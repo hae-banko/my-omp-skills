@@ -39,6 +39,8 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[/wayfinder](./commands/wayfinder.md)** — Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
 - **[/improve-codebase-architecture](./commands/improve-codebase-architecture/command.md)** — Scan for deepening opportunities, present an HTML report, then grill through whichever you pick.
 - **[/omp-handoff](./commands/handoff.md)** — Compact the current conversation into a handoff document so another agent can continue.
+- **[/record](./commands/record/command.md)** — Record a durable finding (lesson, audit, note) into the repo's local knowledge base at `.omp/knowledge/`. Deliberate end-of-work capture; `--recent` lists entries.
+- **[/omfg](./commands/omfg/command.md)** — Something just went wrong — instantly capture the pitfall into `.omp/knowledge/` before the context fades. Reactive capture; `--recent` lists entries.
 - **[/teach](./commands/teach/command.md)** — Teach a new skill or concept over multiple sessions, using the current directory as a stateful workspace.
 - **[/writing-great-skills](./commands/writing-great-skills/command.md)** — Reference for writing and editing skills well.
 

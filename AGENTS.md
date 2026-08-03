@@ -37,6 +37,16 @@ authoring contract.
 2. Add a one-line entry to the README reference table.
 3. Bump `package.json` version.
 
+## Knowledge base convention
+
+`/record` and `/omfg` write to `<target-repo>/.omp/knowledge/` — the repo-local
+knowledge base. Shape is defined in `commands/record/RECORD-FORMAT.md`. Three
+rules, and they apply only to records:
+
+- **Append-only** — never edit an existing record in place; a new finding is a new file.
+- **Timestamped names** — `YYYY-MM-DD_<slug>.md`, `-2` suffix on same-day collision.
+- **Indexed** — every write appends one line to `INDEX.md` (newest first).
+
 ## Rules
 
 - A user-invoked command must never invoke another user-invoked command —

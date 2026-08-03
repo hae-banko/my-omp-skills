@@ -65,6 +65,12 @@ Off the main flow entirely.
 - **`/teach`** — learn a concept over multiple sessions, using the current directory as a stateful workspace.
 - **`/writing-great-skills`** — reference for writing and editing skills well.
 
+## Knowledge base
+
+- **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/`. The deliberate end-of-work capture.
+- **`/omfg`** — something just went wrong: instantly capture the pitfall into `.omp/knowledge/` before the context fades. The reactive capture.
+- **`/record --recent`** (or `/omfg --recent`) — list the last entries of the knowledge base.
+
 ## Precondition
 
 **`/omp-setup`** — run before your first engineering flow to configure the issue tracker, triage labels, and doc layout the other commands assume. Custom issue trackers also work.

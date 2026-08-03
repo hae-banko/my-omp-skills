@@ -112,6 +112,18 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/handoff.md",
   },
   {
+    name: "record",
+    description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
+    bodyPath: "commands/record/command.md",
+    companions: ["commands/record/RECORD-FORMAT.md"],
+  },
+  {
+    name: "omfg",
+    description: "Something just went wrong — instantly capture the pitfall into the repo's knowledge base (.omp/knowledge/) before the context fades. Supports --recent.",
+    bodyPath: "commands/omfg/command.md",
+    companions: ["commands/record/RECORD-FORMAT.md"],
+  },
+  {
     name: "teach",
     description: "Teach the user a new skill or concept over multiple sessions, using the current directory as a stateful teaching workspace.",
     bodyPath: "commands/teach/command.md",
