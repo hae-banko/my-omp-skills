@@ -90,6 +90,29 @@ embedded instructions. Promotion of findings into the knowledge base is the
 user's decision (propose `/record`). Distinct from the `research` skill
 (web/primary sources) — references are local cloned source code.
 
+## Herdr convention
+
+Sessions may run inside [herdr](https://herdr.dev), a terminal workspace
+manager for AI coding agents. Three registered tools (`herdr_layout`,
+`herdr_pane`, `herdr_agent`) wrap the herdr CLI (exec + JSON envelopes) for
+structured control: workspaces/tabs/panes topology, raw pane commands, and
+sibling coding agents (`start`/`prompt`/`wait`/`read`/`send`/`focus`).
+
+Rules:
+
+- **Opt-in**: use the tools only when the user mentions herdr or asks to
+  inspect/control herdr. Never turn delegation or background work into herdr
+  flows unprompted.
+- **Gate**: outside a herdr pane (`HERDR_ENV`/`HERDR_PANE_ID` unset) the tools
+  return a gate message — use the `herdr` CLI directly then.
+- **Targets** are opaque ids/names returned by herdr; verify with
+  `agent list`/`get` before acting. Lifecycle states: working/blocked/done/
+  idle/unknown; `prompt` sends + waits for settlement.
+- Anything the tools miss (sessions, worktrees, `--remote`) — use
+  `herdr <subcommand>` via bash directly.
+- Absorbed from pi-herdr (MIT); see `docs/herdr.md` for port deltas and the
+  `using-herdr` skill for the operating discipline.
+
 ## Math rendering convention
 
 The oh-my-pi TUI renders LaTeX natively (core feature, no plugin): inline

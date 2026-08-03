@@ -4,6 +4,24 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.13.0 — herdr control absorbed (pi-herdr port)
+
+- **`herdr_layout` / `herdr_pane` / `herdr_agent` tools** — structured control
+  of the herdr terminal workspace manager this session runs inside: workspace/
+  tab/pane topology, raw pane commands (`run`/`read`/`wait_output`/`send`),
+  and sibling coding agents (`start`/`prompt`/`wait`/`read`/`send`/`focus`/
+  `rename`). Mechanics identical to pi-herdr (MIT): exec the herdr CLI, parse
+  JSON envelopes. Adapted to the installed herdr 0.7.x CLI (composed
+  primitives where pi-herdr needs 0.7.5+: prompt = send+wait, wait_output =
+  read+poll).
+- **`using-herdr` skill** — model-invoked operating discipline: opt-in policy,
+  activation gate (HERDR_ENV/PANE_ID), target resolution, lifecycle states,
+  workflows, output limits, alternate-screen caveat, CLI escape hatch.
+- Tools register unconditionally and return a gate message outside herdr
+  (testable); selftest asserts registration + gate. `docs/herdr.md`
+  documents the absorption and port deltas; AGENTS.md gains the Herdr
+  convention; README rows updated.
+
 ## v0.12.0 — math formatting always on (rule, not toggle)
 
 - The user wants math typeset "all the time without a second thought": the

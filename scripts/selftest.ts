@@ -35,6 +35,7 @@ interface RegisteredCommand {
 interface RegisteredTool {
   name: string;
   description: string;
+  parameters?: unknown;
   execute(
     toolCallId: string,
     params: Record<string, unknown>,
@@ -93,7 +94,10 @@ const renderers: Record<string, (message: unknown, options: unknown, theme: unkn
 
 const zod = {
   object: (shape: Record<string, unknown>) => ({ shape }),
-  enum: (values: readonly string[]) => ({ default: (value: string) => ({ values, default: value }) }),
+  enum: (values: readonly string[]) => ({
+    default: (value: string) => ({ values, default: value }),
+    optional: () => ({ kind: "enum", values }),
+  }),
   string: () => ({ optional: () => ({ kind: "string" }) }),
   number: () => ({
     int: () => ({
@@ -480,6 +484,33 @@ if (!sessionStop) {
     process.env.HINDSIGHT_CONFIG = prevConfigEnv;
   }
   reloadHindsightConfig(); // restore the real default path
+}
+
+// --- herdr tools (layout / pane / agent) -----------------------------------
+
+// The selftest runs outside herdr, so each tool must (a) be registered with a
+// description and zod parameters, and (b) return the gate message instead of
+// failing cryptically when HERDR_ENV/HERDR_PANE_ID are unset.
+const HERDR_TOOLS = ["herdr_layout", "herdr_pane", "herdr_agent"] as const;
+for (const name of HERDR_TOOLS) {
+  const tool = tools.find((t) => t.name === name);
+  if (!tool) {
+    fail(`${name}: not registered`);
+    continue;
+  }
+  if (!tool.description) fail(`${name}: missing description`);
+  if (!tool.parameters) fail(`${name}: missing zod parameters`);
+  const res = await tool.execute(
+    "selftest",
+    { action: "list" },
+    undefined,
+    undefined,
+    { cwd: "/tmp" },
+  );
+  const text = (res.content ?? []).map((b) => (b.type === "text" ? b.text : "")).join(" ");
+  if (!text.includes("herdr")) {
+    fail(`${name}: gate message missing (got: ${text.slice(0, 60)})`);
+  }
 }
 
 if (failures > 0) {

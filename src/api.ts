@@ -77,7 +77,7 @@ export interface ToolDefinition {
 /** Minimal zod/v4 chain used to author tool parameter schemas. */
 export interface ZodLike {
   object(shape: Record<string, unknown>): unknown;
-  enum(values: readonly string[]): { default(value: string): unknown };
+  enum(values: readonly string[]): { default(value: string): unknown; optional(): unknown };
   string(): { optional(): unknown };
   number(): { int(): { min(n: number): { max(n: number): { optional(): unknown } } } };
   boolean(): { optional(): unknown };

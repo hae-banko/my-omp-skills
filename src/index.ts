@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
+import { installHerdrTools } from "./herdr-tools.ts";
 import {
   hindsightOffMessage,
   hindsightOnMessage,
@@ -248,6 +249,7 @@ export default function (pi: ExtensionApi): void {
   installPolicy(pi);
   installKnowledgeTool(pi);
   installHindsight(pi);
+  installHerdrTools(pi);
 
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);

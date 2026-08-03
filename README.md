@@ -45,12 +45,12 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
 
 ## Install
 
-Requires an SSH key with access to the private repo. Latest release: v0.12.0.
+Requires an SSH key with access to the private repo. Latest release: v0.13.0.
 
 1. Install pinned to the latest release:
 
    ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.12.0
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.13.0
    ```
 
 2. Prefer maximum immutability? Pin to a full commit SHA instead:
@@ -125,6 +125,7 @@ runs only when you ask.
 | `codebase-design` | Vocabulary for deep modules: lots of behaviour behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
 | `resolving-merge-conflicts` | Resolves in-progress merges/rebase by intent, hunk by hunk — never `--abort`. | A merge or rebase is in progress with conflicts. |
 | `using-references` | Consults the cloned reference corpus before reconstructing external behavior from scratch. | Reimplementing something with a reference available (ODE solvers, dense ML). |
+| `using-herdr` | Operates herdr (the terminal workspace manager this session runs inside) via the `herdr_layout`/`herdr_pane`/`herdr_agent` tools or the CLI. | The user mentions herdr, or asks to control workspaces, panes, or sibling agents. |
 | `using-git-worktrees` | Isolates feature work in a git worktree (`.worktrees/` convention). User-invoked only. | You ask for it — never auto-triggers. |
 
 ## Runtime behaviors
@@ -137,6 +138,7 @@ A few behaviors kick in without you invoking anything:
 | Knowledge-base policy | An append-only guard on `.omp/knowledge/`: records, pitfalls, and `INDEX.md` are never rewritten in place. New timestamped entries and index appends pass; research working files stay editable. |
 | Rules | A TTSR rule (a mid-conversation interrupt that stops the model just before it acts) blocks edits to knowledge-base entries; always-apply rules keep the right command discoverable during a conversation. |
 | `knowledge_read` tool | The model can look up past findings on demand — the index, records, pitfalls, and research projects. |
+| Herdr tools | `herdr_layout`/`herdr_pane`/`herdr_agent` wrap the herdr CLI for structured workspace/pane/agent control when the session runs inside a herdr pane (opt-in; gate message outside). |
 | Transcript renderers | How results show up in the terminal: `/record` and `/pitfall` print a compact receipt card; `knowledge_read` results render as labeled cards. |
 
 The append-only guard exists because the knowledge base is a durable,
@@ -162,7 +164,7 @@ applying it.
 2. **List available releases** —
    `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.12.0`.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.13.0`.
    Installs are immutable copies, so the old version keeps working until the
    reinstall succeeds.
 4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools
