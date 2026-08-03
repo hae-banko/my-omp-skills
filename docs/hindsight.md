@@ -117,6 +117,12 @@ invocation). Fields, all optional with defaults:
 | `name` | `"Hindsight"` | What the pass is called in the nudge |
 | `nudge` | the Fable question | The reflection prompt |
 | `leadIn` | `"On reflection…"` | The one-line prefix a revision leads with |
+| `onMessage` | `"Hindsight enabled"` | Toast shown when the pass turns on / is reported on |
+| `offMessage` | `"Hindsight disabled"` | Toast shown when the pass turns off / is reported off |
+
+The footer status line (`Hindsight: on/off`) and the receipt card
+(`HINDSIGHT — ON/OFF`) keep fixed glyphs; only the toast text is
+configurable.
 
 Missing files, invalid JSON, and invalid fields all fall back to the defaults
 — a broken config never takes the nudge down. The `<my-omp-skills:hindsight>`

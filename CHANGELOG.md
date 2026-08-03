@@ -4,6 +4,18 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.14.2 — configurable hindsight toggle messages
+
+- `onMessage` / `offMessage` are back in `~/.omp/hindsight.json` — they were
+  removed in v0.13.2 because they only fed the model reply that silent
+  toggles deleted. Now they drive the **toast** (the visible feedback):
+  `/hindsight on|off|status` toasts your text instead of the fixed
+  "hindsight enabled/disabled". The footer status line and receipt card keep
+  their fixed `Hindsight: on/off` / `HINDSIGHT — ON/OFF` glyphs. Existing
+  configs that still carry the old keys start using them immediately.
+- Selftest: custom `onMessage` reaches the toast; status test no longer
+  asserts exact default text (it would depend on the machine's config).
+
 ## v0.14.1 — hindsight once per yield
 
 - The reflection pass now fires **at most once per user message** — the

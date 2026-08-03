@@ -479,10 +479,11 @@ if (!sessionStop) {
   sent.length = 0;
   customMessages.length = 0;
   const statusCalls: string[] = [];
+  const notifyCalls: string[] = [];
   await registered["hindsight"].handler("status", {
     ui: {
       setStatus: (_key: string, text: string | undefined) => statusCalls.push(String(text)),
-      notify: () => {},
+      notify: (message: string) => notifyCalls.push(message),
     },
   });
   if (sent.length !== 0) fail("hindsight: status emitted a user message");
@@ -491,6 +492,9 @@ if (!sessionStop) {
   }
   if (statusCalls.length !== 1 || statusCalls[0] !== "Hindsight: on") {
     fail("hindsight: status did not set the footer status line");
+  }
+  if (notifyCalls.length !== 1) {
+    fail("hindsight: status did not toast");
   }
   if (!isHindsightEnabled()) fail("hindsight: status toggled the state");
 
@@ -510,18 +514,26 @@ if (!sessionStop) {
       name: "Second Look",
       nudge: "Did you hit walls that design changes would simplify?",
       leadIn: "Rethinking…",
+      onMessage: "Reflection armed",
+      offMessage: "Reflection off",
     }),
   );
   reloadHindsightConfig(cfgPath);
 
   sent.length = 0;
   customMessages.length = 0;
-  await registered["hindsight"].handler("on", {});
+  notifyCalls.length = 0;
+  await registered["hindsight"].handler("on", {
+    ui: { setStatus: () => {}, notify: (message: string) => notifyCalls.push(message) },
+  });
   if (sent.length !== 0) fail("hindsight: toggle emitted a user message (model would reply)");
   if (customMessages.length !== 1 || customMessages[0].customType !== "hindsight") {
     fail("hindsight: toggle receipt custom message missing or wrong type");
   } else if (!String(customMessages[0].content ?? "").includes("on")) {
     fail("hindsight: receipt does not report the on state");
+  }
+  if (notifyCalls.length !== 1 || notifyCalls[0] !== "Reflection armed") {
+    fail("hindsight: custom onMessage not used for the toast");
   }
   const customNudge = await sessionStop(toolTurn);
   const nudgeText = String(

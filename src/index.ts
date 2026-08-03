@@ -22,6 +22,7 @@ import {
   isHindsightEnabled,
   reloadHindsightConfig,
   setHindsightEnabled,
+  hindsightToggleMessages,
 } from "./hindsight.ts";
 import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
@@ -182,9 +183,10 @@ const COMMANDS: CommandSpec[] = [
       // UI, so it shows even when the session is mid-stream (where the receipt
       // card would be queued invisibly). No user message — the model never
       // replies to a toggle.
-      const report = (label: string, state: boolean) => {
+      const report = (state: boolean) => {
+        const { onMessage, offMessage } = hindsightToggleMessages();
         ctx.ui?.setStatus?.("hindsight", `Hindsight: ${state ? "on" : "off"}`);
-        ctx.ui?.notify?.(`${label} ${state ? "enabled" : "disabled"}`, "info");
+        ctx.ui?.notify?.(state ? onMessage : offMessage, "info");
       };
       // Status: report the current state without toggling.
       if (arg === "status" || arg === "state") {
@@ -197,7 +199,7 @@ const COMMANDS: CommandSpec[] = [
           },
           { deliverAs: "followUp" },
         );
-        report("hindsight is", on);
+        report(on);
         return;
       }
       const next = arg === "on" ? true : arg === "off" ? false : !on;
@@ -211,7 +213,7 @@ const COMMANDS: CommandSpec[] = [
         },
         { deliverAs: "followUp" },
       );
-      report("hindsight", next);
+      report(next);
     },
   },
   {

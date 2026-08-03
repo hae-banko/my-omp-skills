@@ -42,6 +42,10 @@ export interface HindsightConfig {
   name: string;
   nudge: string;
   leadIn: string;
+  /** Toast text shown when the pass is turned on / reported on. */
+  onMessage: string;
+  /** Toast text shown when the pass is turned off / reported off. */
+  offMessage: string;
 }
 
 export const HINDSIGHT_CONFIG_PATH = join(homedir(), ".omp", "hindsight.json");
@@ -56,6 +60,8 @@ const DEFAULT_CONFIG: HindsightConfig = {
   nudge:
     "While reasoning about this, did you face challenges or hit walls that would be greatly simplified by design-level changes? Look back at your own thinking and your tool results, and revise your answer if a design-level change would help.",
   leadIn: "On reflection…",
+  onMessage: "Hindsight enabled",
+  offMessage: "Hindsight disabled",
 };
 
 let config: HindsightConfig = DEFAULT_CONFIG;
@@ -98,11 +104,18 @@ export function reloadHindsightConfig(path: string = hindsightConfigPath()): voi
     name: pick("name"),
     nudge: pick("nudge"),
     leadIn: pick("leadIn"),
+    onMessage: pick("onMessage"),
+    offMessage: pick("offMessage"),
   };
 }
 
 export function isHindsightEnabled(): boolean {
   return enabled;
+}
+
+/** Current toggle feedback texts (config onMessage/offMessage). */
+export function hindsightToggleMessages(): { onMessage: string; offMessage: string } {
+  return { onMessage: config.onMessage, offMessage: config.offMessage };
 }
 
 export function setHindsightEnabled(next: boolean): void {
