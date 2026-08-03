@@ -1,11 +1,18 @@
 // Selftest for the my-omp-skills extension entry point.
 //
-// Imports the extension with a mock `pi`, asserts every command registers with
-// a description and a non-empty workflow body, then invokes each handler and
-// asserts `sendUserMessage` receives content that includes the workflow body
-// and, for commands with companions, the companion pointer section.
+// Imports the extension with a mock `pi`, then asserts:
+// 1. Every command registers with a description and a non-empty workflow body,
+//    companions disclosed, args passed through, frontmatter stripped.
+// 2. The session bootstrap injects exactly once per session (session_start →
+//    context → dedup → agent_end clears it), after leading compaction summaries.
+// 3. The tool_call policy blocks rewrites of the append-only knowledge base
+//    while letting new files, research working files, and INDEX.md appends pass.
 //
 // Run: bun run scripts/selftest.ts
+
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import extension from "../src/index.ts";
 
@@ -18,6 +25,18 @@ interface HandlerContext {
 interface RegisteredCommand {
   description: string;
   handler: (args: string, ctx: HandlerContext) => Promise<void>;
+}
+
+interface RegisteredTool {
+  name: string;
+  description: string;
+  execute(
+    toolCallId: string,
+    params: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+    onUpdate: unknown,
+    ctx: { cwd: string },
+  ): Promise<{ content: Array<{ type: string; text: string }>; details?: unknown }>;
 }
 
 const EXPECTED: Record<string, { companions?: number }> = {
@@ -52,6 +71,18 @@ const fail = (msg: string): void => {
 
 const registered: Record<string, RegisteredCommand> = {};
 const sent: string[] = [];
+const customMessages: Array<Record<string, unknown>> = [];
+const handlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
+const tools: RegisteredTool[] = [];
+const renderers: Record<string, (message: unknown, options: unknown, theme: unknown) => unknown> = {};
+
+const zod = {
+  object: (shape: Record<string, unknown>) => ({ shape }),
+  enum: (values: readonly string[]) => ({ default: (value: string) => ({ values, default: value }) }),
+  string: () => ({ optional: () => ({ kind: "string" }) }),
+  number: () => ({ int: () => ({ min: (n: number) => ({ max: (m: number) => ({ kind: "number", min: n, max: m }) }) }) }),
+  boolean: () => ({ optional: () => ({ kind: "boolean" }) }),
+};
 
 const mockPi = {
   registerCommand(
@@ -63,9 +94,27 @@ const mockPi = {
   async sendUserMessage(content: string): Promise<void> {
     sent.push(content);
   },
+  sendMessage(message: Record<string, unknown>): void {
+    customMessages.push(message);
+  },
+  on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
+    handlers[event] = handler;
+  },
+  registerTool(def: RegisteredTool): void {
+    tools.push(def);
+  },
+  registerMessageRenderer(
+    customType: string,
+    renderer: (message: unknown, options: unknown, theme: unknown) => unknown,
+  ): void {
+    renderers[customType] = renderer;
+  },
+  zod,
 };
 
 extension(mockPi);
+
+// --- Commands (unchanged surface) -----------------------------------------
 
 // 1. Every expected command registered, and no extras.
 for (const name of Object.keys(EXPECTED)) {
@@ -101,8 +150,106 @@ for (const name of Object.keys(registered)) {
   if (sent[0]?.startsWith("---")) fail(`${name}: frontmatter not stripped`);
 }
 
+// --- Bootstrap -------------------------------------------------------------
+
+const baseMessages: unknown[] = [
+  { role: "compactionSummary", content: [{ type: "text", text: "compacted" }] },
+  { role: "user", content: [{ type: "text", text: "hello" }] },
+];
+
+/** Extract the messages array from a context-handler result, or null. */
+function asMessagesResult(value: unknown): unknown[] | null {
+  if (!value || typeof value !== "object" || !("messages" in value)) return null;
+  return Array.isArray(value.messages) ? value.messages : null;
+}
+
+/** Extract the text of the first text block of a message, or "". */
+function textOfMessage(message: unknown): string {
+  if (!message || typeof message !== "object" || !("content" in message)) return "";
+  const content: unknown = message.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content) || content.length === 0) return "";
+  const first = content[0];
+  if (!first || typeof first !== "object" || !("text" in first)) return "";
+  return typeof first.text === "string" ? first.text : "";
+}
+
+await handlers["session_start"]({});
+const injected = asMessagesResult(await handlers["context"]({ messages: baseMessages }));
+if (!injected || injected.length !== 3) {
+  fail("bootstrap: context handler did not return 3 messages");
+} else {
+  const first = injected[0];
+  if (!first || typeof first !== "object" || !("role" in first) || first.role !== "compactionSummary") {
+    fail("bootstrap: compaction summary not preserved at index 0");
+  }
+  const bootText = textOfMessage(injected[1]);
+  if (!bootText.includes("my-omp-skills:available-commands")) {
+    fail("bootstrap: injected message missing marker");
+  }
+  if (!bootText.includes("/record") || !bootText.includes("/pitfall")) {
+    fail("bootstrap: injected message does not list commands");
+  }
+  if (injected[2] !== baseMessages[1]) {
+    fail("bootstrap: original user message not preserved");
+  }
+}
+
+// Dedup: same messages again → no second injection.
+const second = await handlers["context"]({ messages: injected ?? baseMessages });
+if (second !== undefined) fail("bootstrap: injected twice in one session");
+
+// agent_end clears the flag.
+await handlers["agent_end"]({});
+const afterEnd = await handlers["context"]({ messages: baseMessages });
+if (afterEnd !== undefined) fail("bootstrap: injected after agent_end");
+
+// --- Policy: append-only knowledge base ------------------------------------
+
+const fixtureRoot = mkdtempSync(join(tmpdir(), "my-omp-skills-test-"));
+mkdirSync(join(fixtureRoot, ".omp", "knowledge", "records"), { recursive: true });
+mkdirSync(join(fixtureRoot, ".omp", "knowledge", "pitfalls"), { recursive: true });
+mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-01_demo"), {
+  recursive: true,
+});
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "records", "2026-08-03_dtcm.md"),
+  "---\ntitle: DTCM\n---\nfound it",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "INDEX.md"),
+  "- 2026-08-03 DTCM — .omp/knowledge/records/2026-08-03_dtcm.md\n",
+);
+
+const toolCall = (toolName: string, input: Record<string, unknown>) =>
+  handlers["tool_call"]({ toolName, input }, { cwd: fixtureRoot });
+
+const isBlocked = (result: unknown): boolean =>
+  !!result && typeof result === "object" && "block" in result && result.block === true;
+
+const cases: Array<[string, string, Record<string, unknown>, boolean]> = [
+  ["edit record", "edit", { path: ".omp/knowledge/records/2026-08-03_dtcm.md", old_string: "a", new_string: "b" }, true],
+  ["edit pitfall", "edit", { path: ".omp/knowledge/pitfalls/2026-08-02_oops.md", old_string: "a", new_string: "b" }, true],
+  ["edit INDEX", "edit", { path: ".omp/knowledge/INDEX.md", old_string: "a", new_string: "b" }, true],
+  ["edit research outline", "edit", { path: ".omp/knowledge/research/2026-08-01_demo/outline.yaml", old_string: "a", new_string: "b" }, false],
+  ["write new record", "write", { path: ".omp/knowledge/records/2026-08-04_new.md", content: "new" }, false],
+  ["overwrite record", "write", { path: ".omp/knowledge/records/2026-08-03_dtcm.md", content: "changed" }, true],
+  ["bash append INDEX", "bash", { command: "echo '- 2026-08-04 New — .omp/knowledge/records/2026-08-04_new.md' >> .omp/knowledge/INDEX.md" }, false],
+  ["bash sed record", "bash", { command: "sed -i 's/a/b/' .omp/knowledge/records/2026-08-03_dtcm.md" }, true],
+  ["bash rm record", "bash", { command: "rm .omp/knowledge/records/2026-08-03_dtcm.md" }, true],
+  ["edit outside KB", "edit", { path: "src/index.ts", old_string: "a", new_string: "b" }, false],
+];
+
+for (const [label, toolName, input, expectBlock] of cases) {
+  const result = await toolCall(toolName, input);
+  const blocked = isBlocked(result);
+  if (blocked !== expectBlock) {
+    fail(`policy: ${label} → blocked=${blocked}, expected ${expectBlock}`);
+  }
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — all commands register and inject correctly.");
+console.log("\nOK — commands, bootstrap, and knowledge-base policy behave correctly.");

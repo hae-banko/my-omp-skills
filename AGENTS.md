@@ -92,8 +92,42 @@ rules, and they apply to every entry:
 - **Timestamped names** — `YYYY-MM-DD_<slug>.md`, `-2` suffix on same-day collision.
 - **Indexed** — every write appends one line to `INDEX.md` (newest first).
 
+## Runtime behaviors (v0.5.0+)
+
+Beyond the markdown commands, the extension entry (`src/index.ts`) wires three
+runtime behaviors:
+
+- **Bootstrap** (`src/bootstrap.ts`). At session start and after compaction,
+  the model receives a one-time message listing every command. Re-injected
+  only on restart/compaction; cleared on `agent_end` (superpowers pattern).
+- **Knowledge-base policy** (`src/policy.ts`, a `tool_call` guard). `edit` on
+  any path under `.omp/knowledge/records/`, `.omp/knowledge/pitfalls/`, or
+  `INDEX.md` is blocked; `write` over an *existing* file in those stores is
+  blocked (new timestamped files pass — that is the sanctioned write path);
+  `bash` referencing those stores with a destructive operator (`sed -i`,
+  `tee`, single `>`, `mv`, `rm`, `cp`, …) is blocked. `>>` appends to
+  `INDEX.md` are allowed. Research project working files (`outline.yaml`,
+  `fields.yaml`) are **not** guarded — they are editable work products.
+- **Rules** (`rules/`). `knowledge-append-only.md` is a TTSR rule that fires
+  when the model is about to `edit` a record/pitfall/INDEX file;
+  `use-record.md`, `use-pitfall.md`, `use-research.md` are always-apply
+  rulebook rules keeping the right slash command in front of the model
+  mid-conversation.
+
+## Memory backend
+
+When `memory.backend: local` is enabled in `~/.omp/agent/config.yml`, omp's
+local pipeline (omp://memory.md) extracts durable signal from past sessions
+and writes `~/.omp/agent/MEMORY.md`. The `.omp/knowledge/` entries written by
+`/record` and `/pitfall` are picked up by that extraction automatically —
+they are the highest-quality memory candidates this package produces. No
+package-side configuration needed; flip the config and the next session
+startup runs extraction.
+
 ## Rules
 
+- Every user-visible change bumps `package.json` **and** adds a `CHANGELOG.md`
+  entry.
 - **`main` moves via reviewed PRs, never direct pushes.** This is a
   convention, not enforcement: GitHub branch protection requires Pro for
   private repos, and this repo is on the free plan. Integrity relies on

@@ -10,7 +10,7 @@ wayfinding, handoff. Not vibe coding.
 
 ```bash
 # Pinned release (recommended — immutable, integrity-checkable)
-omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.4.2
+omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.5.0
 
 # Pinned by commit SHA (most immutable — tags can be moved by repo writers)
 omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
@@ -75,6 +75,25 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[codebase-design](./skills/codebase-design/SKILL.md)** — Shared vocabulary for designing deep modules: a lot of behaviour behind a small interface at a clean seam.
 - **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)** — Resolve an in-progress merge/rebase by intent, hunk by hunk; never `--abort`.
 - **[using-git-worktrees](./skills/using-git-worktrees/SKILL.md)** — Set up an isolated git worktree for feature work: detection guards (submodules), `.worktrees/` convention, clean-baseline verification. User-invoked — runs only when you ask.
+
+## Runtime behaviors (v0.5.0+)
+
+Beyond the slash commands, the extension wires three runtime behaviors:
+
+- **Bootstrap** — at session start (and after compaction) the model gets a
+  one-time message listing every command, so it knows the package exists
+  without `/help`.
+- **Knowledge-base policy** — the append-only convention for
+  `.omp/knowledge/` is enforced at the tool layer: `edit` on records/pitfalls
+  or `INDEX.md` is blocked, `write` over an existing entry is blocked, and
+  destructive `bash` against those stores is blocked. New timestamped entries
+  and `>>` INDEX appends pass; research working files stay editable.
+- **Rules** — `rules/knowledge-append-only.md` (TTSR: interrupts the model
+  when it is about to edit a KB entry) plus always-apply rules
+  (`use-record`, `use-pitfall`, `use-research`) that keep the right command
+  discoverable mid-conversation.
+
+See `AGENTS.md` and `CHANGELOG.md` for details.
 
 ## Attribution
 

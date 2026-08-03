@@ -8,12 +8,15 @@
 //
 // Adapted from Matt Pocock's skills (https://github.com/mattpocock/skills, MIT).
 //
-// The types below are minimal structural contracts for the subset of the omp
-// ExtensionAPI this module uses; the runtime passes the full API, which is a
-// structural superset, so this remains assignable both ways.
+// The types in ./api.ts are minimal structural contracts for the subset of the
+// omp ExtensionAPI this package uses; the runtime passes the full API, which
+// is a structural superset, so this remains assignable both ways.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { CommandContext, ExtensionApi } from "./api.ts";
+import { installBootstrap } from "./bootstrap.ts";
+import { installPolicy } from "./policy.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -24,23 +27,8 @@ interface CommandSpec {
   bodyPath: string;
   /** paths relative to ROOT of companion reference files, disclosed as pointers */
   companions?: string[];
-}
-
-interface CommandContext {
-  ui?: {
-    notify?(message: string, level?: string): void;
-  };
-}
-
-interface ExtensionApi {
-  registerCommand(
-    name: string,
-    def: {
-      description: string;
-      handler: (args: string, ctx: CommandContext) => Promise<void> | void;
-    },
-  ): void;
-  sendUserMessage(content: string, options?: { deliverAs?: string }): Promise<unknown>;
+  /** customType for the transcript receipt emitted when the command runs */
+  customType?: string;
 }
 
 const RESEARCH_ASSETS: string[] = [
@@ -160,12 +148,14 @@ const COMMANDS: CommandSpec[] = [
     description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
     bodyPath: "commands/record/command.md",
     companions: ["commands/record/RECORD-FORMAT.md"],
+    customType: "knowledge-record",
   },
   {
     name: "pitfall",
     description: "Something just went wrong — instantly capture the pitfall into the repo's knowledge base (.omp/knowledge/) before the context fades. Supports --recent.",
     bodyPath: "commands/pitfall/command.md",
     companions: ["commands/record/RECORD-FORMAT.md"],
+    customType: "knowledge-pitfall",
   },
   {
     name: "teach",
@@ -196,6 +186,12 @@ function loadBody(rel: string): string {
 }
 
 export default function (pi: ExtensionApi): void {
+  installBootstrap(
+    pi,
+    COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),
+  );
+  installPolicy(pi);
+
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));
@@ -217,6 +213,17 @@ export default function (pi: ExtensionApi): void {
           )}`;
         }
         await pi.sendUserMessage(text);
+        if (spec.customType) {
+          pi.sendMessage(
+            {
+              customType: spec.customType,
+              content: `${spec.name} requested${argText ? ` — ${argText}` : ""}`,
+              display: true,
+              attribution: "user",
+            },
+            { deliverAs: "followUp" },
+          );
+        }
         ctx.ui?.notify?.(`Running ${spec.name}`, "info");
       },
     });
