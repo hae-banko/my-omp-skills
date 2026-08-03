@@ -4,17 +4,26 @@ Something just went wrong. Capture the pitfall before the context fades.
 
 The moment a dead end, costly mistake, or wrong approach becomes obvious — mid-task, not at the end. The difference from `/record`: `/pitfall` is reactive and instant; `/record` is the deliberate end-of-work capture.
 
-## Behavior
+## Run in the background
 
-1. **Pull the context** from the current conversation: what we were trying, what failed, what we tried, what actually worked or unblocked us.
-2. **Compose a pitfall record** using the `RECORD-FORMAT.md` companion file (listed below), with `kind: pitfall`. Fill `## Context`, `## Finding`, `## Evidence`, and `## Next time` — the detection signal goes in `## Next time` ("how to recognize this again").
-3. **Write it now.** `YYYY-MM-DD_<slug>.md` under `.omp/knowledge/` (`-2` suffix on same-day collision); create the directory if missing. Do not wait for the session to end.
-4. **Update the index.** Append the one-line entry to `.omp/knowledge/INDEX.md`, newest first: `- YYYY-MM-DD <title> — <relative path>`.
-5. **Report the path in one line.** Then get back to the work — the record is one step, not a detour.
+**The capture must never stop the current work.** Delegate the write to a **background subagent** and get back to the task immediately — the pitfall is freshest now, and the flow is worth more than the file.
+
+The subagent brief must include:
+
+- The pitfall: title + tags + the context/finding/evidence/next-time content (from the user's argument and the conversation). Pin `kind: pitfall`.
+- The absolute path of the `RECORD-FORMAT.md` companion file (listed below) — the subagent composes from it.
+- The repo root and the three rules: timestamped name (`YYYY-MM-DD_<slug>.md`, `-2` on collision), append-only (never edit an existing record), append one line to `INDEX.md` (newest first).
+- The instruction to report the written path back.
+
+If the user invoked `/pitfall` as the sole purpose of the turn, write it inline instead.
+
+## Verify
+
+At the next natural pause, confirm the record exists by reading its path. If it is missing, write it yourself. Never double-write: if the file is there, leave it.
 
 ## `--recent` mode
 
-If the user's argument starts with `--recent` (optionally `--recent 5`): skip writing and print the last N pitfall entries from `INDEX.md`.
+If the user's argument starts with `--recent` (optionally `--recent 5`): skip writing and print the last N pitfall entries from `INDEX.md`. This runs inline.
 
 ## Rules
 

@@ -4,19 +4,26 @@ Record a durable finding into this repo's local knowledge base at `.omp/knowledg
 
 The end of an investigation, a finished task, a conclusion worth keeping, a lesson learned, or a decision with a rationale a future session should find. NOT for work-in-progress status or chat messages. (For things that just went wrong mid-task, use `/pitfall` instead.)
 
-## Behavior
+## Run in the background
 
-1. **Identify the finding.** Take it from the user's argument or the just-finished conversation. If the user passed nothing and the conversation has no obvious finding, ask exactly one question: "What should we record?"
-2. **Infer a kind.** `lesson` (something we learned), `audit` (an investigation conclusion), or `note` (anything else durable). Pitfalls belong to `/pitfall`, which pins `kind: pitfall`.
-3. **Compose the record** using the `RECORD-FORMAT.md` companion file (listed below). Keep the title to one greppable line.
-4. **Choose the filename.** `YYYY-MM-DD_<slug>.md` under `.omp/knowledge/`, slug = dash-case of the title. If a file with that name already exists, append `-2`, `-3`, … — **never overwrite**.
-5. **Write the file.** Create `.omp/knowledge/` if missing.
-6. **Update the index.** Append a one-line entry to `.omp/knowledge/INDEX.md`, newest first: `- YYYY-MM-DD <title> — <relative path>`. Create `INDEX.md` with a one-line header if missing.
-7. **Report the path** in one line. Do not commit on the user's behalf; mention `git add` if they want it tracked.
+**The write must never stop the current work.** When `/record` is invoked while work is in progress — the normal case — delegate the write to a **background subagent** and return to the current task immediately. The recording is not a detour.
+
+The subagent brief must include:
+
+- The finding: title + kind + tags + the context/finding/evidence/next-time content (from the user's argument and the conversation).
+- The absolute path of the `RECORD-FORMAT.md` companion file (listed below) — the subagent composes from it.
+- The repo root and the three rules: timestamped name (`YYYY-MM-DD_<slug>.md`, `-2` on collision), append-only (never edit an existing record), append one line to `INDEX.md` (newest first).
+- The instruction to report the written path back.
+
+If the user invoked `/record` as the sole purpose of the turn (e.g. wrapping up), write it inline instead — no subagent needed.
+
+## Verify
+
+When you get a free moment — the next natural pause — confirm the record exists by reading its path. If it is missing, write it yourself. Never double-write: if the file is there, leave it.
 
 ## `--recent` mode
 
-If the user's argument starts with `--recent` (optionally `--recent 5` for a count, default 10): skip writing entirely and print the last N entries from `INDEX.md` with their paths.
+If the user's argument starts with `--recent` (optionally `--recent 5` for a count, default 10): skip writing entirely and print the last N entries from `INDEX.md` with their paths. This runs inline — it is the whole point of the turn.
 
 ## Rules
 

@@ -67,8 +67,8 @@ Off the main flow entirely.
 
 ## Knowledge base
 
-- **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/`. The deliberate end-of-work capture.
-- **`/pitfall`** — something just went wrong: instantly capture the pitfall into `.omp/knowledge/` before the context fades. The reactive capture.
+- **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/`. The deliberate end-of-work capture. Runs in the background when invoked mid-flow.
+- **`/pitfall`** — something just went wrong: instantly capture the pitfall into `.omp/knowledge/` before the context fades. The reactive capture. Runs in the background.
 - **`/record --recent`** (or `/pitfall --recent`) — list the last entries of the knowledge base.
 
 ## Precondition
