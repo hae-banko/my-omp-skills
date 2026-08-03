@@ -37,33 +37,51 @@ function parseEnvelope(output: string): HerdrEnvelope | null {
   }
 }
 
+/**
+ * Classify CLI stdout: a JSON envelope ({result}/{error}), or raw terminal
+ * text (`pane read` / `agent read` print the pane content verbatim, not an
+ * envelope). Returns {ok, value} with value = the unwrapped result, the raw
+ * text, or null for empty output.
+ */
+export function parseHerdrOutput(stdout: string): { ok: boolean; value: unknown } {
+  const envelope = parseEnvelope(stdout);
+  if (envelope) {
+    if (envelope.error) {
+      return { ok: false, value: envelope.error.message ?? String(envelope.error.code ?? "herdr error") };
+    }
+    return { ok: true, value: envelope.result ?? null };
+  }
+  return { ok: true, value: stdout.length > 0 ? stdout : null };
+}
+
 function runHerdr(args: string[], signal?: AbortSignal, timeoutMs = 30000): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    execFile("herdr", args, { timeout: timeoutMs, signal }, (error, stdout, stderr) => {
-      if (error) {
-        const envelope = parseEnvelope(stderr || stdout);
-        const message = envelope?.error?.message;
-        if (message) {
-          reject(new Error(message));
-        } else if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          reject(new Error("herdr CLI not found on PATH"));
-        } else {
-          reject(error);
-        }
-        return;
+  const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+  execFile("herdr", args, { timeout: timeoutMs, signal }, (error, stdout, stderr) => {
+    if (error) {
+      const parsed = parseHerdrOutput(stderr || stdout);
+      if (!parsed.ok) {
+        reject(new Error(String(parsed.value)));
+      } else if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        reject(new Error("herdr CLI not found on PATH"));
+      } else {
+        reject(error);
       }
-      const envelope = parseEnvelope(stdout);
-      if (envelope?.error) {
-        reject(new Error(envelope.error.message ?? String(envelope.error.code ?? "herdr error")));
-        return;
-      }
-      resolve(envelope?.result ?? null);
-    });
+      return;
+    }
+    const parsed = parseHerdrOutput(stdout);
+    if (!parsed.ok) {
+      reject(new Error(String(parsed.value)));
+      return;
+    }
+    resolve(parsed.value);
   });
+  return promise;
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, ms);
+  return promise;
 }
 
 /** `--current`/`--pane <id>` flag pair for pane-targeted CLI calls. */
@@ -269,9 +287,14 @@ export function installHerdrTools(pi: ExtensionApi): void {
             ["pane", "read", pane, "--source", "recent", "--lines", "400"],
             signal,
           );
-          lastText = typeof read === "object" && read !== null
-            ? String((read as Record<string, unknown>).content ?? (read as Record<string, unknown>).text ?? JSON.stringify(read))
-            : String(read ?? "");
+          lastText =
+            typeof read === "string"
+              ? read
+              : String(
+                  (read as Record<string, unknown>)?.content ??
+                    (read as Record<string, unknown>)?.text ??
+                    JSON.stringify(read),
+                );
           const hit = regex ? regex.test(lastText) : lastText.includes(match);
           if (hit) {
             matched = true;

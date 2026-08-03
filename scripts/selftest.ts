@@ -513,6 +513,26 @@ for (const name of HERDR_TOOLS) {
   }
 }
 
+// --- herdr output parsing (JSON envelope vs raw terminal text) -------------
+
+// `pane read`/`agent read` print raw terminal content, everything else prints
+// {"id":…,"result":…} / {"error":…}. The parser must classify all three.
+const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
+{
+  const envelope = parseHerdrOutput('{"id":"cli:agent:list","result":{"agents":[]}}');
+  if (!envelope.ok || (envelope.value as { agents?: unknown[] })?.agents === undefined) {
+    fail("herdr parse: JSON envelope not unwrapped");
+  }
+  const raw = parseHerdrOutput("base) user@host:~$ echo hi\nhi\n");
+  if (!raw.ok || typeof raw.value !== "string" || !raw.value.includes("echo hi")) {
+    fail("herdr parse: raw terminal text not passed through");
+  }
+  const error = parseHerdrOutput('{"error":{"code":"agent_not_found","message":"nope"},"id":"cli:agent:get"}');
+  if (error.ok || error.value !== "nope") {
+    fail("herdr parse: error envelope not surfaced");
+  }
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

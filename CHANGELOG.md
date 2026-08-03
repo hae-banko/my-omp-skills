@@ -4,6 +4,17 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.13.1 — herdr read parsing fix
+
+- `herdr pane read` / `herdr agent read` print **raw terminal text**, not a
+  JSON envelope — the herdr tools' parser assumed envelopes everywhere, so
+  `read`/`wait_output` returned empty results. Parser now falls back to raw
+  text (exported `parseHerdrOutput`; selftest regression for envelope, raw
+  text, and error envelopes). Found by live smoke test: split → run →
+  wait_output on a real pane. Selftest now runs under bun (the harness
+  runtime; `Promise.withResolvers` needs it — node 20 lacks the API), TS
+  target es2024.
+
 ## v0.13.0 — herdr control absorbed (pi-herdr port)
 
 - **`herdr_layout` / `herdr_pane` / `herdr_agent` tools** — structured control
