@@ -4,6 +4,24 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.11.0 — math rendering made first-class
+
+- **Check verdict**: oh-my-pi's TUI already renders LaTeX natively — inline
+  `$…$` → Unicode, display `$$…$$`/`\[…\]`/bare math environments → 2-D
+  layout (stacked fractions, stretched delimiters, matrices, radicals,
+  operator limits, aligned environments), wired unconditionally into the
+  markdown renderer. pi-math's image-based approach (MathJax→PNG via
+  Kitty/iTerm2) is architecturally possible in omp but terminal-gated — the
+  user's Windows Terminal supports none of the image protocols — so the
+  native path is the feature.
+- **`math-rendering` skill** — model-invoked: write math as LaTeX instead of
+  ASCII approximations; delimiter table, supported constructs, guardrails
+  (no delimiters in code/shell variables/currency; inline stays single-line).
+- **`/math` command** — user-invoked: applies the formatting instruction to
+  the conversation, with a demo. No built-in-name conflict.
+- `docs/math-rendering.md` (feasibility findings + shipped design); AGENTS.md
+  math rendering convention; README bullet + command/skill rows.
+
 ## v0.10.0 — configurable Hindsight
 
 - Hindsight reads `~/.omp/hindsight.json`: `name` (what the pass is called),

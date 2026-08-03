@@ -55,6 +55,7 @@ const EXPECTED: Record<string, { companions?: number }> = {
   "grill-me": {},
   "grill-with-docs": {},
   hindsight: {},
+  math: {},
   triage: { companions: 2 },
   "improve-codebase-architecture": { companions: 1 },
   "omp-setup": { companions: 5 },

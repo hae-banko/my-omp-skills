@@ -38,15 +38,18 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
   turn settles, the model gets one hidden look back at its own reasoning and
   tool results to catch design-level changes that would simplify the
   approach.
+- **Math rendering** — the TUI typesets LaTeX natively; `/math` and the
+  `math-rendering` skill make the model write real formulas ($…$, $$…$$,
+  `\begin{aligned}`, matrices, radicals) instead of ASCII approximations.
 
 ## Install
 
-Requires an SSH key with access to the private repo. Latest release: v0.10.0.
+Requires an SSH key with access to the private repo. Latest release: v0.11.0.
 
 1. Install pinned to the latest release:
 
    ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.10.0
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.11.0
    ```
 
 2. Prefer maximum immutability? Pin to a full commit SHA instead:
@@ -97,6 +100,7 @@ suggest the right one when your situation fits.
 | **Session & support** | | |
 | `/omp-setup` | Configures the repo: issue tracker, triage labels, domain doc layout | First run in a new repo |
 | `/hindsight` | Toggle the settle-time reflection pass: after turns that did real work, one hidden pass reconsiders design-level changes before the turn settles | You want answers reconsidered before they settle |
+| `/math` | Applies LaTeX math formatting to the conversation — the TUI renders $…$, $$…$$, `\begin{aligned}` natively | You work with formulas; want math typeset, not ASCII |
 | `/omp-handoff` | Compacts the conversation into a handoff document for another agent | Pass work to a fresh session |
 | `/plugin-issue` | Files a bug or feature request on this plugin's GitHub repo | The plugin misbehaves or lacks something |
 | `/teach` | Teaches a skill or concept over multiple sessions in a stateful workspace | Learn something over time |
@@ -120,6 +124,7 @@ runs only when you ask.
 | `codebase-design` | Vocabulary for deep modules: lots of behaviour behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
 | `resolving-merge-conflicts` | Resolves in-progress merges/rebase by intent, hunk by hunk — never `--abort`. | A merge or rebase is in progress with conflicts. |
 | `using-references` | Consults the cloned reference corpus before reconstructing external behavior from scratch. | Reimplementing something with a reference available (ODE solvers, dense ML). |
+| `math-rendering` | Writes math as LaTeX ($…$, $$…$$, `\begin{aligned}`, matrices, radicals) because the TUI typesets it natively. | An answer contains formulas, equations, or math-heavy ML content. |
 | `using-git-worktrees` | Isolates feature work in a git worktree (`.worktrees/` convention). User-invoked only. | You ask for it — never auto-triggers. |
 
 ## Runtime behaviors
@@ -157,7 +162,7 @@ applying it.
 2. **List available releases** —
    `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.10.0`.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.11.0`.
    Installs are immutable copies, so the old version keeps working until the
    reinstall succeeds.
 4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools

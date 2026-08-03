@@ -193,6 +193,12 @@ const COMMANDS: CommandSpec[] = [
     },
   },
   {
+    name: "math",
+    description:
+      "Math formatting for this conversation: the TUI renders LaTeX natively ($...$ inline, $$...$$ / \\[...\\] display, \\begin{aligned}), so answers use LaTeX instead of ASCII approximations.",
+    bodyPath: "commands/math/command.md",
+  },
+  {
     name: "record",
     description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
     bodyPath: "commands/record/command.md",
