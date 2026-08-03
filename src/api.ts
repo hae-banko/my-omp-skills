@@ -61,7 +61,7 @@ export interface ToolDefinition {
   parameters: unknown;
   execute(
     toolCallId: string,
-    params: Record<string, unknown>,
+    params: unknown,
     signal: AbortSignal | undefined,
     onUpdate: unknown,
     ctx: { cwd: string },
@@ -79,7 +79,7 @@ export interface ZodLike {
   object(shape: Record<string, unknown>): unknown;
   enum(values: readonly string[]): { default(value: string): unknown };
   string(): { optional(): unknown };
-  number(): { int(): { min(n: number): { max(n: number): unknown } } };
+  number(): { int(): { min(n: number): { max(n: number): { optional(): unknown } } } };
   boolean(): { optional(): unknown };
 }
 

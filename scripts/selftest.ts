@@ -14,6 +14,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Bundled via esbuild alias to scripts/stubs/pi-tui.ts; the real module is
+// served at runtime by the omp binary.
+import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
+
 import extension from "../src/index.ts";
 
 interface HandlerContext {
@@ -37,6 +41,12 @@ interface RegisteredTool {
     onUpdate: unknown,
     ctx: { cwd: string },
   ): Promise<{ content: Array<{ type: string; text: string }>; details?: unknown }>;
+  renderResult?: (
+    result: { content: Array<{ type: string; text: string }>; details?: unknown },
+    options: { expanded: boolean },
+    theme: unknown,
+    args?: Record<string, unknown>,
+  ) => unknown;
 }
 
 const EXPECTED: Record<string, { companions?: number }> = {
@@ -80,7 +90,13 @@ const zod = {
   object: (shape: Record<string, unknown>) => ({ shape }),
   enum: (values: readonly string[]) => ({ default: (value: string) => ({ values, default: value }) }),
   string: () => ({ optional: () => ({ kind: "string" }) }),
-  number: () => ({ int: () => ({ min: (n: number) => ({ max: (m: number) => ({ kind: "number", min: n, max: m }) }) }) }),
+  number: () => ({
+    int: () => ({
+      min: (n: number) => ({
+        max: (m: number) => ({ optional: () => ({ kind: "number", min: n, max: m }) }),
+      }),
+    }),
+  }),
   boolean: () => ({ optional: () => ({ kind: "boolean" }) }),
 };
 
@@ -248,8 +264,75 @@ for (const [label, toolName, input, expectBlock] of cases) {
   }
 }
 
+// --- knowledge_read tool + renderers + receipts -----------------------------
+
+// The tool's details field is our own shape ({found, type, count, paths}).
+function isFoundDetails(details: unknown): boolean | undefined {
+  if (!details || typeof details !== "object") return undefined;
+  const d = details as { found?: boolean };
+  return d.found;
+}
+
+const knowledgeTool = tools.find((t) => t.name === "knowledge_read");
+if (!knowledgeTool) {
+  fail("tool: knowledge_read not registered");
+} else {
+  const res = await knowledgeTool.execute(
+    "t1",
+    { type: "records", limit: 10 },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const text = res.content.map((b) => b.text).join("");
+  if (isFoundDetails(res.details) !== true) fail("tool: records read not found");
+  if (!text.includes("2026-08-03_dtcm.md")) fail("tool: records read missing entry");
+
+  const idx = await knowledgeTool.execute(
+    "t2",
+    { type: "index" },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  if (!idx.content.map((b) => b.text).join("").includes("2026-08-03 DTCM")) {
+    fail("tool: index read missing line");
+  }
+
+  const none = await knowledgeTool.execute("t3", { type: "index" }, undefined, undefined, { cwd: "/" });
+  if (isFoundDetails(none.details) !== false) fail("tool: no-KB case not reported");
+
+  const rendered = knowledgeTool.renderResult?.(
+    { content: [{ type: "text", text: "a record\nsecond line" }], details: { found: true, type: "records", count: 2, paths: [] } },
+    { expanded: false },
+    null,
+  );
+  if (!(rendered instanceof TuiContainer)) fail("tool: renderResult did not produce a component");
+}
+
+if (!renderers["knowledge-record"] || !renderers["knowledge-pitfall"]) {
+  fail("renderers: knowledge-record/pitfall not registered");
+} else {
+  const card = renderers["knowledge-record"]({ content: "remember the DTCM thing" }, {}, null);
+  if (!(card instanceof TuiContainer)) fail("renderer: knowledge-record did not produce a component");
+}
+
+// Receipts: /record and /pitfall emit a custom message with the right type.
+customMessages.length = 0;
+await registered["record"].handler("remember the DTCM thing", {});
+if (customMessages.length !== 1 || customMessages[0].customType !== "knowledge-record") {
+  fail("record: receipt custom message missing or wrong type");
+} else if (!String(customMessages[0].content ?? "").includes("remember the DTCM thing")) {
+  fail("record: receipt content missing the finding");
+}
+customMessages.length = 0;
+await registered["pitfall"].handler("memory backend was off", {});
+if (customMessages.length !== 1 || customMessages[0].customType !== "knowledge-pitfall") {
+  fail("pitfall: receipt custom message missing or wrong type");
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — commands, bootstrap, and knowledge-base policy behave correctly.");
+console.log("\nOK — commands, bootstrap, policy, knowledge_read, and renderers behave correctly.");

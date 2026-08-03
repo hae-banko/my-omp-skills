@@ -10,7 +10,7 @@ wayfinding, handoff. Not vibe coding.
 
 ```bash
 # Pinned release (recommended — immutable, integrity-checkable)
-omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.5.0
+omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.6.0
 
 # Pinned by commit SHA (most immutable — tags can be moved by repo writers)
 omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
@@ -27,6 +27,15 @@ omp plugin install git@github.com:hae-banko/my-omp-skills.git
 Releases are tagged (`v0.4.2`, …). To update: list tags
 (`git ls-remote --tags origin`), then reinstall pinned to the new tag using
 the `git+ssh://…​#<tag>` form.
+
+If the install fails with `no commit matching "<tag>" found`, bun's cached git
+mirror is stale (it was cloned before the tag existed). Refresh it:
+
+```bash
+git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
+```
+
+Then retry the install.
 
 Then run **`/omp-setup`** once per repo. It configures the issue tracker
 (local `.scratch/` markdown by default, GitHub/GitLab available), triage
@@ -92,6 +101,9 @@ Beyond the slash commands, the extension wires three runtime behaviors:
   when it is about to edit a KB entry) plus always-apply rules
   (`use-record`, `use-pitfall`, `use-research`) that keep the right command
   discoverable mid-conversation.
+- **`knowledge_read` tool** (v0.6.0+) — the model can look up past findings
+  (INDEX, records, pitfalls, research projects) on demand; `/record` and
+  `/pitfall` show a compact receipt card in the transcript.
 
 See `AGENTS.md` and `CHANGELOG.md` for details.
 

@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
+import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -191,6 +192,7 @@ export default function (pi: ExtensionApi): void {
     COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),
   );
   installPolicy(pi);
+  installKnowledgeTool(pi);
 
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);

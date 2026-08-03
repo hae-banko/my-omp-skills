@@ -4,6 +4,20 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.6.0 — knowledge_read tool, transcript renderers
+
+- **`knowledge_read` tool**: the model can now look up past findings on demand
+  (`.omp/knowledge/` INDEX, records, pitfalls, or research projects) without
+  the user typing `/record --recent` first. Anchors on the nearest
+  `.omp/knowledge/` walking up from cwd; `type` / `slug` / `limit` / `full`
+  parameters.
+- **Transcript renderers**: `/record` and `/pitfall` emit a compact receipt
+  card (custom messages `knowledge-record` / `knowledge-pitfall`); the
+  `knowledge_read` tool result renders as a labeled summary card in the TUI.
+- Selftest now exercises the tool, renderers, and receipts against a fixture
+  knowledge base; `@oh-my-pi/pi-tui` is stubbed via esbuild alias (the real
+  module is served by the omp binary at runtime).
+
 ## v0.5.0 — runtime behaviors: bootstrap, KB policy, rules
 
 - **Bootstrap**: at session start and after compaction, the model receives a
