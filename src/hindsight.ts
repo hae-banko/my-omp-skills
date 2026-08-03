@@ -131,7 +131,7 @@ export function installHindsight(pi: ExtensionApi): void {
       message && typeof message === "object" && "content" in message
         ? String(message.content ?? "")
         : "";
-    const on = content.includes("on");
+    const on = content.trim().endsWith(" on");
     const box = new Container();
     box.addChild(new Text(`HINDSIGHT — ${on ? "ON" : "OFF"}`));
     box.addChild(

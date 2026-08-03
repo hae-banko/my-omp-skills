@@ -4,6 +4,20 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.14.0 — hindsight feedback like /advisor
+
+- `/hindsight` now gives advisor-style feedback: a persistent footer status
+  line (`Hindsight: on` / `Hindsight: off`) via `ui.setStatus`, set on every
+  invocation (toggle, `on`/`off`, or `status`), plus the existing toast. The
+  footer indicator is synchronous UI, so it appears even when the session is
+  mid-stream — where the receipt card was queued invisibly and the toggle
+  looked like nothing happened. The toggle itself stays silent (no user
+  message, no model reply).
+- The `hindsight` receipt renderer's state detection is now exact
+  (`content` ends in " on") instead of a substring check.
+- Selftest: status asserts the footer status-line call; `api.ts` documents
+  `ui.setStatus`.
+
 ## v0.13.3 — hindsight status + clearer card
 
 - `/hindsight status` (or `state`) reports the current state without toggling

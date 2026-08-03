@@ -6,6 +6,8 @@
 export interface CommandContext {
   ui?: {
     notify?(message: string, level?: string): void;
+    /** Persistent footer status slot (keyed), e.g. mode indicators. */
+    setStatus?(key: string, text: string | undefined): void;
   };
 }
 

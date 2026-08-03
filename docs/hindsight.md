@@ -82,8 +82,12 @@ worth the risk for a package. Not implemented.
 
 - The nudge is `display: false` (forced by the runtime); the user sees the
   reflection turn's output. The toggle is **silent**: the handler flips the
-  state, emits a `hindsight` receipt card, and notifies via `ui.notify` — it
-  sends no user message, so the model never replies to an on/off toggle.
+  state, emits a `hindsight` receipt card, sets a persistent footer status
+  line (`Hindsight: on` / `Hindsight: off`) via `ui.setStatus`, and notifies
+  via `ui.notify` — it sends no user message, so the model never replies to an
+  on/off toggle. The footer indicator is synchronous UI, so it appears even
+  when the session is mid-stream (where a receipt card would be queued
+  invisibly).
 
 ## Gating rules
 

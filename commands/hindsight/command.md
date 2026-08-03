@@ -17,11 +17,13 @@ have made the whole approach simpler.
 ## How it works
 
 - **Toggle**: `/hindsight` (bare, toggles), `/hindsight on`, or `/hindsight off`.
-  The toggle is **silent** — the extension flips the state and shows a
-  receipt card + notification; the model does not reply. The model's only job
-  is to follow the hidden nudge when it arrives.
-- **Check the state**: `/hindsight status` shows the current state (same
-  silent card) without toggling.
+  The toggle is **silent** — the extension flips the state and shows
+  advisor-style feedback: a persistent footer status line (`Hindsight: on` /
+  `Hindsight: off`) plus a transition toast; the model does not reply. The
+  model's only job is to follow the hidden nudge when it arrives.
+- **Check the state**: `/hindsight status` reports the current state (same
+  footer indicator) without toggling. The footer line is set on every
+  invocation and always reflects the live state.
 - **Once per turn**: a turn that was already a reflection pass is never
   nudged again; the runtime's continuation cap is never approached.
 - **Only real work**: turns that used tools, or reasoned substantially, get

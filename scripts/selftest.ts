@@ -24,6 +24,7 @@ import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 interface HandlerContext {
   ui?: {
     notify?(message: string, level?: string): void;
+    setStatus?(key: string, text: string | undefined): void;
   };
 }
 
@@ -438,10 +439,19 @@ if (!sessionStop) {
   // Status: reports the state without toggling and without a user message.
   sent.length = 0;
   customMessages.length = 0;
-  await registered["hindsight"].handler("status", {});
+  const statusCalls: string[] = [];
+  await registered["hindsight"].handler("status", {
+    ui: {
+      setStatus: (_key: string, text: string | undefined) => statusCalls.push(String(text)),
+      notify: () => {},
+    },
+  });
   if (sent.length !== 0) fail("hindsight: status emitted a user message");
   if (customMessages.length !== 1 || !String(customMessages[0].content ?? "").includes("on")) {
     fail("hindsight: status receipt does not report the on state");
+  }
+  if (statusCalls.length !== 1 || statusCalls[0] !== "Hindsight: on") {
+    fail("hindsight: status did not set the footer status line");
   }
   if (!isHindsightEnabled()) fail("hindsight: status toggled the state");
 

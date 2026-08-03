@@ -177,8 +177,16 @@ const COMMANDS: CommandSpec[] = [
       reloadHindsightConfig(); // edits to ~/.omp/hindsight.json apply on any invocation
       const arg = args.trim().toLowerCase();
       const on = isHindsightEnabled();
-      // Status: report the current state without toggling. Still silent —
-      // no user message, just the card + notification.
+      // Advisor-style feedback: a persistent footer status line ("Hindsight:
+      // on/off") plus a transition toast. The footer indicator is synchronous
+      // UI, so it shows even when the session is mid-stream (where the receipt
+      // card would be queued invisibly). No user message — the model never
+      // replies to a toggle.
+      const report = (label: string, state: boolean) => {
+        ctx.ui?.setStatus?.("hindsight", `Hindsight: ${state ? "on" : "off"}`);
+        ctx.ui?.notify?.(`${label} ${state ? "enabled" : "disabled"}`, "info");
+      };
+      // Status: report the current state without toggling.
       if (arg === "status" || arg === "state") {
         pi.sendMessage(
           {
@@ -189,13 +197,11 @@ const COMMANDS: CommandSpec[] = [
           },
           { deliverAs: "followUp" },
         );
-        ctx.ui?.notify?.(`hindsight is ${on ? "enabled" : "disabled"}`, "info");
+        report("hindsight is", on);
         return;
       }
       const next = arg === "on" ? true : arg === "off" ? false : !on;
       setHindsightEnabled(next);
-      // Silent toggle: no user message, so the model never replies. The
-      // receipt card + UI notification are the only feedback.
       pi.sendMessage(
         {
           customType: "hindsight",
@@ -205,7 +211,7 @@ const COMMANDS: CommandSpec[] = [
         },
         { deliverAs: "followUp" },
       );
-      ctx.ui?.notify?.(`hindsight ${next ? "enabled" : "disabled"}`, "info");
+      report("hindsight", next);
     },
   },
   {
