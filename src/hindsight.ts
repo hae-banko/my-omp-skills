@@ -21,27 +21,82 @@
 //   approached.
 // - Thinking traces come for free: the continuation turn's context is the
 //   full transcript, including the model's own thinking blocks.
+//
+// Configuration: ~/.omp/hindsight.json (user-level). Fields: name (what the
+// pass is called), nudge (the reflection question), leadIn (the one-line
+// prefix a revision leads with), onMessage/offMessage (toggle state
+// messages). Missing or invalid fields fall back to defaults; the file is
+// re-read on every /hindsight invocation.
 
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionApi } from "./api.ts";
 
 /** A "substantial" pure-reasoning turn, in characters of thinking text. */
 const THINKING_MIN_CHARS = 400;
 
-const NUDGE = `<my-omp-skills:hindsight>
+export interface HindsightConfig {
+  name: string;
+  nudge: string;
+  leadIn: string;
+  onMessage: string;
+  offMessage: string;
+}
 
-One more look before this turn settles — Hindsight.
+export const HINDSIGHT_CONFIG_PATH = join(homedir(), ".omp", "hindsight.json");
 
-While reasoning about this, did you face challenges or hit walls that would be greatly simplified by design-level changes? Look back at your own thinking and your tool results, and revise your answer if a design-level change would help.
+/** Config file location — overridable via HINDSIGHT_CONFIG (e.g. for testing). */
+export function hindsightConfigPath(): string {
+  return process.env.HINDSIGHT_CONFIG ?? HINDSIGHT_CONFIG_PATH;
+}
 
-If you revise: lead your reply with a one-line "On reflection…" note so this second pass is self-explanatory. If the answer stands: say so in one line and stop.`;
+const DEFAULT_CONFIG: HindsightConfig = {
+  name: "Hindsight",
+  nudge:
+    "While reasoning about this, did you face challenges or hit walls that would be greatly simplified by design-level changes? Look back at your own thinking and your tool results, and revise your answer if a design-level change would help.",
+  leadIn: "On reflection…",
+  onMessage:
+    "Hindsight enabled. After each turn that does real work, one hidden reflection pass runs before the turn settles: the model looks back at its own thinking and tool results and revises the answer if a design-level change would simplify the approach. Run /hindsight off to disable.",
+  offMessage: "Hindsight disabled — turns settle after the first pass.",
+};
 
-export const HINDSIGHT_ON_MESSAGE =
-  "Hindsight enabled. After each turn that does real work, one hidden reflection pass runs before the turn settles: the model looks back at its own thinking and tool results and revises the answer if a design-level change would simplify the approach. Run /hindsight off to disable.";
-
-export const HINDSIGHT_OFF_MESSAGE =
-  "Hindsight disabled — turns settle after the first pass.";
-
+let config: HindsightConfig = DEFAULT_CONFIG;
 let enabled = false;
+
+/**
+ * Re-read the config file (default: ~/.omp/hindsight.json). A missing file,
+ * invalid JSON, or invalid fields all fall back to the defaults — a broken
+ * config must never take the nudge down.
+ */
+export function reloadHindsightConfig(path: string = hindsightConfigPath()): void {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    config = DEFAULT_CONFIG;
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    config = DEFAULT_CONFIG;
+    return;
+  }
+  const partial = (parsed ?? {}) as Record<string, unknown>;
+  const pick = (key: keyof HindsightConfig): string =>
+    typeof partial[key] === "string" && (partial[key] as string).length > 0
+      ? (partial[key] as string)
+      : DEFAULT_CONFIG[key];
+  config = {
+    name: pick("name"),
+    nudge: pick("nudge"),
+    leadIn: pick("leadIn"),
+    onMessage: pick("onMessage"),
+    offMessage: pick("offMessage"),
+  };
+}
 
 export function isHindsightEnabled(): boolean {
   return enabled;
@@ -51,6 +106,24 @@ export function setHindsightEnabled(next: boolean): void {
   enabled = next;
 }
 
+export function hindsightOnMessage(): string {
+  return config.onMessage;
+}
+
+export function hindsightOffMessage(): string {
+  return config.offMessage;
+}
+
+function buildNudge(): string {
+  return `<my-omp-skills:hindsight>
+
+One more look before this turn settles — ${config.name}.
+
+${config.nudge}
+
+If you revise: lead your reply with a one-line "${config.leadIn}" note so this second pass is self-explanatory. If the answer stands: say so in one line and stop.`;
+}
+
 /** Narrowed view of the session_stop event payload. */
 interface SessionStopEvent {
   stop_hook_active?: unknown;
@@ -58,12 +131,13 @@ interface SessionStopEvent {
 }
 
 export function installHindsight(pi: ExtensionApi): void {
+  reloadHindsightConfig();
   pi.on("session_stop", (event) => {
     if (!enabled) return;
     const stopEvent = event as SessionStopEvent;
     if (stopEvent.stop_hook_active === true) return; // already a continuation turn
     if (!didRealWork(stopEvent.last_assistant_message)) return; // trivial turn
-    return { continue: true, additionalContext: NUDGE };
+    return { continue: true, additionalContext: buildNudge() };
   });
 }
 

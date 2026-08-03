@@ -29,3 +29,25 @@ have made the whole approach simpler.
 - **The output**: the reflection turn leads with a one-line "On reflection…"
   note when it revises; when the answer stands, it says so in one line and
   stops.
+
+## Configuration
+
+Hindsight reads `~/.omp/hindsight.json` — edit it, then invoke `/hindsight`
+again (any invocation re-reads the file):
+
+```json
+{
+  "name": "Hindsight",
+  "nudge": "While reasoning about this, did you face challenges or hit walls that would be greatly simplified by design-level changes? Look back at your own thinking and your tool results, and revise your answer if a design-level change would help.",
+  "leadIn": "On reflection…",
+  "onMessage": "Hindsight enabled. After each turn that does real work, one hidden reflection pass runs before the turn settles. Run /hindsight off to disable.",
+  "offMessage": "Hindsight disabled — turns settle after the first pass."
+}
+```
+
+- `name` — what the pass is called in the nudge and the toggle messages.
+- `nudge` — the reflection question itself.
+- `leadIn` — the one-line prefix a revision leads with.
+- `onMessage` / `offMessage` — the messages shown when the pass is toggled.
+
+Missing or invalid fields fall back to the defaults.

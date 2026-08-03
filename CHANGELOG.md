@@ -4,6 +4,18 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.10.0 — configurable Hindsight
+
+- Hindsight reads `~/.omp/hindsight.json`: `name` (what the pass is called),
+  `nudge` (the reflection prompt), `leadIn` (the one-line prefix a revision
+  leads with), `onMessage`/`offMessage` (toggle messages). Missing files,
+  invalid JSON, and invalid fields all fall back to the defaults — a broken
+  config never takes the nudge down.
+- The file is re-read on every `/hindsight` invocation, so edits apply
+  without re-entering omp. Selftest extended (custom name/nudge/leadIn in
+  the hidden continuation; invalid-config fallback); command body, design
+  doc, AGENTS.md, and README document the configuration.
+
 ## v0.9.0 — Hindsight: the settle-time reflection pass
 
 - **`/hindsight`** command (user-invoked toggle, `on`/`off`/bare): while on,

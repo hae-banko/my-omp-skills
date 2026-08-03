@@ -17,10 +17,11 @@ import { join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
 import {
-  HINDSIGHT_OFF_MESSAGE,
-  HINDSIGHT_ON_MESSAGE,
+  hindsightOffMessage,
+  hindsightOnMessage,
   installHindsight,
   isHindsightEnabled,
+  reloadHindsightConfig,
   setHindsightEnabled,
 } from "./hindsight.ts";
 import { installKnowledgeTool } from "./knowledge-tool.ts";
@@ -174,10 +175,11 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/hindsight/command.md",
     customType: "hindsight",
     handler: (pi) => async (args, ctx) => {
+      reloadHindsightConfig(); // edits to ~/.omp/hindsight.json apply on any invocation
       const arg = args.trim().toLowerCase();
       const next = arg === "on" ? true : arg === "off" ? false : !isHindsightEnabled();
       setHindsightEnabled(next);
-      await pi.sendUserMessage(next ? HINDSIGHT_ON_MESSAGE : HINDSIGHT_OFF_MESSAGE);
+      await pi.sendUserMessage(next ? hindsightOnMessage() : hindsightOffMessage());
       pi.sendMessage(
         {
           customType: "hindsight",

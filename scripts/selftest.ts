@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
 
 import extension from "../src/index.ts";
+import { reloadHindsightConfig } from "../src/hindsight.ts";
 
 interface HandlerContext {
   ui?: {
@@ -420,6 +421,64 @@ if (!sessionStop) {
     fail("hindsight: bare toggle did not enable");
   }
   await registered["hindsight"].handler("off", {});
+
+  // --- Configurable: name, nudge, leadIn, and toggle messages ---------------
+
+  const cfgDir = mkdtempSync(join(tmpdir(), "my-omp-skills-hindsight-cfg-"));
+  const cfgPath = join(cfgDir, "hindsight.json");
+  // The toggle handler re-reads the config file itself; point it at the temp
+  // file via the HINDSIGHT_CONFIG override so the two stay in sync.
+  const prevConfigEnv = process.env.HINDSIGHT_CONFIG;
+  process.env.HINDSIGHT_CONFIG = cfgPath;
+  writeFileSync(
+    cfgPath,
+    JSON.stringify({
+      name: "Second Look",
+      nudge: "Did you hit walls that design changes would simplify?",
+      leadIn: "Rethinking…",
+      onMessage: "Second Look is on.",
+      offMessage: "Second Look is off.",
+    }),
+  );
+  reloadHindsightConfig(cfgPath);
+
+  sent.length = 0;
+  await registered["hindsight"].handler("on", {});
+  if (!sent[0]?.includes("Second Look is on.")) {
+    fail("hindsight: custom onMessage not used");
+  }
+  const customNudge = await sessionStop(toolTurn);
+  const nudgeText = String(
+    (customNudge as { additionalContext?: unknown } | undefined)?.additionalContext ?? "",
+  );
+  if (!nudgeText.includes("Second Look")) fail("hindsight: custom name not in nudge");
+  if (!nudgeText.includes("Rethinking…")) fail("hindsight: custom leadIn not in nudge");
+  if (!nudgeText.includes("Did you hit walls")) fail("hindsight: custom nudge not used");
+
+  // Invalid JSON → defaults; the nudge must not go down.
+  writeFileSync(cfgPath, "{ not json");
+  reloadHindsightConfig(cfgPath);
+  sent.length = 0;
+  await registered["hindsight"].handler("on", {});
+  if (!sent[0]?.includes("Hindsight enabled")) {
+    fail("hindsight: invalid config did not fall back to defaults");
+  }
+  const fallbackNudge = await sessionStop(toolTurn);
+  if (
+    !String(
+      (fallbackNudge as { additionalContext?: unknown } | undefined)?.additionalContext ?? "",
+    ).includes("design-level")
+  ) {
+    fail("hindsight: invalid config broke the default nudge");
+  }
+
+  await registered["hindsight"].handler("off", {});
+  if (prevConfigEnv === undefined) {
+    delete process.env.HINDSIGHT_CONFIG;
+  } else {
+    process.env.HINDSIGHT_CONFIG = prevConfigEnv;
+  }
+  reloadHindsightConfig(); // restore the real default path
 }
 
 if (failures > 0) {

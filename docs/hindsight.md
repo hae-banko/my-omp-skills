@@ -96,6 +96,24 @@ Nudge only when the turn did real work and hasn't been nudged yet:
    text) — a pure-reasoning hard problem still gets the nudge.
 4. Trivial turns (no tool calls, little thinking) pass through untouched.
 
+## Configuration
+
+`~/.omp/hindsight.json` (user-level; re-read on every `/hindsight`
+invocation). Fields, all optional with defaults:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `name` | `"Hindsight"` | What the pass is called in the nudge and toggle messages |
+| `nudge` | the Fable question | The reflection prompt |
+| `leadIn` | `"On reflection…"` | The one-line prefix a revision leads with |
+| `onMessage` / `offMessage` | state notices | Toggle messages |
+
+Missing files, invalid JSON, and invalid fields all fall back to the defaults
+— a broken config never takes the nudge down. The `<my-omp-skills:hindsight>`
+marker in the hidden message is fixed (it identifies the continuation to the
+package, not to the user). The file location can be overridden with the
+`HINDSIGHT_CONFIG` environment variable (used by the selftest).
+
 ## Implementation notes
 
 - `src/hindsight.ts` — module-level `enabled` flag, `installHindsight(pi)`

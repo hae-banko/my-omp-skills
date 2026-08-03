@@ -108,7 +108,10 @@ Rules the model follows:
 - Subagent/task sessions are never interrupted.
 
 The nudge is a hidden message (`display: false`) — the user sees only the
-reflection turn's output. See `docs/hindsight.md` for the full mechanics.
+reflection turn's output. All of it is configurable via
+`~/.omp/hindsight.json` (`name`, `nudge`, `leadIn`, `onMessage`,
+`offMessage`); edits apply on the next `/hindsight` invocation. See
+`docs/hindsight.md` for the full mechanics.
 
 ## Routinization convention
 
