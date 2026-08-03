@@ -9,11 +9,22 @@ wayfinding, handoff. Not vibe coding.
 ## Install
 
 ```bash
+# Pinned release (recommended — immutable, integrity-checkable)
+omp plugin install git@github.com:hae-banko/my-omp-skills.git#v0.4.2
+
+# Unpinned (tracks main; development only)
 omp plugin install git@github.com:hae-banko/my-omp-skills.git
 ```
 
 (Private repo — your SSH key must have access. Local development instead:
 `omp plugin link /path/to/my-omp-skills`.)
+
+### Updating
+
+Releases are tagged (`v0.4.2`, …). To update: list tags
+(`git ls-remote --tags origin`), then reinstall pinned to the new tag.
+Branch protection on `main` requires PRs for all changes — main only moves
+via reviewed merges, never direct pushes.
 
 Then run **`/omp-setup`** once per repo. It configures the issue tracker
 (local `.scratch/` markdown by default, GitHub/GitLab available), triage
