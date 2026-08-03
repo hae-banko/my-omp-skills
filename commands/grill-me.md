@@ -1,0 +1,1 @@
+Run a `grilling` session: read the `grilling` skill and follow its loop exactly — interview the user relentlessly about the plan, decision, or idea, one question at a time with a recommended answer for each, until every branch of the decision tree is resolved and a shared understanding is reached.

@@ -1,0 +1,168 @@
+// my-omp-skills — extension entry point.
+//
+// Registers every slash command in this package. Workflow bodies are plain
+// markdown under ../commands (editable without touching code); companion
+// reference files (agent briefs, HTML scaffolds, seed templates, formats)
+// are disclosed to the agent as absolute-path pointers in the injected
+// message, so they stay out of the prompt until the workflow needs them.
+//
+// Adapted from Matt Pocock's skills (https://github.com/mattpocock/skills, MIT).
+//
+// The types below are minimal structural contracts for the subset of the omp
+// ExtensionAPI this module uses; the runtime passes the full API, which is a
+// structural superset, so this remains assignable both ways.
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const ROOT = join(import.meta.dirname, "..");
+
+interface CommandSpec {
+  name: string;
+  description: string;
+  /** path relative to ROOT of the workflow markdown body */
+  bodyPath: string;
+  /** paths relative to ROOT of companion reference files, disclosed as pointers */
+  companions?: string[];
+}
+
+interface CommandContext {
+  ui?: {
+    notify?(message: string, level?: string): void;
+  };
+}
+
+interface ExtensionApi {
+  registerCommand(
+    name: string,
+    def: {
+      description: string;
+      handler: (args: string, ctx: CommandContext) => Promise<void> | void;
+    },
+  ): void;
+  sendUserMessage(content: string, options?: { deliverAs?: string }): Promise<unknown>;
+}
+
+const COMMANDS: CommandSpec[] = [
+  {
+    name: "ask-matt",
+    description: "Ask which command or flow fits your situation. A router over the commands in this package.",
+    bodyPath: "commands/ask-matt.md",
+  },
+  {
+    name: "grill-me",
+    description: "A relentless interview to sharpen a plan or design.",
+    bodyPath: "commands/grill-me.md",
+  },
+  {
+    name: "grill-with-docs",
+    description: "A relentless interview to sharpen a plan or design, which also creates docs (ADRs and glossary) as we go.",
+    bodyPath: "commands/grill-with-docs.md",
+  },
+  {
+    name: "triage",
+    description: "Move issues and external PRs through a state machine of triage roles — categorise, verify, grill if needed, and write agent-ready briefs.",
+    bodyPath: "commands/triage/command.md",
+    companions: [
+      "commands/triage/AGENT-BRIEF.md",
+      "commands/triage/OUT-OF-SCOPE.md",
+    ],
+  },
+  {
+    name: "improve-codebase-architecture",
+    description: "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+    bodyPath: "commands/improve-codebase-architecture/command.md",
+    companions: ["commands/improve-codebase-architecture/HTML-REPORT.md"],
+  },
+  {
+    name: "setup",
+    description: "Configure this repo for the workflow commands — issue tracker (local .scratch by default), triage label vocabulary, and domain doc layout. Run once per repo.",
+    bodyPath: "commands/setup/command.md",
+    companions: [
+      "commands/setup/issue-tracker-local.md",
+      "commands/setup/issue-tracker-github.md",
+      "commands/setup/issue-tracker-gitlab.md",
+      "commands/setup/triage-labels.md",
+      "commands/setup/domain.md",
+    ],
+  },
+  {
+    name: "to-spec",
+    description: "Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.",
+    bodyPath: "commands/to-spec.md",
+  },
+  {
+    name: "to-tickets",
+    description: "Break a plan, spec, or conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker.",
+    bodyPath: "commands/to-tickets.md",
+  },
+  {
+    name: "implement",
+    description: "Build the work described by a spec or set of tickets, driving tdd at pre-agreed seams and closing out with code-review before committing.",
+    bodyPath: "commands/implement.md",
+  },
+  {
+    name: "wayfinder",
+    description: "Plan a huge chunk of work — more than one session can hold — as a shared map of decision tickets on the issue tracker, and resolve them one at a time until the way is clear.",
+    bodyPath: "commands/wayfinder.md",
+  },
+  {
+    name: "handoff",
+    description: "Compact the current conversation into a handoff document for another agent to pick up.",
+    bodyPath: "commands/handoff.md",
+  },
+  {
+    name: "teach",
+    description: "Teach the user a new skill or concept over multiple sessions, using the current directory as a stateful teaching workspace.",
+    bodyPath: "commands/teach/command.md",
+    companions: [
+      "commands/teach/MISSION-FORMAT.md",
+      "commands/teach/RESOURCES-FORMAT.md",
+      "commands/teach/LEARNING-RECORD-FORMAT.md",
+      "commands/teach/GLOSSARY-FORMAT.md",
+    ],
+  },
+  {
+    name: "writing-great-skills",
+    description: "Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable.",
+    bodyPath: "commands/writing-great-skills/command.md",
+    companions: ["commands/writing-great-skills/GLOSSARY.md"],
+  },
+];
+
+function loadBody(rel: string): string {
+  const raw = readFileSync(join(ROOT, rel), "utf8");
+  if (raw.startsWith("---")) {
+    const end = raw.indexOf("\n---", 3);
+    if (end !== -1) return raw.slice(end + 4).trim();
+  }
+  return raw.trim();
+}
+
+export default function (pi: ExtensionApi): void {
+  for (const spec of COMMANDS) {
+    const body = loadBody(spec.bodyPath);
+    const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));
+
+    pi.registerCommand(spec.name, {
+      description: spec.description,
+      handler: async (args: string, ctx: CommandContext) => {
+        const argText = args.trim();
+        let text = body;
+        if (argText) {
+          text = text.replace(/\$ARGUMENTS/g, argText);
+          text += `\n\n## User's arguments\n${argText}`;
+        } else {
+          text = text.replace(/\$ARGUMENTS/g, "");
+        }
+        if (companionPaths.length > 0) {
+          text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${companionPaths.join(
+            "\n",
+          )}`;
+        }
+        await pi.sendUserMessage(text);
+        ctx.ui?.notify?.(`Running ${spec.name}`, "info");
+      },
+    });
+  }
+}
