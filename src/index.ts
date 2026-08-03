@@ -151,6 +151,11 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/handoff.md",
   },
   {
+    name: "plugin-issue",
+    description: "Report a bug or missing feature in this plugin as a GitHub issue on hae-banko/my-omp-skills. Auto-posts after a duplicate check.",
+    bodyPath: "commands/plugin-issue/command.md",
+  },
+  {
     name: "record",
     description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
     bodyPath: "commands/record/command.md",

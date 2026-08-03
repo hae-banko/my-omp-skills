@@ -76,6 +76,10 @@ For academic, technical, and market research — a two-phase, human-in-the-loop 
 
 Requires Python + `pyyaml` (for the JSON validator). Projects live in `.omp/knowledge/research/<date>_<topic_slug>/` — `outline.yaml`, `fields.yaml`, `results/*.json`, `report.md` — timestamped, append-only, and indexed in `.omp/knowledge/INDEX.md` like `/record` entries. Pass the project slug as an argument to `/research-deep`/`/research-report` to pick a specific project.
 
+## Plugin feedback
+
+- **`/plugin-issue`** — found a bug or want a feature in this package? Auto-posts a GitHub issue to `hae-banko/my-omp-skills` (after a duplicate check), labeled `bug` or `enhancement`. Later, run `/omp-setup` + `/triage` inside the plugin repo to process the backlog.
+
 ## Knowledge base
 
 - **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/records/`. The deliberate end-of-work capture. Runs in the background when invoked mid-flow.
