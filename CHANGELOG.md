@@ -4,6 +4,15 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.13.2 — silent hindsight toggle
+
+- `/hindsight on|off` no longer sends a user message, so the model never
+  replies to a toggle — just a `hindsight` receipt card (`HINDSIGHT — ON/OFF`,
+  new renderer) and a `ui.notify`. The `onMessage`/`offMessage` config fields
+  are removed (they existed only to feed that reply); `name`/`nudge`/`leadIn`
+  remain. Selftest: silent commands are marked in EXPECTED and asserted to
+  emit no user message; renderer asserted.
+
 ## v0.13.1 — herdr read parsing fix
 
 - `herdr pane read` / `herdr agent read` print **raw terminal text**, not a

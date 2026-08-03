@@ -51,11 +51,11 @@ interface RegisteredTool {
   ) => unknown;
 }
 
-const EXPECTED: Record<string, { companions?: number }> = {
+const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   "ask-me": {},
   "grill-me": {},
   "grill-with-docs": {},
-  hindsight: {},
+  hindsight: { silent: true },
   math: {},
   triage: { companions: 2 },
   "improve-codebase-architecture": { companions: 1 },
@@ -153,6 +153,9 @@ console.log(`registered: ${Object.keys(registered).sort().join(", ")}`);
 for (const name of Object.keys(registered)) {
   const def = registered[name];
   if (!def.description) fail(`${name}: missing description`);
+  // Silent commands (e.g. /hindsight toggle) intentionally send no user
+  // message — the model must not reply. They are checked for silence below.
+  if (EXPECTED[name]?.silent) continue;
   sent.length = 0;
   await def.handler("", {});
   const injected = sent[0] ?? "";
@@ -325,6 +328,12 @@ if (!renderers["knowledge-record"] || !renderers["knowledge-pitfall"]) {
   const card = renderers["knowledge-record"]({ content: "remember the DTCM thing" }, {}, null);
   if (!(card instanceof TuiContainer)) fail("renderer: knowledge-record did not produce a component");
 }
+if (!renderers["hindsight"]) {
+  fail("renderers: hindsight receipt renderer not registered");
+} else {
+  const card = renderers["hindsight"]({ content: "hindsight on" }, {}, null);
+  if (!(card instanceof TuiContainer)) fail("renderer: hindsight did not produce a component");
+}
 
 // Receipts: /record and /pitfall emit a custom message with the right type.
 customMessages.length = 0;
@@ -441,16 +450,18 @@ if (!sessionStop) {
       name: "Second Look",
       nudge: "Did you hit walls that design changes would simplify?",
       leadIn: "Rethinking…",
-      onMessage: "Second Look is on.",
-      offMessage: "Second Look is off.",
     }),
   );
   reloadHindsightConfig(cfgPath);
 
   sent.length = 0;
+  customMessages.length = 0;
   await registered["hindsight"].handler("on", {});
-  if (!sent[0]?.includes("Second Look is on.")) {
-    fail("hindsight: custom onMessage not used");
+  if (sent.length !== 0) fail("hindsight: toggle emitted a user message (model would reply)");
+  if (customMessages.length !== 1 || customMessages[0].customType !== "hindsight") {
+    fail("hindsight: toggle receipt custom message missing or wrong type");
+  } else if (!String(customMessages[0].content ?? "").includes("on")) {
+    fail("hindsight: receipt does not report the on state");
   }
   const customNudge = await sessionStop(toolTurn);
   const nudgeText = String(
@@ -460,14 +471,12 @@ if (!sessionStop) {
   if (!nudgeText.includes("Rethinking…")) fail("hindsight: custom leadIn not in nudge");
   if (!nudgeText.includes("Did you hit walls")) fail("hindsight: custom nudge not used");
 
-  // Invalid JSON → defaults; the nudge must not go down.
+  // Invalid JSON → defaults; the nudge must not go down, and the toggle stays silent.
   writeFileSync(cfgPath, "{ not json");
   reloadHindsightConfig(cfgPath);
   sent.length = 0;
   await registered["hindsight"].handler("on", {});
-  if (!sent[0]?.includes("Hindsight enabled")) {
-    fail("hindsight: invalid config did not fall back to defaults");
-  }
+  if (sent.length !== 0) fail("hindsight: invalid-config toggle emitted a user message");
   const fallbackNudge = await sessionStop(toolTurn);
   if (
     !String(

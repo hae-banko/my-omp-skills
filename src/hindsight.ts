@@ -24,13 +24,15 @@
 //
 // Configuration: ~/.omp/hindsight.json (user-level). Fields: name (what the
 // pass is called), nudge (the reflection question), leadIn (the one-line
-// prefix a revision leads with), onMessage/offMessage (toggle state
-// messages). Missing or invalid fields fall back to defaults; the file is
-// re-read on every /hindsight invocation.
+// prefix a revision leads with). Missing or invalid fields fall back to
+// defaults; the file is re-read on every /hindsight invocation. The toggle
+// itself is silent — no user message, so the model never replies; a receipt
+// card and a UI notification are the only feedback.
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi } from "./api.ts";
 
 /** A "substantial" pure-reasoning turn, in characters of thinking text. */
@@ -40,8 +42,6 @@ export interface HindsightConfig {
   name: string;
   nudge: string;
   leadIn: string;
-  onMessage: string;
-  offMessage: string;
 }
 
 export const HINDSIGHT_CONFIG_PATH = join(homedir(), ".omp", "hindsight.json");
@@ -56,9 +56,6 @@ const DEFAULT_CONFIG: HindsightConfig = {
   nudge:
     "While reasoning about this, did you face challenges or hit walls that would be greatly simplified by design-level changes? Look back at your own thinking and your tool results, and revise your answer if a design-level change would help.",
   leadIn: "On reflection…",
-  onMessage:
-    "Hindsight enabled. After each turn that does real work, one hidden reflection pass runs before the turn settles: the model looks back at its own thinking and tool results and revises the answer if a design-level change would simplify the approach. Run /hindsight off to disable.",
-  offMessage: "Hindsight disabled — turns settle after the first pass.",
 };
 
 let config: HindsightConfig = DEFAULT_CONFIG;
@@ -93,8 +90,6 @@ export function reloadHindsightConfig(path: string = hindsightConfigPath()): voi
     name: pick("name"),
     nudge: pick("nudge"),
     leadIn: pick("leadIn"),
-    onMessage: pick("onMessage"),
-    offMessage: pick("offMessage"),
   };
 }
 
@@ -104,14 +99,6 @@ export function isHindsightEnabled(): boolean {
 
 export function setHindsightEnabled(next: boolean): void {
   enabled = next;
-}
-
-export function hindsightOnMessage(): string {
-  return config.onMessage;
-}
-
-export function hindsightOffMessage(): string {
-  return config.offMessage;
 }
 
 function buildNudge(): string {
@@ -138,6 +125,15 @@ export function installHindsight(pi: ExtensionApi): void {
     if (stopEvent.stop_hook_active === true) return; // already a continuation turn
     if (!didRealWork(stopEvent.last_assistant_message)) return; // trivial turn
     return { continue: true, additionalContext: buildNudge() };
+  });
+  pi.registerMessageRenderer("hindsight", (message, _options, _theme) => {
+    const content =
+      message && typeof message === "object" && "content" in message
+        ? String(message.content ?? "")
+        : "";
+    const box = new Container();
+    box.addChild(new Text(`HINDSIGHT — ${content.includes("on") ? "ON" : "OFF"}`));
+    return box;
   });
 }
 

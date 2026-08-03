@@ -17,8 +17,9 @@ have made the whole approach simpler.
 ## How it works
 
 - **Toggle**: `/hindsight` (bare, toggles), `/hindsight on`, or `/hindsight off`.
-  The toggle is handled by the extension; the model's job is just to follow
-  the hidden nudge when it arrives and keep the user informed.
+  The toggle is **silent** — the extension flips the state and shows a
+  receipt card + notification; the model does not reply. The model's only job
+  is to follow the hidden nudge when it arrives.
 - **Once per turn**: a turn that was already a reflection pass is never
   nudged again; the runtime's continuation cap is never approached.
 - **Only real work**: turns that used tools, or reasoned substantially, get
@@ -39,15 +40,12 @@ again (any invocation re-reads the file):
 {
   "name": "Hindsight",
   "nudge": "While reasoning about this, did you face challenges or hit walls that would be greatly simplified by design-level changes? Look back at your own thinking and your tool results, and revise your answer if a design-level change would help.",
-  "leadIn": "On reflection…",
-  "onMessage": "Hindsight enabled. After each turn that does real work, one hidden reflection pass runs before the turn settles. Run /hindsight off to disable.",
-  "offMessage": "Hindsight disabled — turns settle after the first pass."
+  "leadIn": "On reflection…"
 }
 ```
 
-- `name` — what the pass is called in the nudge and the toggle messages.
+- `name` — what the pass is called in the nudge.
 - `nudge` — the reflection question itself.
 - `leadIn` — the one-line prefix a revision leads with.
-- `onMessage` / `offMessage` — the messages shown when the pass is toggled.
 
 Missing or invalid fields fall back to the defaults.

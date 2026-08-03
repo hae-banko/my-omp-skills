@@ -81,8 +81,9 @@ worth the risk for a package. Not implemented.
   > "On reflection…" note. If the answer stands: say so in one line and stop.
 
 - The nudge is `display: false` (forced by the runtime); the user sees the
-  reflection turn's output. The toggle handler sends a short state message
-  and a `hindsight` receipt card.
+  reflection turn's output. The toggle is **silent**: the handler flips the
+  state, emits a `hindsight` receipt card, and notifies via `ui.notify` — it
+  sends no user message, so the model never replies to an on/off toggle.
 
 ## Gating rules
 
@@ -103,10 +104,9 @@ invocation). Fields, all optional with defaults:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `name` | `"Hindsight"` | What the pass is called in the nudge and toggle messages |
+| `name` | `"Hindsight"` | What the pass is called in the nudge |
 | `nudge` | the Fable question | The reflection prompt |
 | `leadIn` | `"On reflection…"` | The one-line prefix a revision leads with |
-| `onMessage` / `offMessage` | state notices | Toggle messages |
 
 Missing files, invalid JSON, and invalid fields all fall back to the defaults
 — a broken config never takes the nudge down. The `<my-omp-skills:hindsight>`

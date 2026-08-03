@@ -149,9 +149,10 @@ correcting entry rather than editing the old one.
 ## Configuration
 
 `/hindsight` is configurable via `~/.omp/hindsight.json` — set the mode name,
-the reflection prompt, the revision lead-in phrase, and the toggle messages.
-Any invocation of `/hindsight` re-reads the file; missing or invalid fields
-fall back to the defaults.
+the reflection prompt, and the revision lead-in phrase. Any invocation of
+`/hindsight` re-reads the file; missing or invalid fields fall back to the
+defaults. The toggle itself is silent — a receipt card and notification
+appear, the model does not reply.
 
 ## Updating & troubleshooting
 

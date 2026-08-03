@@ -18,8 +18,6 @@ import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
 import { installHerdrTools } from "./herdr-tools.ts";
 import {
-  hindsightOffMessage,
-  hindsightOnMessage,
   installHindsight,
   isHindsightEnabled,
   reloadHindsightConfig,
@@ -180,7 +178,8 @@ const COMMANDS: CommandSpec[] = [
       const arg = args.trim().toLowerCase();
       const next = arg === "on" ? true : arg === "off" ? false : !isHindsightEnabled();
       setHindsightEnabled(next);
-      await pi.sendUserMessage(next ? hindsightOnMessage() : hindsightOffMessage());
+      // Silent toggle: no user message, so the model never replies. The
+      // receipt card + UI notification are the only feedback.
       pi.sendMessage(
         {
           customType: "hindsight",
