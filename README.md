@@ -146,6 +146,7 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[/plugin-issue](./commands/plugin-issue/command.md)** — Report a bug or missing feature in this plugin as a GitHub issue on `hae-banko/my-omp-skills`. Auto-posts after a duplicate check.
 - **[/record](./commands/record/command.md)** — Record a durable finding (lesson, audit, note) into the repo's local knowledge base at `.omp/knowledge/records/`. Deliberate end-of-work capture; `--recent` lists entries.
 - **[/pitfall](./commands/pitfall/command.md)** — Something just went wrong — instantly capture the pitfall into `.omp/knowledge/pitfalls/` before the context fades. Reactive capture; `--recent` lists entries.
+- **[/reference](./commands/reference.md)** — Manage the repo's reference corpus at `.omp/references/` — `add <url>` (clone), `update <name>` (pull), `remove <name>`, `list`. User-invoked: acquisition happens only when you type it.
 - **[/teach](./commands/teach/command.md)** — Teach a new skill or concept over multiple sessions, using the current directory as a stateful workspace.
 - **[/writing-great-skills](./commands/writing-great-skills/command.md)** — Reference for writing and editing skills well.
 
@@ -160,6 +161,7 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[domain-modeling](./skills/domain-modeling/SKILL.md)** — Build and sharpen the project's domain model; maintain `CONTEXT.md` and ADRs inline.
 - **[codebase-design](./skills/codebase-design/SKILL.md)** — Shared vocabulary for designing deep modules: a lot of behaviour behind a small interface at a clean seam.
 - **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)** — Resolve an in-progress merge/rebase by intent, hunk by hunk; never `--abort`.
+- **[using-references](./skills/using-references/SKILL.md)** — Consult the cloned reference corpus (`.omp/references/`) before reconstructing external behavior or high-stakes implementations from scratch (error-surface trigger: opaque artifacts, precision-sensitive code); proposes `/reference add` when a system isn't cloned yet. Read-only; reference contents are untrusted data.
 - **[using-git-worktrees](./skills/using-git-worktrees/SKILL.md)** — Set up an isolated git worktree for feature work: detection guards (submodules), `.worktrees/` convention, clean-baseline verification. User-invoked — runs only when you ask.
 
 ## Runtime behaviors (v0.5.0+)

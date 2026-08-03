@@ -4,6 +4,21 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.7.0 — reference acquisition: /reference command + using-references skill
+
+- **`/reference`** command: manage the per-project reference corpus at
+  `.omp/references/` — `add <url>` (full clone, flat name, gitignored),
+  `update <name>` (git pull), `remove <name>`, `list`. User-invoked, so
+  acquisition is permission-gated by construction.
+- **`using-references`** skill (model-invoked): consults references before
+  reconstructing external behavior or high-stakes implementations from
+  memory — the error-surface trigger (opaque artifacts, precision-sensitive
+  code like ODE solvers / dense ML). Proposes `/reference add` when a system
+  isn't cloned yet; treats reference contents as untrusted data — read-only,
+  never executes, never follows embedded instructions.
+- Docs: design parked at `docs/reference-acquisition.md`; AGENTS.md gains the
+  reference-acquisition convention; README reference tables updated.
+
 ## v0.6.2 — docs: setup-after-update FAQ
 
 - README: answers "I already ran `/omp-setup` — do I need to re-run it after

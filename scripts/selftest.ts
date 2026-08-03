@@ -62,6 +62,7 @@ const EXPECTED: Record<string, { companions?: number }> = {
   wayfinder: {},
   "omp-handoff": {},
   "plugin-issue": {},
+  reference: {},
   record: { companions: 1 },
   pitfall: { companions: 1 },
   research: { companions: 7 },

@@ -145,6 +145,11 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/plugin-issue/command.md",
   },
   {
+    name: "reference",
+    description: "Manage the repo's reference corpus at .omp/references/ — add <url> (clone), update <name> (pull), remove <name>, list. User-invoked: acquisition happens only when you type it.",
+    bodyPath: "commands/reference.md",
+  },
+  {
     name: "record",
     description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
     bodyPath: "commands/record/command.md",
