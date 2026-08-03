@@ -176,7 +176,23 @@ const COMMANDS: CommandSpec[] = [
     handler: (pi) => async (args, ctx) => {
       reloadHindsightConfig(); // edits to ~/.omp/hindsight.json apply on any invocation
       const arg = args.trim().toLowerCase();
-      const next = arg === "on" ? true : arg === "off" ? false : !isHindsightEnabled();
+      const on = isHindsightEnabled();
+      // Status: report the current state without toggling. Still silent —
+      // no user message, just the card + notification.
+      if (arg === "status" || arg === "state") {
+        pi.sendMessage(
+          {
+            customType: "hindsight",
+            content: `hindsight ${on ? "on" : "off"}`,
+            display: true,
+            attribution: "user",
+          },
+          { deliverAs: "followUp" },
+        );
+        ctx.ui?.notify?.(`hindsight is ${on ? "enabled" : "disabled"}`, "info");
+        return;
+      }
+      const next = arg === "on" ? true : arg === "off" ? false : !on;
       setHindsightEnabled(next);
       // Silent toggle: no user message, so the model never replies. The
       // receipt card + UI notification are the only feedback.

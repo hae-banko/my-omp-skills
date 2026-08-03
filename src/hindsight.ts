@@ -131,8 +131,18 @@ export function installHindsight(pi: ExtensionApi): void {
       message && typeof message === "object" && "content" in message
         ? String(message.content ?? "")
         : "";
+    const on = content.includes("on");
     const box = new Container();
-    box.addChild(new Text(`HINDSIGHT — ${content.includes("on") ? "ON" : "OFF"}`));
+    box.addChild(new Text(`HINDSIGHT — ${on ? "ON" : "OFF"}`));
+    box.addChild(
+      new Text(
+        on
+          ? "  reflection pass runs after real-work turns"
+          : "  turns settle after the first pass",
+        0,
+        1,
+      ),
+    );
     return box;
   });
 }

@@ -20,6 +20,8 @@ have made the whole approach simpler.
   The toggle is **silent** — the extension flips the state and shows a
   receipt card + notification; the model does not reply. The model's only job
   is to follow the hidden nudge when it arrives.
+- **Check the state**: `/hindsight status` shows the current state (same
+  silent card) without toggling.
 - **Once per turn**: a turn that was already a reflection pass is never
   nudged again; the runtime's continuation cap is never approached.
 - **Only real work**: turns that used tools, or reasoned substantially, get

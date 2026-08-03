@@ -4,6 +4,15 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.13.3 — hindsight status + clearer card
+
+- `/hindsight status` (or `state`) reports the current state without toggling
+  and without a model reply — no more guessing whether the pass is on.
+- The `hindsight` receipt card now carries a subtitle: "reflection pass runs
+  after real-work turns" (on) / "turns settle after the first pass" (off).
+- Selftest: status emits no user message, reports the state, and does not
+  flip it.
+
 ## v0.13.2 — silent hindsight toggle
 
 - `/hindsight on|off` no longer sends a user message, so the model never

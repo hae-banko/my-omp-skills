@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
 
 import extension from "../src/index.ts";
-import { reloadHindsightConfig } from "../src/hindsight.ts";
+import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 
 interface HandlerContext {
   ui?: {
@@ -434,6 +434,17 @@ if (!sessionStop) {
   } else if (!String(customMessages[0].content ?? "").includes("on")) {
     fail("hindsight: bare toggle did not enable");
   }
+
+  // Status: reports the state without toggling and without a user message.
+  sent.length = 0;
+  customMessages.length = 0;
+  await registered["hindsight"].handler("status", {});
+  if (sent.length !== 0) fail("hindsight: status emitted a user message");
+  if (customMessages.length !== 1 || !String(customMessages[0].content ?? "").includes("on")) {
+    fail("hindsight: status receipt does not report the on state");
+  }
+  if (!isHindsightEnabled()) fail("hindsight: status toggled the state");
+
   await registered["hindsight"].handler("off", {});
 
   // --- Configurable: name, nudge, leadIn, and toggle messages ---------------
