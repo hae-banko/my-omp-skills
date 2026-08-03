@@ -83,7 +83,7 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
 - `execution`:
   - `batch_size`: number of parallel agents (confirm with `ask`)
   - `items_per_agent`: items per agent (confirm with `ask`)
-  - `output_dir`: results output directory (default: `./results`)
+  - `output_dir`: results output directory (default: `./results`, resolved relative to this project directory)
 
 **`fields.yaml`** (field definitions):
 - Field categories and definitions
@@ -93,17 +93,25 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
 
 ### Step 5: Output and Confirm
 
-- Create directory `./{topic_slug}/`
-- Save `outline.yaml` and `fields.yaml`
-- Show to the user for confirmation
+- Anchor to the repo root: `git rev-parse --show-toplevel` if unsure — never create research files under nested subdirectories.
+- Create the project directory: `<root>/.omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`, where `YYYY-MM-DD` is the current date and `<topic_slug>` is the dash-case slug of the topic.
+- Save `outline.yaml` and `fields.yaml` into it.
+- Append one line to `<root>/.omp/knowledge/INDEX.md` (create it with a one-line header if missing, newest first): `- YYYY-MM-DD <topic> (research) — .omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`.
+- Show to the user for confirmation.
 
 ## Output Path
 
 ```
-{current_working_directory}/{topic_slug}/
+<repo-root>/.omp/knowledge/research/YYYY-MM-DD_<topic_slug>/
   ├── outline.yaml    # items list + execution config
   └── fields.yaml     # field definitions
 ```
+
+## Rules
+
+- **Append-only.** Never overwrite or modify an existing project directory — a new run on the same topic is a new dated directory. (Editing `outline.yaml`/`fields.yaml` while the project is still in its outline phase is part of the workflow; once `/research-deep` completes, treat the project as closed.)
+- **Timestamped names.** The directory date is the creation date; keep it truthful.
+- **Indexed.** Every new project appends one line to `INDEX.md` — same convention as `/record` and `/pitfall`.
 
 ## Follow-up Commands
 

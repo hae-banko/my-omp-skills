@@ -39,7 +39,7 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[/wayfinder](./commands/wayfinder.md)** — Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
 - **[/improve-codebase-architecture](./commands/improve-codebase-architecture/command.md)** — Scan for deepening opportunities, present an HTML report, then grill through whichever you pick.
 - **[/omp-handoff](./commands/handoff.md)** — Compact the current conversation into a handoff document so another agent can continue.
-- **[/research](./commands/research/command.md)** — Phase 1 of deep research: outline generation (items + field framework) for academic/technical/market research, human-in-the-loop, web-supplemented.
+- **[/research](./commands/research/command.md)** — Phase 1 of deep research: outline generation (items + field framework) for academic/technical/market research, human-in-the-loop, web-supplemented. Projects land in `.omp/knowledge/research/<date>_<topic_slug>/`, indexed like `/record` entries.
 - **[/research-add-items](./commands/research-add-items/command.md)** — Add research items to an existing outline.
 - **[/research-add-fields](./commands/research-add-fields/command.md)** — Add field definitions to an existing outline.
 - **[/research-deep](./commands/research-deep/command.md)** — Phase 2: research each item with parallel background agents, outputting validated JSON per item.

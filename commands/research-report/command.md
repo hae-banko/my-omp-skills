@@ -10,7 +10,7 @@ Summarize deep-research results into a markdown report: table of contents plus d
 
 ### Step 1: Locate Results Directory
 
-Find `*/outline.yaml` in the current working directory; read `topic` and `output_dir` config.
+Anchor to the repo root (`git rev-parse --show-toplevel`). Locate the project under `<root>/.omp/knowledge/research/`: the **most recent** dated directory if the user names no specific one, or the directory matching the user's argument (e.g. `/research-report 2026-08-03_ai-agent-demo-2025`). Read its `outline.yaml` — `topic` and `output_dir` config; `{project_dir}` is the absolute path of the located project.
 
 ### Step 2: Scan Optional Summary Fields
 
@@ -23,7 +23,7 @@ Use the `ask` tool:
 
 ### Step 3: Generate Python Conversion Script
 
-Generate `generate_report.py` in the `{topic}/` directory. Requirements:
+Generate `generate_report.py` in `{project_dir}`. Requirements:
 
 - Read all JSON from `output_dir`
 - Read `fields.yaml` for the field structure
@@ -31,7 +31,7 @@ Generate `generate_report.py` in the `{topic}/` directory. Requirements:
 - Skip fields whose values contain `[uncertain]`
 - Skip fields listed in the `uncertain` array
 - Generate markdown report format: table of contents (with anchor links + user-selected summary fields) + detailed content (by field category)
-- Save to `{topic}/report.md`
+- Save to `{project_dir}/report.md`
 
 **TOC format requirements:**
 - Must include every item
@@ -79,9 +79,9 @@ CATEGORY_MAPPING = {
 
 ### Step 4: Execute Script
 
-Run `python {topic}/generate_report.py`
+Run `python {project_dir}/generate_report.py`
 
 ## Output
 
-- `{topic}/generate_report.py` — conversion script
-- `{topic}/report.md` — summary report
+- `{project_dir}/generate_report.py` — conversion script
+- `{project_dir}/report.md` — summary report

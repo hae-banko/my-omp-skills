@@ -10,7 +10,7 @@ Add field definitions to an existing research outline. Phase-1 extension of the 
 
 ### Step 1: Auto-locate Fields File
 
-Find `*/fields.yaml` in the current working directory and read the existing field definitions.
+Anchor to the repo root (`git rev-parse --show-toplevel`). Locate the project under `<root>/.omp/knowledge/research/`: the **most recent** dated directory if the user names no specific one, or the directory matching the user's argument. Read its `fields.yaml`.
 
 ### Step 2: Get Supplement Source
 
@@ -30,4 +30,4 @@ Append confirmed fields to `fields.yaml` and save.
 
 ## Output
 
-Updated `{topic}/fields.yaml` (in-place modification, requires user confirmation).
+Updated `<project>/.omp/knowledge/research/<date>_<topic_slug>/fields.yaml` (in-place modification, requires user confirmation; allowed while the project is in its outline phase).

@@ -74,7 +74,7 @@ For academic, technical, and market research — a two-phase, human-in-the-loop 
 - **`/research-deep`** — Phase 2: research each item with parallel background agents, outputting validated JSON.
 - **`/research-report`** — Phase 3: turn the JSON results into a markdown report with table of contents.
 
-Requires Python + `pyyaml` (for the JSON validator). Output lives in `./<topic_slug>/` — `outline.yaml`, `fields.yaml`, `results/*.json`, `report.md`.
+Requires Python + `pyyaml` (for the JSON validator). Projects live in `.omp/knowledge/research/<date>_<topic_slug>/` — `outline.yaml`, `fields.yaml`, `results/*.json`, `report.md` — timestamped, append-only, and indexed in `.omp/knowledge/INDEX.md` like `/record` entries. Pass the project slug as an argument to `/research-deep`/`/research-report` to pick a specific project.
 
 ## Knowledge base
 

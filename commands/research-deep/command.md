@@ -10,11 +10,11 @@ Deep research phase: read the research outline, launch an independent background
 
 ### Step 1: Auto-locate Outline
 
-Find `*/outline.yaml` in the current working directory; read the items list and execution config (including `items_per_agent`).
+Anchor to the repo root (`git rev-parse --show-toplevel`). Locate the project under `<root>/.omp/knowledge/research/`: the **most recent** dated directory if the user names no specific one, or the directory matching the user's argument (e.g. `/research-deep 2026-08-03_ai-agent-demo-2025`). Read its `outline.yaml` — items list and execution config (including `items_per_agent`). All paths below are absolute.
 
 ### Step 2: Resume Check
 
-- Check completed JSON files in `output_dir`
+- Check completed JSON files in `{project_dir}/results` (or the configured `output_dir`)
 - Skip completed items
 
 ### Step 3: Batch Execution
@@ -24,11 +24,12 @@ Find `*/outline.yaml` in the current working directory; read the items list and 
 - Spawn the agents in **parallel** (task subagents, background), each running the `WEB-SEARCH-AGENT.md` brief (companion file listed below — include its absolute path and the modules directory path so the subagent loads the strategy modules). Subagent output goes to its file; no chat payload needed.
 
 **Parameters:**
+- `{project_dir}`: absolute path of the located project directory (`.omp/knowledge/research/<date>_<topic_slug>/`)
 - `{topic}`: `topic` field from `outline.yaml`
 - `{item_name}`: the item's `name` field
 - `{item_related_info}`: the item's complete yaml content (name + category + description, etc.)
-- `{output_dir}`: `execution.output_dir` from `outline.yaml` (default `./results`)
-- `{fields_path}`: absolute path to `{topic}/fields.yaml`
+- `{output_dir}`: `execution.output_dir` from `outline.yaml` (default `./results`), **resolved relative to `{project_dir}`** → `{project_dir}/results`
+- `{fields_path}`: absolute path to `{project_dir}/fields.yaml`
 - `{output_path}`: absolute path to `{output_dir}/{item_name_slug}.json` (slugify `item_name`: replace spaces with `_`, remove special chars)
 
 **Hard constraint:** the following prompt must be strictly reproduced, only replacing variables in `{xxx}` — do not modify structure or wording.
