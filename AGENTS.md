@@ -37,6 +37,14 @@ authoring contract.
 2. Add a one-line entry to the README reference table.
 3. Bump `package.json` version.
 
+## Worktree convention
+
+`using-git-worktrees` standardizes isolated feature work on `.worktrees/` at
+the project root (falling back to an existing `worktrees/` dir or an explicit
+user preference). The directory must be gitignored (`git check-ignore`) before
+a worktree is created there. omp has no native worktree tool, so the git CLI
+path is primary.
+
 ## Deep research convention
 
 The five `research*` commands implement a two-phase human-in-the-loop research

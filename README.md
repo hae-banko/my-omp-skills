@@ -61,6 +61,7 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[domain-modeling](./skills/domain-modeling/SKILL.md)** — Build and sharpen the project's domain model; maintain `CONTEXT.md` and ADRs inline.
 - **[codebase-design](./skills/codebase-design/SKILL.md)** — Shared vocabulary for designing deep modules: a lot of behaviour behind a small interface at a clean seam.
 - **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)** — Resolve an in-progress merge/rebase by intent, hunk by hunk; never `--abort`.
+- **[using-git-worktrees](./skills/using-git-worktrees/SKILL.md)** — Ensure feature work happens in an isolated workspace: detection guards (submodules), `.worktrees/` convention, clean-baseline verification.
 
 ## Attribution
 
@@ -70,6 +71,9 @@ tracker default; renamed because `/setup` is an omp built-in); `/omp-handoff`
 because `/handoff` is an omp built-in; slash references to model-invoked skills
 were normalized to skill names; subagent wording was mapped to omp task agents;
 commands ship as markdown bodies registered by a TS extension entry.
+
+`using-git-worktrees` is adapted from
+[obra/superpowers](https://github.com/obra/superpowers) (MIT).
 
 The deep-research commands (`/research`, `/research-add-items`,
 `/research-add-fields`, `/research-deep`, `/research-report`) are adapted from
