@@ -78,8 +78,8 @@ Requires Python + `pyyaml` (for the JSON validator). Projects live in `.omp/know
 
 ## Knowledge base
 
-- **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/`. The deliberate end-of-work capture. Runs in the background when invoked mid-flow.
-- **`/pitfall`** — something just went wrong: instantly capture the pitfall into `.omp/knowledge/` before the context fades. The reactive capture. Runs in the background.
+- **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/records/`. The deliberate end-of-work capture. Runs in the background when invoked mid-flow.
+- **`/pitfall`** — something just went wrong: instantly capture the pitfall into `.omp/knowledge/pitfalls/` before the context fades. The reactive capture. Runs in the background.
 - **`/record --recent`** (or `/pitfall --recent`) — list the last entries of the knowledge base.
 
 ## Precondition

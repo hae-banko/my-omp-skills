@@ -1,4 +1,4 @@
-Record a durable finding into this repo's local knowledge base at `.omp/knowledge/`.
+Record a durable finding into this repo's local knowledge base at `.omp/knowledge/records/`.
 
 ## When to use
 
@@ -12,7 +12,7 @@ The subagent brief must include:
 
 - The finding: title + kind + tags + the context/finding/evidence/next-time content (from the user's argument and the conversation).
 - The absolute path of the `RECORD-FORMAT.md` companion file (listed below) — the subagent composes from it.
-- The repo root and the three rules: timestamped name (`YYYY-MM-DD_<slug>.md`, `-2` on collision), append-only (never edit an existing record), append one line to `INDEX.md` (newest first).
+- The repo root and the three rules: timestamped name (`YYYY-MM-DD_<slug>.md` under `.omp/knowledge/records/`, `-2` on collision), append-only (never edit an existing record), append one line to `INDEX.md` (newest first) in the form `- YYYY-MM-DD <title> — .omp/knowledge/records/YYYY-MM-DD_<slug>.md`.
 - The instruction to report the written path back.
 
 If the user invoked `/record` as the sole purpose of the turn (e.g. wrapping up), write it inline instead — no subagent needed.

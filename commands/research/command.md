@@ -96,7 +96,7 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
 - Anchor to the repo root: `git rev-parse --show-toplevel` if unsure — never create research files under nested subdirectories.
 - Create the project directory: `<root>/.omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`, where `YYYY-MM-DD` is the current date and `<topic_slug>` is the dash-case slug of the topic.
 - Save `outline.yaml` and `fields.yaml` into it.
-- Append one line to `<root>/.omp/knowledge/INDEX.md` (create it with a one-line header if missing, newest first): `- YYYY-MM-DD <topic> (research) — .omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`.
+- Append one line to `<root>/.omp/knowledge/INDEX.md` (create it with a one-line header if missing, newest first): `- YYYY-MM-DD <topic> — .omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`.
 - Show to the user for confirmation.
 
 ## Output Path

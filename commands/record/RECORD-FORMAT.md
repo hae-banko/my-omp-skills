@@ -1,6 +1,8 @@
 # Record format
 
-Every record in `.omp/knowledge/` follows this shape.
+Every entry in `.omp/knowledge/` follows this shape. Location encodes the type:
+`records/` for `/record` entries (lesson | audit | note), `pitfalls/` for
+`/pitfall` entries, `research/` for deep-research projects.
 
 Filename: `YYYY-MM-DD_<slug>.md`, slug = dash-case of the title; append `-2`, `-3`, … on same-day collision. **Append-only** — never edit an existing record in place; a new finding is a new file.
 

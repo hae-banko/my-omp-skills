@@ -44,8 +44,8 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[/research-add-fields](./commands/research-add-fields/command.md)** — Add field definitions to an existing outline.
 - **[/research-deep](./commands/research-deep/command.md)** — Phase 2: research each item with parallel background agents, outputting validated JSON per item.
 - **[/research-report](./commands/research-report/command.md)** — Phase 3: convert JSON results into a markdown report with table of contents.
-- **[/record](./commands/record/command.md)** — Record a durable finding (lesson, audit, note) into the repo's local knowledge base at `.omp/knowledge/`. Deliberate end-of-work capture; `--recent` lists entries.
-- **[/pitfall](./commands/pitfall/command.md)** — Something just went wrong — instantly capture the pitfall into `.omp/knowledge/` before the context fades. Reactive capture; `--recent` lists entries.
+- **[/record](./commands/record/command.md)** — Record a durable finding (lesson, audit, note) into the repo's local knowledge base at `.omp/knowledge/records/`. Deliberate end-of-work capture; `--recent` lists entries.
+- **[/pitfall](./commands/pitfall/command.md)** — Something just went wrong — instantly capture the pitfall into `.omp/knowledge/pitfalls/` before the context fades. Reactive capture; `--recent` lists entries.
 - **[/teach](./commands/teach/command.md)** — Teach a new skill or concept over multiple sessions, using the current directory as a stateful workspace.
 - **[/writing-great-skills](./commands/writing-great-skills/command.md)** — Reference for writing and editing skills well.
 
