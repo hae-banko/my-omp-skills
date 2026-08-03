@@ -4,6 +4,13 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.6.1 — docs: plugin update & management guide
+
+- README: expanded "Updating" into a full management guide — `omp plugin
+  list`, tag listing, pinned reinstall, activate-by-re-entering-omp, pinning
+  a specific version/SHA, the stale bun git-mirror fix, uninstall, local
+  development via `omp plugin link`, and the `omp plugin upgrade` caveat.
+
 ## v0.6.0 — knowledge_read tool, transcript renderers
 
 - **`knowledge_read` tool**: the model can now look up past findings on demand

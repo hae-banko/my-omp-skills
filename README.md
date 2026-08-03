@@ -10,7 +10,7 @@ wayfinding, handoff. Not vibe coding.
 
 ```bash
 # Pinned release (recommended — immutable, integrity-checkable)
-omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.6.0
+omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.6.1
 
 # Pinned by commit SHA (most immutable — tags can be moved by repo writers)
 omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
@@ -22,26 +22,85 @@ omp plugin install git@github.com:hae-banko/my-omp-skills.git
 (Private repo — your SSH key must have access. Local development instead:
 `omp plugin link /path/to/my-omp-skills`.)
 
-### Updating
+### Updating & managing the plugin
 
-Releases are tagged (`v0.4.2`, …). To update: list tags
-(`git ls-remote --tags origin`), then reinstall pinned to the new tag using
-the `git+ssh://…​#<tag>` form.
+Installed plugins live in `~/.omp/plugins/` — a small bun project whose
+`package.json` pins exactly what is installed. All management goes through
+`omp plugin <action>` (`install | uninstall | list | link | doctor | upgrade |
+…`); add `--dry-run` to preview any action without applying it.
+
+**1. Check what's installed**
+
+```bash
+omp plugin list          # → ● my-omp-skills@0.6.0
+```
+
+**2. List available releases**
+
+```bash
+git ls-remote --tags origin                            # from the repo checkout
+git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags   # from anywhere
+```
+
+**3. Update to a new release**
+
+Releases are tagged (`v0.5.0`, `v0.6.0`, …). Reinstall pinned to the new tag:
+
+```bash
+omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.6.0
+```
+
+Installs are immutable copies, so the old version keeps working until the
+reinstall succeeds.
+
+**4. Activate the update**
+
+Exit and re-enter omp — commands, skills, rules, and tools are discovered at
+session start, so a running session won't see the new version. Verify in the
+fresh session with `omp plugin list` and `/help` (or ask the model what
+commands exist — the bootstrap message lists them).
+
+**5. Pin a different version (downgrade / specific SHA)**
+
+Same command with an older tag, or the most immutable form, a full commit SHA:
+
+```bash
+omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
+```
+
+**6. Troubleshooting: stale bun git mirror**
 
 If the install fails with `no commit matching "<tag>" found`, bun's cached git
-mirror is stale (it was cloned before the tag existed). Refresh it:
+mirror predates the tag. Refresh it, then retry:
 
 ```bash
 git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
 ```
 
-Then retry the install.
+**7. Uninstall**
 
-Then run **`/omp-setup`** once per repo. It configures the issue tracker
-(local `.scratch/` markdown by default, GitHub/GitLab available), triage
-labels, and domain doc layout that the other commands assume. (`/setup` and
-`/handoff` are omp built-ins; this package's versions are `/omp-setup` and
-`/omp-handoff`.)
+```bash
+omp plugin uninstall my-omp-skills
+```
+
+**8. Local development (instead of installs)**
+
+`omp plugin link /path/to/my-omp-skills` replaces the installed copy with a
+live directory — edit, re-link, and re-enter omp to pick up changes. No
+tagging needed. (Maintainers: every user-visible change bumps `package.json`
+and adds a `CHANGELOG.md` entry — see `AGENTS.md`.)
+
+**9. `omp plugin upgrade`**
+
+Updates unpinned plugins to their latest version. This package's installs are
+pinned by design, so updating means an explicit reinstall pinned to a new tag
+(step 3) — `upgrade` is for tracking-`main` dev installs only.
+
+After (re)installing, run **`/omp-setup`** once per repo. It configures the
+issue tracker (local `.scratch/` markdown by default, GitHub/GitLab
+available), triage labels, and domain doc layout that the other commands
+assume. (`/setup` and `/handoff` are omp built-ins; this package's versions
+are `/omp-setup` and `/omp-handoff`.)
 
 ## Reference
 
