@@ -4,6 +4,14 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.8.1 — public-facing README rewrite
+
+- README rewritten for a wider audience: short intro, "What's inside" bullets,
+  category-grouped tables for all 23 commands and 11 skills, runtime
+  behaviors table, condensed updating/troubleshooting guide, attribution.
+  No behavior changes; content cross-checked against the registered command
+  and skill inventory.
+
 ## v0.8.0 — routinization: /routinize command
 
 - **`/routinize`** command (user-invoked, optional steering prompt): turns

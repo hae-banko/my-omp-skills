@@ -1,210 +1,195 @@
 # my-omp-skills
 
-Personal oh-my-pi extension package: slash commands and skills adapted from
-[Matt Pocock's engineering workflow suite](https://github.com/mattpocock/skills)
-(MIT). Small, composable workflows for real engineering — grilling before you
-build, specs and tracer-bullet tickets, TDD, two-axis code review, triage,
-wayfinding, handoff. Not vibe coding.
+An extension package for the oh-my-pi (omp) agent harness that turns a plain
+repo into a workflow engine: 23 user-invoked slash commands and 11
+model-invoked skills covering planning, research, review, and learning. Ideas
+get grilled before they get built, specs become tracer-bullet tickets, and
+tickets get implemented test-first with a two-axis code review before commit.
+Everything the package learns about your repo — knowledge entries, reference
+clones, routine scripts — accumulates locally under `.omp/` so it persists
+across sessions. Adapted from open-source suites (mattpocock/skills,
+obra/superpowers, Weizhena/deep-research-skills), all MIT.
+
+## What's inside
+
+- **Grill before building** — `/grill-me` and `/grill-with-docs` interview
+  your plan relentlessly, one question at a time, until every branch of the
+  decision tree is resolved.
+- **Specs, tickets, TDD, review** — `/to-spec` synthesizes the conversation
+  into a spec, `/to-tickets` breaks it into tracer-bullet tickets with
+  declared blocking edges, and `/implement` builds them test-first and closes
+  with code review before committing.
+- **Triage** — `/triage` moves issues and external PRs through a state
+  machine of roles — categorise, verify, grill if needed, and write
+  agent-ready briefs.
+- **Deep research** — the `/research` family runs a three-phase flow: outline,
+  parallel background-agent research with validated JSON, and a report with
+  table of contents.
+- **Knowledge base** — `/record` and `/pitfall` capture lessons and failures
+  into an append-only, timestamped, indexed store at `.omp/knowledge/`,
+  queryable by the model mid-session.
+- **Reference corpus** — `/reference` manages clones of external sources at
+  `.omp/references/` so the model consults them instead of reconstructing
+  behavior from memory.
+- **Routines** — `/routinize` turns repeated ad-hoc work into canonical,
+  parameterized scripts under `scripts/routines/`, with a proposal you
+  approve before each write.
 
 ## Install
 
-```bash
-# Pinned release (recommended — immutable, integrity-checkable)
-omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.6.1
+Requires an SSH key with access to the private repo. Latest release: v0.8.0.
 
-# Pinned by commit SHA (most immutable — tags can be moved by repo writers)
-omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
+1. Install pinned to the latest release:
 
-# Unpinned (tracks main; development only)
-omp plugin install git@github.com:hae-banko/my-omp-skills.git
-```
+   ```
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.8.0
+   ```
 
-(Private repo — your SSH key must have access. Local development instead:
-`omp plugin link /path/to/my-omp-skills`.)
+2. Prefer maximum immutability? Pin to a full commit SHA instead:
 
-### Updating & managing the plugin
+   ```
+   omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
+   ```
 
-Installed plugins live in `~/.omp/plugins/` — a small bun project whose
-`package.json` pins exactly what is installed. All management goes through
-`omp plugin <action>` (`install | uninstall | list | link | doctor | upgrade |
-…`); add `--dry-run` to preview any action without applying it.
+3. Exit and re-enter omp. Commands, skills, rules, and tools are discovered
+   at session start, so the new session is what picks them up.
+4. On your first session in a repo, run `/omp-setup` to configure the issue
+   tracker (local `.scratch/` by default; GitHub/GitLab available), triage
+   label vocabulary, and domain doc layout. Run it once per repo — it does
+   not need re-running after plugin updates, and re-running is safe.
 
-**1. Check what's installed**
+For development only, you may install unpinned
+(`git@github.com:hae-banko/my-omp-skills.git`), which tracks `main`.
 
-```bash
-omp plugin list          # → ● my-omp-skills@0.6.0
-```
+## Commands
 
-**2. List available releases**
+All commands are user-invoked. The model knows them at session start and will
+suggest the right one when your situation fits.
 
-```bash
-git ls-remote --tags origin                            # from the repo checkout
-git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags   # from anywhere
-```
+| Command | What it does | When to use |
+| --- | --- | --- |
+| **Plan & decide** | | |
+| `/ask-me` | Router over this package; suggests the command or flow that fits | Unsure which command to use |
+| `/grill-me` | Relentless one-question interview that sharpens a plan or design | Stress-test an idea before building |
+| `/grill-with-docs` | Grilling session that also records domain docs (glossary, ADRs) as it goes | Sharpen a plan and capture decisions |
+| `/wayfinder` | Maps a multi-session project into decision tickets, resolved one at a time | Plan work bigger than one session |
+| `/improve-codebase-architecture` | Scans for deepening opportunities, shows an HTML report, then grills the chosen one | Find and evaluate architecture improvements |
+| **Ship** | | |
+| `/to-spec` | Synthesizes the conversation into a spec, published to the issue tracker | Formalize what you already discussed |
+| `/to-tickets` | Breaks a spec or plan into tracer-bullet tickets with blocking edges | Split work into actionable tickets |
+| `/implement` | Builds from spec or tickets with TDD and a final code review | Deliver work described by tickets |
+| `/triage` | Moves issues and PRs through triage roles into agent-ready briefs | Process an incoming issue backlog |
+| **Research** | | |
+| `/research` | Phase 1: drafts a research outline (items + fields) for a topic | Start a deep research project |
+| `/research-add-items` | Adds research items to an existing outline | Expand your research outline |
+| `/research-add-fields` | Adds field definitions to an existing outline | Extend the field framework |
+| `/research-deep` | Phase 2: researches each item with parallel agents into validated JSON | Gather evidence per outline item |
+| `/research-report` | Phase 3: turns research JSON into a markdown report with a table of contents | Compile findings into a report |
+| **Knowledge & memory** | | |
+| `/record` | Saves a durable lesson, audit, or note to the local knowledge base | Persist a finding worth keeping |
+| `/pitfall` | Captures a fresh mistake into the knowledge base before context fades | Something just went wrong |
+| `/routinize` | Turns repeated ad-hoc work into parameterized scripts under `scripts/routines/` | You keep doing the same thing |
+| `/reference` | Manages cloned reference material in `.omp/references/` (add, update, remove, list) | Acquire external docs for the repo |
+| **Session & support** | | |
+| `/omp-setup` | Configures the repo: issue tracker, triage labels, domain doc layout | First run in a new repo |
+| `/omp-handoff` | Compacts the conversation into a handoff document for another agent | Pass work to a fresh session |
+| `/plugin-issue` | Files a bug or feature request on this plugin's GitHub repo | The plugin misbehaves or lacks something |
+| `/teach` | Teaches a skill or concept over multiple sessions in a stateful workspace | Learn something over time |
+| `/writing-great-skills` | Reference for the vocabulary and principles of well-written skills | Write or edit a skill |
 
-**3. Update to a new release**
+## Skills
 
-Releases are tagged (`v0.5.0`, `v0.6.0`, …). Reinstall pinned to the new tag:
+The 11 skills are model-invoked: omp loads one automatically when the
+situation fits, so you don't type anything. Exception: `using-git-worktrees`
+runs only when you ask.
 
-```bash
-omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.6.0
-```
+| Skill | What it does | When the model reaches for it |
+|---|---|---|
+| `grilling` | Relentless one-question-at-a-time interview until every decision branch resolves. | You have a plan or design worth stress-testing before building. |
+| `tdd` | Red-green-refactor test-first loop at pre-agreed seams. | Building a feature or fixing a bug where tests guard the contract. |
+| `code-review` | Two-axis review (Standards + Spec) of a diff via parallel subagents. | You ask for a review of a branch, PR, or work-in-progress. |
+| `diagnosing-bugs` | Disciplined loop: reproduce, minimise, hypothesise, instrument, fix, regression-test. | Something is broken, throwing, failing, or slow. |
+| `research` | Background agent investigates high-trust primary sources; findings as cited markdown. | A question needs facts from docs or papers, not guesses. |
+| `prototype` | Throwaway code that answers one design question (logic or UI). | Sanity-checking whether a state model or interface feels right. |
+| `domain-modeling` | Builds and sharpens the project domain model; maintains CONTEXT.md and ADRs. | Terminology is fuzzy or an architectural decision needs recording. |
+| `codebase-design` | Vocabulary for deep modules: lots of behaviour behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
+| `resolving-merge-conflicts` | Resolves in-progress merges/rebase by intent, hunk by hunk — never `--abort`. | A merge or rebase is in progress with conflicts. |
+| `using-references` | Consults the cloned reference corpus before reconstructing external behavior from scratch. | Reimplementing something with a reference available (ODE solvers, dense ML). |
+| `using-git-worktrees` | Isolates feature work in a git worktree (`.worktrees/` convention). User-invoked only. | You ask for it — never auto-triggers. |
 
-Installs are immutable copies, so the old version keeps working until the
-reinstall succeeds.
+## Runtime behaviors
 
-**4. Activate the update**
+A few behaviors kick in without you invoking anything:
 
-Exit and re-enter omp — commands, skills, rules, and tools are discovered at
-session start, so a running session won't see the new version. Verify in the
-fresh session with `omp plugin list` and `/help` (or ask the model what
-commands exist — the bootstrap message lists them).
+| Behavior | What it does |
+|---|---|
+| Bootstrap | At session start the model gets a one-time message listing every command, so it knows the package exists without `/help`. |
+| Knowledge-base policy | An append-only guard on `.omp/knowledge/`: records, pitfalls, and `INDEX.md` are never rewritten in place. New timestamped entries and index appends pass; research working files stay editable. |
+| Rules | A TTSR rule (a mid-conversation interrupt that stops the model just before it acts) blocks edits to knowledge-base entries; always-apply rules keep the right command discoverable during a conversation. |
+| `knowledge_read` tool | The model can look up past findings on demand — the index, records, pitfalls, and research projects. |
+| Transcript renderers | How results show up in the terminal: `/record` and `/pitfall` print a compact receipt card; `knowledge_read` results render as labeled cards. |
 
-**5. Pin a different version (downgrade / specific SHA)**
+The append-only guard exists because the knowledge base is a durable,
+append-only memory: entries are timestamped records of what happened, and
+later edits would silently rewrite history. If a finding is wrong, add a
+correcting entry rather than editing the old one.
 
-Same command with an older tag, or the most immutable form, a full commit SHA:
+## Updating & troubleshooting
 
-```bash
-omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
-```
+Installed plugins live in `~/.omp/plugins/` and are pinned to a version. All
+management goes through `omp plugin <action>` (`install | uninstall | list |
+link | doctor | upgrade | …`); add `--dry-run` to preview any action without
+applying it.
 
-**6. Troubleshooting: stale bun git mirror**
+1. **See what's installed** — `omp plugin list` shows `my-omp-skills@<version>`.
+2. **List available releases** —
+   `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
+3. **Update to a new release** — reinstall pinned to the new tag, e.g.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.8.0`.
+   Installs are immutable copies, so the old version keeps working until the
+   reinstall succeeds.
+4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools
+   are discovered at session start, so a running session won't see the new
+   version.
+5. **Pin a different version (downgrade / specific SHA)** — same command with
+   an older tag, or the most immutable form, a full commit SHA.
+6. **Stale bun git mirror** — if install fails with
+   `no commit matching "<tag>" found`, bun's cached git mirror predates the
+   tag. Refresh it, then retry:
 
-If the install fails with `no commit matching "<tag>" found`, bun's cached git
-mirror predates the tag. Refresh it, then retry:
+   ```
+   git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
+   ```
 
-```bash
-git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
-```
+7. **Uninstall** — `omp plugin uninstall my-omp-skills`.
+8. **Local development** — `omp plugin link /path/to/my-omp-skills` replaces
+   the installed copy with a live directory: edit, re-link, and re-enter omp
+   to pick up changes. No tagging needed.
+9. **`omp plugin upgrade`** — for unpinned (tracks-`main`) installs only.
+   This package's installs are pinned by design, so updating means step 3.
 
-**7. Uninstall**
-
-```bash
-omp plugin uninstall my-omp-skills
-```
-
-**8. Local development (instead of installs)**
-
-`omp plugin link /path/to/my-omp-skills` replaces the installed copy with a
-live directory — edit, re-link, and re-enter omp to pick up changes. No
-tagging needed. (Maintainers: every user-visible change bumps `package.json`
-and adds a `CHANGELOG.md` entry — see `AGENTS.md`.)
-
-**9. `omp plugin upgrade`**
-
-Updates unpinned plugins to their latest version. This package's installs are
-pinned by design, so updating means an explicit reinstall pinned to a new tag
-(step 3) — `upgrade` is for tracking-`main` dev installs only.
-
-After (re)installing, run **`/omp-setup`** once per repo. It configures the
-issue tracker (local `.scratch/` markdown by default, GitHub/GitLab
-available), triage labels, and domain doc layout that the other commands
-assume. (`/setup` and `/handoff` are omp built-ins; this package's versions
-are `/omp-setup` and `/omp-handoff`.)
-
-**"I already ran `/omp-setup` before — do I need to re-run it after updating?"**
-
-No. `/omp-setup` writes *per-repo configuration* (which issue tracker, triage
-labels, domain-doc layout — into `docs/agents/*.md` and the `## Agent skills`
-block of your `AGENTS.md`/`CLAUDE.md`), not a snapshot of this package's
-version. Its output does not change between releases, so a plugin update needs
-nothing:
-
-- New runtime behaviors (bootstrap message, knowledge-base policy, rules,
-  `knowledge_read` tool) activate on their own once you re-enter omp — no
-  setup involved.
-- The knowledge base (`.omp/knowledge/`) is created on demand the first time
-  you run `/record` or `/pitfall` — no setup needed either.
-- Re-running `/omp-setup` is always safe: it detects existing state and
-  updates the `## Agent skills` block in place instead of duplicating it.
-  Re-run only when you want to switch issue trackers or restart the
-  configuration from scratch.
-
-## Reference
-
-Two axes, like the source: **user-invoked** commands fire only when you type
-them; **model-invoked** skills are reachable by the agent when the task fits.
-
-### User-invoked commands
-
-- **[/ask-me](./commands/ask-me.md)** — Ask which command or flow fits your situation. A router over this package.
-- **[/grill-me](./commands/grill-me.md)** — A relentless interview to sharpen a plan or design.
-- **[/grill-with-docs](./commands/grill-with-docs.md)** — A grilling session that also builds your project's domain model, sharpening terminology and updating `CONTEXT.md` and ADRs inline.
-- **[/omp-setup](./commands/setup/command.md)** — Configure this repo for the workflow commands (issue tracker, triage labels, domain doc layout). Run once per repo.
-- **[/to-spec](./commands/to-spec.md)** — Turn the current conversation into a spec and publish it to the issue tracker — no interview, just synthesis.
-- **[/to-tickets](./commands/to-tickets.md)** — Break a plan, spec, or conversation into tracer-bullet tickets, each declaring its blocking edges.
-- **[/implement](./commands/implement.md)** — Build the work described by a spec or tickets, driving TDD at pre-agreed seams and closing out with code review.
-- **[/triage](./commands/triage/command.md)** — Move issues and external PRs through a state machine of triage roles and write agent-ready briefs.
-- **[/wayfinder](./commands/wayfinder.md)** — Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
-- **[/improve-codebase-architecture](./commands/improve-codebase-architecture/command.md)** — Scan for deepening opportunities, present an HTML report, then grill through whichever you pick.
-- **[/omp-handoff](./commands/handoff.md)** — Compact the current conversation into a handoff document so another agent can continue.
-- **[/research](./commands/research/command.md)** — Phase 1 of deep research: outline generation (items + field framework) for academic/technical/market research, human-in-the-loop, web-supplemented. Projects land in `.omp/knowledge/research/<date>_<topic_slug>/`, indexed like `/record` entries.
-- **[/research-add-items](./commands/research-add-items/command.md)** — Add research items to an existing outline.
-- **[/research-add-fields](./commands/research-add-fields/command.md)** — Add field definitions to an existing outline.
-- **[/research-deep](./commands/research-deep/command.md)** — Phase 2: research each item with parallel background agents, outputting validated JSON per item.
-- **[/research-report](./commands/research-report/command.md)** — Phase 3: convert JSON results into a markdown report with table of contents.
-- **[/plugin-issue](./commands/plugin-issue/command.md)** — Report a bug or missing feature in this plugin as a GitHub issue on `hae-banko/my-omp-skills`. Auto-posts after a duplicate check.
-- **[/record](./commands/record/command.md)** — Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at `.omp/knowledge/records/`. Deliberate end-of-work capture; `--recent` lists entries.
-- **[/routinize](./commands/routinize/command.md)** — Routinize repeated ad-hoc work from the conversation into canonical, parameterized scripts under `scripts/routines/` (DRY for programmatic work — not a text record). Background scan proposes; you approve each write. Optional steering prompt.
-- **[/pitfall](./commands/pitfall/command.md)** — Something just went wrong — instantly capture the pitfall into `.omp/knowledge/pitfalls/` before the context fades. Reactive capture; `--recent` lists entries.
-- **[/reference](./commands/reference.md)** — Manage the repo's reference corpus at `.omp/references/` — `add <url>` (clone), `update <name>` (pull), `remove <name>`, `list`. User-invoked: acquisition happens only when you type it.
-- **[/teach](./commands/teach/command.md)** — Teach a new skill or concept over multiple sessions, using the current directory as a stateful workspace.
-- **[/writing-great-skills](./commands/writing-great-skills/command.md)** — Reference for writing and editing skills well.
-
-### Model-invoked skills
-
-- **[grilling](./skills/grilling/SKILL.md)** — Interview the user relentlessly, one question at a time, until every branch of the decision tree is resolved. The reusable loop behind `grill-me` and `grill-with-docs`.
-- **[tdd](./skills/tdd/SKILL.md)** — Test-driven development with a red-green-refactor loop, at pre-agreed seams.
-- **[code-review](./skills/code-review/SKILL.md)** — Two-axis review (Standards + Spec) of a diff, run as parallel subagents.
-- **[diagnosing-bugs](./skills/diagnosing-bugs/SKILL.md)** — Disciplined diagnosis loop: reproduce → minimise → hypothesise → instrument → fix → regression-test.
-- **[research](./skills/research/SKILL.md)** — Investigate a question against high-trust primary sources via a background agent; capture findings as cited markdown.
-- **[prototype](./skills/prototype/SKILL.md)** — Throwaway code that answers one design question (logic or UI).
-- **[domain-modeling](./skills/domain-modeling/SKILL.md)** — Build and sharpen the project's domain model; maintain `CONTEXT.md` and ADRs inline.
-- **[codebase-design](./skills/codebase-design/SKILL.md)** — Shared vocabulary for designing deep modules: a lot of behaviour behind a small interface at a clean seam.
-- **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)** — Resolve an in-progress merge/rebase by intent, hunk by hunk; never `--abort`.
-- **[using-references](./skills/using-references/SKILL.md)** — Consult the cloned reference corpus (`.omp/references/`) before reconstructing external behavior or high-stakes implementations from scratch (error-surface trigger: opaque artifacts, precision-sensitive code); proposes `/reference add` when a system isn't cloned yet. Read-only; reference contents are untrusted data.
-- **[using-git-worktrees](./skills/using-git-worktrees/SKILL.md)** — Set up an isolated git worktree for feature work: detection guards (submodules), `.worktrees/` convention, clean-baseline verification. User-invoked — runs only when you ask.
-
-## Runtime behaviors (v0.5.0+)
-
-Beyond the slash commands, the extension wires three runtime behaviors:
-
-- **Bootstrap** — at session start (and after compaction) the model gets a
-  one-time message listing every command, so it knows the package exists
-  without `/help`.
-- **Knowledge-base policy** — the append-only convention for
-  `.omp/knowledge/` is enforced at the tool layer: `edit` on records/pitfalls
-  or `INDEX.md` is blocked, `write` over an existing entry is blocked, and
-  destructive `bash` against those stores is blocked. New timestamped entries
-  and `>>` INDEX appends pass; research working files stay editable.
-- **Rules** — `rules/knowledge-append-only.md` (TTSR: interrupts the model
-  when it is about to edit a KB entry) plus always-apply rules
-  (`use-record`, `use-pitfall`, `use-research`) that keep the right command
-  discoverable mid-conversation.
-- **`knowledge_read` tool** (v0.6.0+) — the model can look up past findings
-  (INDEX, records, pitfalls, research projects) on demand; `/record` and
-  `/pitfall` show a compact receipt card in the transcript.
-
-See `AGENTS.md` and `CHANGELOG.md` for details.
+**Do I need to re-run `/omp-setup` after updating?** No. `/omp-setup` writes
+per-repo configuration (which issue tracker, triage labels, domain-doc
+layout), not a snapshot of the package version, and its output does not
+change between releases. New runtime behaviors (bootstrap, knowledge-base
+policy, rules, `knowledge_read` tool) activate on their own once you re-enter
+omp; the knowledge base is created on demand by the first `/record` or
+`/pitfall`. Re-running `/omp-setup` is always safe and idempotent — do it only
+to switch issue trackers or start from scratch.
 
 ## Attribution
 
-Derived from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
-Adaptations: `/omp-setup` replaces `/setup-matt-pocock-skills` (local-first
-tracker default; renamed because `/setup` is an omp built-in); `/omp-handoff`
-because `/handoff` is an omp built-in; slash references to model-invoked skills
-were normalized to skill names; subagent wording was mapped to omp task agents;
-commands ship as markdown bodies registered by a TS extension entry.
+The commands and skills here are adapted from three MIT-licensed open-source
+suites:
 
-`using-git-worktrees` is adapted from
-[obra/superpowers](https://github.com/obra/superpowers) (MIT).
+- [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — base for
+  the command and skill structure.
+- [obra/superpowers](https://github.com/obra/superpowers) (MIT) — source of
+  the `using-git-worktrees` skill.
+- [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills)
+  (MIT) — source of the research command family (`/research`,
+  `/research-add-items`, `/research-add-fields`, `/research-deep`,
+  `/research-report`).
 
-The deep-research commands (`/research`, `/research-add-items`,
-`/research-add-fields`, `/research-deep`, `/research-report`) are adapted from
-[Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills)
-(MIT), inspired by the RhinoInsight paper (arXiv:2511.18743). Adaptation notes:
-Claude/Codex-specific surfaces (`~/.claude/agents/…`, `AskUserQuestion`,
-`WebSearch`/`WebFetch`, `model: opus`) mapped to omp equivalents — task
-subagents, the `ask` tool, the `web_search` tool, companion-file disclosure of
-the agent brief, strategy modules, and `validate_json.py`. Requires Python +
-`pyyaml` for validation.
+`/research-deep` validates its JSON output, which requires Python with
+`pyyaml` installed.
