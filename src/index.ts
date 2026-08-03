@@ -45,9 +45,9 @@ interface ExtensionApi {
 
 const COMMANDS: CommandSpec[] = [
   {
-    name: "ask-matt",
+    name: "ask-me",
     description: "Ask which command or flow fits your situation. A router over the commands in this package.",
-    bodyPath: "commands/ask-matt.md",
+    bodyPath: "commands/ask-me.md",
   },
   {
     name: "grill-me",

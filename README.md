@@ -28,7 +28,7 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 
 ### User-invoked commands
 
-- **[/ask-matt](./commands/ask-matt.md)** — Ask which command or flow fits your situation. A router over this package.
+- **[/ask-me](./commands/ask-me.md)** — Ask which command or flow fits your situation. A router over this package.
 - **[/grill-me](./commands/grill-me.md)** — A relentless interview to sharpen a plan or design.
 - **[/grill-with-docs](./commands/grill-with-docs.md)** — A grilling session that also builds your project's domain model, sharpening terminology and updating `CONTEXT.md` and ADRs inline.
 - **[/omp-setup](./commands/setup/command.md)** — Configure this repo for the workflow commands (issue tracker, triage labels, domain doc layout). Run once per repo.

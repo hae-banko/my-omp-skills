@@ -21,7 +21,7 @@ interface RegisteredCommand {
 }
 
 const EXPECTED: Record<string, { companions?: number }> = {
-  "ask-matt": {},
+  "ask-me": {},
   "grill-me": {},
   "grill-with-docs": {},
   triage: { companions: 2 },
