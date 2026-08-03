@@ -150,6 +150,15 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/reference.md",
   },
   {
+    name: "routinize",
+    description: "Routinize repeated ad-hoc work from the conversation into canonical, parameterized scripts under scripts/routines/ — DRY for programmatic routines. Proposals first; you approve each write.",
+    bodyPath: "commands/routinize/command.md",
+    companions: [
+      "commands/routinize/ROUTINIZE-BRIEF.md",
+      "commands/routinize/ROUTINE-FORMAT.md",
+    ],
+  },
+  {
     name: "record",
     description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
     bodyPath: "commands/record/command.md",

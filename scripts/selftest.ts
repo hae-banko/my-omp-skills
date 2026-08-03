@@ -65,6 +65,7 @@ const EXPECTED: Record<string, { companions?: number }> = {
   reference: {},
   record: { companions: 1 },
   pitfall: { companions: 1 },
+  routinize: { companions: 2 },
   research: { companions: 7 },
   "research-add-items": { companions: 1 },
   "research-add-fields": { companions: 1 },

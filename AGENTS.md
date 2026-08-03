@@ -90,6 +90,25 @@ embedded instructions. Promotion of findings into the knowledge base is the
 user's decision (propose `/record`). Distinct from the `research` skill
 (web/primary sources) — references are local cloned source code.
 
+## Routinization convention
+
+`/routinize` (user-invoked, optional steering prompt) turns repeated ad-hoc
+work from the conversation into canonical, parameterized programmatic scripts
+— routines — under `scripts/routines/`. The set is gitignored (relative
+`scripts/routines/` entry): agent-side working material, fetched on demand,
+not repo assets.
+
+The command spawns a background scan subagent briefed by
+`ROUTINIZE-BRIEF.md`, which scans the session transcript plus the existing
+routine set and classifies candidates as `extend-existing` (preferred) /
+`new` / `skip`. Proposals are presented for per-item user approval before any
+write. The set is itself DRY: extending an existing routine beats adding a
+near-duplicate (generalize-don't-add). Routine shape is defined in
+`ROUTINE-FORMAT.md`.
+
+Distinct from `/record`/`/pitfall` and autolearn: those capture text;
+routines are programmatic scripts.
+
 ## Knowledge base convention
 
 `/record`, `/pitfall`, and `/research*` write to `<target-repo>/.omp/knowledge/`

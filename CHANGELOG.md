@@ -4,6 +4,23 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.8.0 — routinization: /routinize command
+
+- **`/routinize`** command (user-invoked, optional steering prompt): turns
+  repeated ad-hoc work from the conversation into canonical, parameterized
+  programmatic scripts — routines — under `scripts/routines/`. Programmatic
+  output, not text: the differentiator from `/record`, `/pitfall`, and
+  autolearn.
+- Background scan subagent (`ROUTINIZE-BRIEF.md`) scans the session
+  transcript plus the existing routine set and classifies candidates as
+  `extend-existing` (preferred) / `new` / `skip`; proposals are presented for
+  per-item user approval before any write — the anti-bloat gate.
+- The routine set is itself DRY (generalize-don't-add): extending an existing
+  routine beats adding a near-duplicate. The set is gitignored
+  (`scripts/routines/`), fetched on demand like the reference corpus.
+- Routine shape defined in `ROUTINE-FORMAT.md`; AGENTS.md gains the
+  routinization convention; README table updated.
+
 ## v0.7.0 — reference acquisition: /reference command + using-references skill
 
 - **`/reference`** command: manage the per-project reference corpus at
