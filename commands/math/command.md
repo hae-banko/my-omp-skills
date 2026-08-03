@@ -1,33 +1,21 @@
-Math formatting for this conversation — the TUI renders LaTeX natively, so
-from now on format math as LaTeX instead of ASCII approximations.
+Native LaTeX math rendering — explainer and demo.
 
-## What you do
-
-For every answer that contains math (formulas, equations, derivations,
-math-heavy ML content):
-
-- **Inline** math: `$...$` (or `\(...\)` when `$` is risky, e.g. near
-  currency). Single-line only — superscripts, subscripts, Greek, `\frac`
-  compacted.
-- **Display** math: `$$...$$` or `\[...\]`, each delimiter on its own line.
-  Multi-line derivations use `\begin{aligned}` (or `align`/`gather`) with
-  `&` alignment — never flatten a derivation into one line.
-- **Prefer the real thing**: `\frac{a}{b}`, `\sqrt{x}`, `\sum_{i=1}^{n}`,
-  `\begin{pmatrix}...\end{pmatrix}`, `\left( \right)`, `\lim`, `\int`,
-  `\binom`, `\underbrace`, `\mathbf`, `\mathbb` — not ASCII approximations.
+The oh-my-pi TUI renders LaTeX math natively and **always on** (a core
+feature, no plugin and no toggle): inline `$...$` becomes single-line
+Unicode; display `$$...$$` / `\[...\]` and bare `\begin{env}` math blocks
+become 2-D layout — stacked fractions, stretched delimiters, matrices,
+radicals, big-operator limits, aligned environments.
 
 ## What the renderer supports
 
-Fractions and roots, scripts, stretchy delimiters, matrices and cases,
-big-operator limits, integrals, aligned environments, bold vectors, math
-fonts, `\textcolor`/`\colorbox`.
-
-## Guardrails
-
-- Never use math delimiters inside code blocks, inline code, shell variables
-  (`$PATH`, `$HOME`), or dollar amounts (`$5` is not math).
-- When in doubt between `$` and other uses, use `\(...\)` for inline math.
-- Inline math stays on one line; anything taller becomes a display block.
+- Fractions and roots: `\frac{a}{b}`, `\sqrt{x}`, `\binom{n}{k}`
+- Scripts: `x^2`, `x_i`, `e^{i\pi}`, `\hat{\boldsymbol{\theta}}`
+- Stretchy delimiters: `\left( \right)`, tall bare parens
+- Matrices and cases: `\begin{pmatrix}...\end{pmatrix}`, `\begin{cases}`
+- Big operators with limits: `\sum_{i=1}^{n}`, `\prod`, `\lim`, `\int`
+- Aligned environments: `\begin{aligned}` with `&` alignment
+- Bold vectors and math fonts: `\mathbf{E}`, `\mathbb{R}`, `\mathcal{L}`
+- Colors: `\textcolor`, `\colorbox`
 
 ## Demo
 
@@ -43,3 +31,6 @@ To show the user what rendering looks like, emit:
 ```
 
 and an inline example like $e^{i\pi} + 1 = 0$.
+
+The formatting itself is enforced by the always-apply `math-formatting`
+rule — no command needed. This command exists only to explain and demo.

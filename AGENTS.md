@@ -98,15 +98,16 @@ and bare `\begin{env}` math blocks become 2-D layout (stacked fractions,
 stretched delimiters, matrices, radicals, big-operator limits, aligned
 environments).
 
-The model therefore writes math as LaTeX, not ASCII approximations: `\frac`,
-`\sqrt`, `\sum_{i=1}^{n}`, `\begin{aligned}` with `&` alignment for
-derivations, `\mathbf`/`\mathbb`/`\mathcal`. Guardrails: never math delimiters
-inside code, shell variables (`$PATH`), or currency; inline stays single-line.
-The `math-rendering` skill encodes this for the model; `/math` is the
-user-facing explainer. The image-based alternative (pi-math: MathJax→PNG via
-Kitty/iTerm2 protocols) is not pursued — omp's native text rendering works in
-every terminal, and the user's Windows Terminal supports none of the image
-protocols.
+The `math-formatting` rule (always-apply) makes the model write math as
+LaTeX, not ASCII approximations — every turn, no toggle: `\frac`, `\sqrt`,
+`\sum_{i=1}^{n}`, `\begin{aligned}` with `&` alignment for derivations,
+`\mathbf`/`\mathbb`/`\mathcal`. Guardrails: never math delimiters inside
+code, shell variables (`$PATH`), or currency; inline stays single-line.
+`/math` is the user-facing explainer/demo. The image-based alternative
+(pi-math: MathJax→PNG via Kitty/iTerm2 protocols) is not pursued — omp's
+native text rendering works in every terminal (the user's Windows Terminal
+supports none of the image protocols), and the seam would be a core change,
+not a plugin hook.
 
 ## Hindsight convention
 

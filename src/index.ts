@@ -195,7 +195,7 @@ const COMMANDS: CommandSpec[] = [
   {
     name: "math",
     description:
-      "Math formatting for this conversation: the TUI renders LaTeX natively ($...$ inline, $$...$$ / \\[...\\] display, \\begin{aligned}), so answers use LaTeX instead of ASCII approximations.",
+      "Explain and demo native LaTeX math rendering — the TUI typesets $...$ inline and $$...$$ / \\[...\\] / \\begin{aligned} display math natively, always on (no toggle).",
     bodyPath: "commands/math/command.md",
   },
   {

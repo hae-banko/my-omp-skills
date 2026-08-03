@@ -4,6 +4,20 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.12.0 — math formatting always on (rule, not toggle)
+
+- The user wants math typeset "all the time without a second thought": the
+  `math-rendering` skill is replaced by the **`math-formatting` always-apply
+  rule** (enforced every turn, no command, no toggle): write math as LaTeX
+  ($…$ inline; $$…$$ / \[…\] / `\begin{aligned}` display; `\frac`, `\sqrt`,
+  matrices, `\left( \right)`, `\sum`/`\lim`/`\int`, `\mathbf`, `\mathbb`),
+  with guardrails (no delimiters in code, shell variables, or currency;
+  inline stays single-line).
+- `/math` re-scoped to explainer + demo. `docs/math-rendering.md` and
+  AGENTS.md updated; the pi-math image-port analysis is recorded there
+  (possible only as a core patch — omp has no assistant-message render hook —
+  and terminal-gated on Windows Terminal; deferred).
+
 ## v0.11.0 — math rendering made first-class
 
 - **Check verdict**: oh-my-pi's TUI already renders LaTeX natively — inline
