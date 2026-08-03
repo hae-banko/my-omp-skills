@@ -39,6 +39,11 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[/wayfinder](./commands/wayfinder.md)** — Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
 - **[/improve-codebase-architecture](./commands/improve-codebase-architecture/command.md)** — Scan for deepening opportunities, present an HTML report, then grill through whichever you pick.
 - **[/omp-handoff](./commands/handoff.md)** — Compact the current conversation into a handoff document so another agent can continue.
+- **[/research](./commands/research/command.md)** — Phase 1 of deep research: outline generation (items + field framework) for academic/technical/market research, human-in-the-loop, web-supplemented.
+- **[/research-add-items](./commands/research-add-items/command.md)** — Add research items to an existing outline.
+- **[/research-add-fields](./commands/research-add-fields/command.md)** — Add field definitions to an existing outline.
+- **[/research-deep](./commands/research-deep/command.md)** — Phase 2: research each item with parallel background agents, outputting validated JSON per item.
+- **[/research-report](./commands/research-report/command.md)** — Phase 3: convert JSON results into a markdown report with table of contents.
 - **[/record](./commands/record/command.md)** — Record a durable finding (lesson, audit, note) into the repo's local knowledge base at `.omp/knowledge/`. Deliberate end-of-work capture; `--recent` lists entries.
 - **[/pitfall](./commands/pitfall/command.md)** — Something just went wrong — instantly capture the pitfall into `.omp/knowledge/` before the context fades. Reactive capture; `--recent` lists entries.
 - **[/teach](./commands/teach/command.md)** — Teach a new skill or concept over multiple sessions, using the current directory as a stateful workspace.
@@ -64,3 +69,13 @@ tracker default; renamed because `/setup` is an omp built-in); `/omp-handoff`
 because `/handoff` is an omp built-in; slash references to model-invoked skills
 were normalized to skill names; subagent wording was mapped to omp task agents;
 commands ship as markdown bodies registered by a TS extension entry.
+
+The deep-research commands (`/research`, `/research-add-items`,
+`/research-add-fields`, `/research-deep`, `/research-report`) are adapted from
+[Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills)
+(MIT), inspired by the RhinoInsight paper (arXiv:2511.18743). Adaptation notes:
+Claude/Codex-specific surfaces (`~/.claude/agents/…`, `AskUserQuestion`,
+`WebSearch`/`WebFetch`, `model: opus`) mapped to omp equivalents — task
+subagents, the `ask` tool, the `web_search` tool, companion-file disclosure of
+the agent brief, strategy modules, and `validate_json.py`. Requires Python +
+`pyyaml` for validation.

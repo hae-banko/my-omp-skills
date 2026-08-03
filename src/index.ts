@@ -43,7 +43,46 @@ interface ExtensionApi {
   sendUserMessage(content: string, options?: { deliverAs?: string }): Promise<unknown>;
 }
 
+const RESEARCH_ASSETS: string[] = [
+  "commands/research/WEB-SEARCH-AGENT.md",
+  "commands/research/modules/github-debug.md",
+  "commands/research/modules/general-web.md",
+  "commands/research/modules/academic-papers.md",
+  "commands/research/modules/chinese-tech.md",
+  "commands/research/modules/stackoverflow.md",
+  "commands/research/validate_json.py",
+];
+
 const COMMANDS: CommandSpec[] = [
+  {
+    name: "research",
+    description: "Phase 1 of deep research: generate a research outline (items + field framework) for a topic, human-in-the-loop. Follow with /research-deep and /research-report.",
+    bodyPath: "commands/research/command.md",
+    companions: RESEARCH_ASSETS,
+  },
+  {
+    name: "research-add-items",
+    description: "Add research items to an existing outline.yaml.",
+    bodyPath: "commands/research-add-items/command.md",
+    companions: ["commands/research/WEB-SEARCH-AGENT.md"],
+  },
+  {
+    name: "research-add-fields",
+    description: "Add field definitions to an existing fields.yaml.",
+    bodyPath: "commands/research-add-fields/command.md",
+    companions: ["commands/research/WEB-SEARCH-AGENT.md"],
+  },
+  {
+    name: "research-deep",
+    description: "Phase 2 of deep research: research each outline item with parallel background agents, outputting validated JSON per item.",
+    bodyPath: "commands/research-deep/command.md",
+    companions: RESEARCH_ASSETS,
+  },
+  {
+    name: "research-report",
+    description: "Phase 3 of deep research: convert the deep-research JSON results into a markdown report with table of contents.",
+    bodyPath: "commands/research-report/command.md",
+  },
   {
     name: "ask-me",
     description: "Ask which command or flow fits your situation. A router over the commands in this package.",

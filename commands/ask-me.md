@@ -65,6 +65,17 @@ Off the main flow entirely.
 - **`/teach`** — learn a concept over multiple sessions, using the current directory as a stateful workspace.
 - **`/writing-great-skills`** — reference for writing and editing skills well.
 
+## Deep research
+
+For academic, technical, and market research — a two-phase, human-in-the-loop workflow (adapted from Weizhena/deep-research-skills, MIT):
+
+- **`/research <topic>`** — Phase 1: generate a research outline (items + field framework), with web-search supplementation.
+- **`/research-add-items`** / **`/research-add-fields`** — extend the outline before deep research.
+- **`/research-deep`** — Phase 2: research each item with parallel background agents, outputting validated JSON.
+- **`/research-report`** — Phase 3: turn the JSON results into a markdown report with table of contents.
+
+Requires Python + `pyyaml` (for the JSON validator). Output lives in `./<topic_slug>/` — `outline.yaml`, `fields.yaml`, `results/*.json`, `report.md`.
+
 ## Knowledge base
 
 - **`/record`** — record a durable finding (lesson, audit, note) into `.omp/knowledge/`. The deliberate end-of-work capture. Runs in the background when invoked mid-flow.

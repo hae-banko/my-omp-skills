@@ -34,6 +34,11 @@ const EXPECTED: Record<string, { companions?: number }> = {
   "omp-handoff": {},
   record: { companions: 1 },
   pitfall: { companions: 1 },
+  research: { companions: 7 },
+  "research-add-items": { companions: 1 },
+  "research-add-fields": { companions: 1 },
+  "research-deep": { companions: 7 },
+  "research-report": {},
   teach: { companions: 4 },
   "writing-great-skills": { companions: 1 },
 };
