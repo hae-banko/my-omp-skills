@@ -4,6 +4,26 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.9.0 — Hindsight: the settle-time reflection pass
+
+- **`/hindsight`** command (user-invoked toggle, `on`/`off`/bare): while on,
+  after each main-session turn that did real work, one hidden reflection pass
+  runs before the turn settles. The model looks back at its own thinking and
+  tool results (both already in context) and revises the answer if a
+  design-level change would simplify the approach — the Fable trick, without
+  a fragile pre-stream abort.
+- Implemented on the verified `session_stop` seam: a handler returning
+  `{ continue: true, additionalContext }` queues a hidden next-turn message;
+  `stop_hook_active` is the once-per-turn guard, subagent sessions are never
+  interrupted, and the runtime's 8-continuation cap is never approached.
+- Gating: tool-use turns or substantial thinking (≥400 chars) get the pass;
+  trivial turns pass through. Reflection turns lead with an "On reflection…"
+  note when they revise.
+- Selftest extended (synthetic session_stop events: tool turn, continuation
+  turn, thinking turn, trivial turn, toggle off, bare toggle receipt);
+  `docs/reflect-mode.md` reparked as the shipped `docs/hindsight.md`;
+  AGENTS.md gains the Hindsight convention.
+
 ## v0.8.1 — public-facing README rewrite
 
 - README rewritten for a wider audience: short intro, "What's inside" bullets,

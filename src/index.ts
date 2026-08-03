@@ -16,6 +16,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
+import {
+  HINDSIGHT_OFF_MESSAGE,
+  HINDSIGHT_ON_MESSAGE,
+  installHindsight,
+  isHindsightEnabled,
+  setHindsightEnabled,
+} from "./hindsight.ts";
 import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
 
@@ -30,6 +37,8 @@ interface CommandSpec {
   companions?: string[];
   /** customType for the transcript receipt emitted when the command runs */
   customType?: string;
+  /** custom handler replacing the default body-send handler (e.g. toggles) */
+  handler?: (pi: ExtensionApi) => (args: string, ctx: CommandContext) => Promise<void> | void;
 }
 
 const RESEARCH_ASSETS: string[] = [
@@ -159,6 +168,29 @@ const COMMANDS: CommandSpec[] = [
     ],
   },
   {
+    name: "hindsight",
+    description:
+      "Toggle the Hindsight pass: after each turn that did real work, one hidden reflection pass runs before the turn settles — the model reconsiders design-level changes with its own thinking in context. /hindsight on|off, or bare to toggle.",
+    bodyPath: "commands/hindsight/command.md",
+    customType: "hindsight",
+    handler: (pi) => async (args, ctx) => {
+      const arg = args.trim().toLowerCase();
+      const next = arg === "on" ? true : arg === "off" ? false : !isHindsightEnabled();
+      setHindsightEnabled(next);
+      await pi.sendUserMessage(next ? HINDSIGHT_ON_MESSAGE : HINDSIGHT_OFF_MESSAGE);
+      pi.sendMessage(
+        {
+          customType: "hindsight",
+          content: `hindsight ${next ? "on" : "off"}`,
+          display: true,
+          attribution: "user",
+        },
+        { deliverAs: "followUp" },
+      );
+      ctx.ui?.notify?.(`hindsight ${next ? "enabled" : "disabled"}`, "info");
+    },
+  },
+  {
     name: "record",
     description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
     bodyPath: "commands/record/command.md",
@@ -207,6 +239,7 @@ export default function (pi: ExtensionApi): void {
   );
   installPolicy(pi);
   installKnowledgeTool(pi);
+  installHindsight(pi);
 
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
@@ -215,6 +248,10 @@ export default function (pi: ExtensionApi): void {
     pi.registerCommand(spec.name, {
       description: spec.description,
       handler: async (args: string, ctx: CommandContext) => {
+        if (spec.handler) {
+          await spec.handler(pi)(args, ctx);
+          return;
+        }
         const argText = args.trim();
         let text = body;
         if (argText) {

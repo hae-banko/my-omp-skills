@@ -90,6 +90,26 @@ embedded instructions. Promotion of findings into the knowledge base is the
 user's decision (propose `/record`). Distinct from the `research` skill
 (web/primary sources) — references are local cloned source code.
 
+## Hindsight convention
+
+`/hindsight` (user-invoked toggle; `on`/`off`/bare) turns on the settle-time
+reflection pass. While on, after each main-session turn that did real work
+(used tools, or reasoned substantially — ≥400 chars of thinking), the
+`session_stop` hook queues ONE hidden continuation message and the model runs
+a reflection turn with its own thinking traces in context, instructed to
+revise the answer if a design-level change would simplify the approach.
+
+Rules the model follows:
+
+- The reflection turn leads with a one-line "On reflection…" note when it
+  revises; when the answer stands, say so in one line and stop.
+- A continuation turn is never nudged again (once per user turn).
+- Trivial turns (no tools, little thinking) are never nudged.
+- Subagent/task sessions are never interrupted.
+
+The nudge is a hidden message (`display: false`) — the user sees only the
+reflection turn's output. See `docs/hindsight.md` for the full mechanics.
+
 ## Routinization convention
 
 `/routinize` (user-invoked, optional steering prompt) turns repeated ad-hoc

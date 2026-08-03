@@ -53,6 +53,7 @@ const EXPECTED: Record<string, { companions?: number }> = {
   "ask-me": {},
   "grill-me": {},
   "grill-with-docs": {},
+  hindsight: {},
   triage: { companions: 2 },
   "improve-codebase-architecture": { companions: 1 },
   "omp-setup": { companions: 5 },
@@ -333,8 +334,96 @@ if (customMessages.length !== 1 || customMessages[0].customType !== "knowledge-p
   fail("pitfall: receipt custom message missing or wrong type");
 }
 
+// --- Hindsight: settle-time reflection pass --------------------------------
+
+// The handler runs bare (no args) in the command-surface checks above, which
+// toggles state — set it explicitly so these assertions are order-independent.
+const sessionStop = handlers["session_stop"];
+if (!sessionStop) {
+  fail("hindsight: session_stop handler not registered");
+} else {
+  const toolTurn = {
+    stop_hook_active: false,
+    last_assistant_message: {
+      role: "assistant",
+      content: [
+        { type: "text", text: "found it" },
+        { type: "toolCall", id: "t1", name: "bash", input: {} },
+      ],
+    },
+  };
+  const thinkingTurn = {
+    stop_hook_active: false,
+    last_assistant_message: {
+      role: "assistant",
+      content: [
+        { type: "thinking", text: "x".repeat(900) },
+        { type: "text", text: "the answer" },
+      ],
+    },
+  };
+  const trivialTurn = {
+    stop_hook_active: false,
+    last_assistant_message: {
+      role: "assistant",
+      content: [{ type: "text", text: "you're welcome" }],
+    },
+  };
+
+  // Disabled → no continuation, even for a tool-heavy turn.
+  await registered["hindsight"].handler("off", {});
+  if (await sessionStop(toolTurn) !== undefined) fail("hindsight: nudged while disabled");
+
+  // Enabled → tool turn gets a { continue: true } continuation with the nudge.
+  await registered["hindsight"].handler("on", {});
+  const toolResult = await sessionStop(toolTurn);
+  if (
+    !toolResult ||
+    typeof toolResult !== "object" ||
+    !("continue" in toolResult) ||
+    (toolResult as { continue?: unknown }).continue !== true
+  ) {
+    fail("hindsight: no continuation for a tool turn");
+  } else if (
+    !String((toolResult as { additionalContext?: unknown }).additionalContext ?? "").includes(
+      "design-level",
+    )
+  ) {
+    fail("hindsight: nudge text missing");
+  }
+
+  // Continuation turn (stop_hook_active) → never re-nudged.
+  if (await sessionStop({ ...toolTurn, stop_hook_active: true }) !== undefined) {
+    fail("hindsight: nudged a continuation turn");
+  }
+
+  // Substantial thinking without tools → nudged.
+  if (await sessionStop(thinkingTurn) === undefined) {
+    fail("hindsight: no nudge for substantial thinking");
+  }
+
+  // Trivial turn → passes through.
+  if (await sessionStop(trivialTurn) !== undefined) {
+    fail("hindsight: nudged a trivial turn");
+  }
+
+  // Toggled off again → no continuation.
+  await registered["hindsight"].handler("off", {});
+  if (await sessionStop(toolTurn) !== undefined) fail("hindsight: nudged after toggle off");
+
+  // Bare toggle flips state and reports the new state in the receipt.
+  customMessages.length = 0;
+  await registered["hindsight"].handler("", {});
+  if (customMessages.length !== 1 || customMessages[0].customType !== "hindsight") {
+    fail("hindsight: receipt custom message missing or wrong type");
+  } else if (!String(customMessages[0].content ?? "").includes("on")) {
+    fail("hindsight: bare toggle did not enable");
+  }
+  await registered["hindsight"].handler("off", {});
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — commands, bootstrap, policy, knowledge_read, and renderers behave correctly.");
+console.log("\nOK — commands, bootstrap, policy, knowledge_read, renderers, and hindsight behave correctly.");

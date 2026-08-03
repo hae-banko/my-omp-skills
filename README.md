@@ -34,15 +34,19 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
 - **Routines** — `/routinize` turns repeated ad-hoc work into canonical,
   parameterized scripts under `scripts/routines/`, with a proposal you
   approve before each write.
+- **Hindsight** — `/hindsight` adds a settle-time reflection pass: before a
+  turn settles, the model gets one hidden look back at its own reasoning and
+  tool results to catch design-level changes that would simplify the
+  approach.
 
 ## Install
 
-Requires an SSH key with access to the private repo. Latest release: v0.8.0.
+Requires an SSH key with access to the private repo. Latest release: v0.9.0.
 
 1. Install pinned to the latest release:
 
    ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.8.0
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.9.0
    ```
 
 2. Prefer maximum immutability? Pin to a full commit SHA instead:
@@ -92,6 +96,7 @@ suggest the right one when your situation fits.
 | `/reference` | Manages cloned reference material in `.omp/references/` (add, update, remove, list) | Acquire external docs for the repo |
 | **Session & support** | | |
 | `/omp-setup` | Configures the repo: issue tracker, triage labels, domain doc layout | First run in a new repo |
+| `/hindsight` | Toggle the settle-time reflection pass: after turns that did real work, one hidden pass reconsiders design-level changes before the turn settles | You want answers reconsidered before they settle |
 | `/omp-handoff` | Compacts the conversation into a handoff document for another agent | Pass work to a fresh session |
 | `/plugin-issue` | Files a bug or feature request on this plugin's GitHub repo | The plugin misbehaves or lacks something |
 | `/teach` | Teaches a skill or concept over multiple sessions in a stateful workspace | Learn something over time |
@@ -145,7 +150,7 @@ applying it.
 2. **List available releases** —
    `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.8.0`.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.9.0`.
    Installs are immutable copies, so the old version keeps working until the
    reinstall succeeds.
 4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools
