@@ -423,6 +423,45 @@ if (!sessionStop) {
     fail("hindsight: nudged a trivial turn");
   }
 
+  // Once per yield: a second session_stop within the same user message (e.g.
+  // after an advisor card or reminder turn) must not re-nudge; only a NEW
+  // user message re-arms the pass.
+  const yieldMessages = [
+    { role: "user", content: "first prompt" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "found it" },
+        { type: "toolCall", id: "t1", name: "bash", input: {} },
+      ],
+    },
+  ];
+  const yieldTurn = {
+    stop_hook_active: false,
+    last_assistant_message: yieldMessages[1],
+    messages: yieldMessages,
+  };
+  if (await sessionStop(yieldTurn) === undefined) {
+    fail("hindsight: no nudge for a fresh user yield");
+  }
+  if (await sessionStop(yieldTurn) !== undefined) {
+    fail("hindsight: re-nudged within the same user yield");
+  }
+  const newUserTurn = {
+    ...yieldTurn,
+    messages: [
+      ...yieldMessages,
+      { role: "user", content: "second prompt" },
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "t2", name: "bash", input: {} }],
+      },
+    ],
+  };
+  if (await sessionStop(newUserTurn) === undefined) {
+    fail("hindsight: no nudge for a new user yield");
+  }
+
   // Toggled off again → no continuation.
   await registered["hindsight"].handler("off", {});
   if (await sessionStop(toolTurn) !== undefined) fail("hindsight: nudged after toggle off");

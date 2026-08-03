@@ -91,15 +91,21 @@ worth the risk for a package. Not implemented.
 
 ## Gating rules
 
-Nudge only when the turn did real work and hasn't been nudged yet:
+Nudge only when the turn did real work and the pass hasn't fired for this
+user yield:
 
-1. `stop_hook_active === false` — never nudge a continuation turn (once per
-   turn; the runtime's 8-cap is then never approached).
-2. `last_assistant_message` contains `toolCall` content blocks — the turn
+1. `stop_hook_active === false` — never nudge a continuation turn (the
+   runtime's 8-cap is then never approached).
+2. **Once per yield**: the handler counts user-role messages in the
+   `session_stop` payload; a nudge is spent for the whole user message.
+   Internal turns (advisor cards, todo reminders, follow-up drains) within
+   the same yield carry the same count, so they never re-nudge. Only a NEW
+   user message changes the count and re-arms the pass.
+3. `last_assistant_message` contains `toolCall` content blocks — the turn
    actually used tools.
-3. OR the turn's thinking was substantial (≥ 400 characters of thinking
+4. OR the turn's thinking was substantial (≥ 400 characters of thinking
    text) — a pure-reasoning hard problem still gets the nudge.
-4. Trivial turns (no tool calls, little thinking) pass through untouched.
+5. Trivial turns (no tool calls, little thinking) pass through untouched.
 
 ## Configuration
 

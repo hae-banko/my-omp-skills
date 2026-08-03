@@ -62,6 +62,14 @@ let config: HindsightConfig = DEFAULT_CONFIG;
 let enabled = false;
 
 /**
+ * User-message count at the last nudge. A nudge is spent for the whole user
+ * yield: internal turns (advisor cards, todo reminders, follow-up drains)
+ * within the same yield never re-nudge, and only a NEW user message re-arms
+ * the pass. `-1` = never nudged (fresh module).
+ */
+let nudgedUserMessageCount = -1;
+
+/**
  * Re-read the config file (default: ~/.omp/hindsight.json). A missing file,
  * invalid JSON, or invalid fields all fall back to the defaults — a broken
  * config must never take the nudge down.
@@ -115,6 +123,17 @@ If you revise: lead your reply with a one-line "${config.leadIn}" note so this s
 interface SessionStopEvent {
   stop_hook_active?: unknown;
   last_assistant_message?: unknown;
+  messages?: unknown;
+}
+
+/** Count of user-role messages in the turn transcript (yield boundary). */
+function countUserMessages(messages: unknown): number {
+  if (!Array.isArray(messages)) return -1;
+  let n = 0;
+  for (const m of messages) {
+    if (m && typeof m === "object" && (m as { role?: unknown }).role === "user") n += 1;
+  }
+  return n;
 }
 
 export function installHindsight(pi: ExtensionApi): void {
@@ -124,6 +143,12 @@ export function installHindsight(pi: ExtensionApi): void {
     const stopEvent = event as SessionStopEvent;
     if (stopEvent.stop_hook_active === true) return; // already a continuation turn
     if (!didRealWork(stopEvent.last_assistant_message)) return; // trivial turn
+    // Once per yield: one nudge per user message, never more until the user
+    // prompts again. Internal turns (advisors, reminders, drains) within the
+    // same yield carry the same user-message count, so they never re-nudge.
+    const userCount = countUserMessages(stopEvent.messages);
+    if (userCount >= 0 && userCount === nudgedUserMessageCount) return;
+    nudgedUserMessageCount = userCount;
     return { continue: true, additionalContext: buildNudge() };
   });
   pi.registerMessageRenderer("hindsight", (message, _options, _theme) => {

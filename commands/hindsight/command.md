@@ -24,8 +24,10 @@ have made the whole approach simpler.
 - **Check the state**: `/hindsight status` reports the current state (same
   footer indicator) without toggling. The footer line is set on every
   invocation and always reflects the live state.
-- **Once per turn**: a turn that was already a reflection pass is never
-  nudged again; the runtime's continuation cap is never approached.
+- **Once per yield**: the pass fires at most once per user message. Internal
+  turns within the same yield (advisor cards, reminders, follow-up drains)
+  never re-nudge; only a new user prompt re-arms the pass. A turn that was
+  already a reflection pass is never nudged again either.
 - **Only real work**: turns that used tools, or reasoned substantially, get
   the pass. Trivial turns (acknowledgments, one-liners) pass through
   untouched.

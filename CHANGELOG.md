@@ -4,6 +4,18 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.14.1 — hindsight once per yield
+
+- The reflection pass now fires **at most once per user message** — the
+  "one nudge until yielding" rule. Previously it was once per turn: internal
+  turns within the same yield (advisor cards, todo reminders, follow-up
+  drains) could each re-trigger the nudge and stack reflection passes.
+  The handler counts user-role messages in the `session_stop` payload; a
+  nudge is spent until a new user prompt changes that count. The
+  `stop_hook_active` continuation guard is unchanged.
+- Selftest: same-yield second session_stop does not re-nudge; a new user
+  message re-arms the pass.
+
 ## v0.14.0 — hindsight feedback like /advisor
 
 - `/hindsight` now gives advisor-style feedback: a persistent footer status
