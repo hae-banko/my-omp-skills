@@ -24,7 +24,6 @@ import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 interface HandlerContext {
   ui?: {
     notify?(message: string, level?: string): void;
-    setStatus?(key: string, text: string | undefined): void;
   };
 }
 
@@ -478,20 +477,13 @@ if (!sessionStop) {
   // Status: reports the state without toggling and without a user message.
   sent.length = 0;
   customMessages.length = 0;
-  const statusCalls: string[] = [];
   const notifyCalls: string[] = [];
   await registered["hindsight"].handler("status", {
-    ui: {
-      setStatus: (_key: string, text: string | undefined) => statusCalls.push(String(text)),
-      notify: (message: string) => notifyCalls.push(message),
-    },
+    ui: { notify: (message: string) => notifyCalls.push(message) },
   });
   if (sent.length !== 0) fail("hindsight: status emitted a user message");
   if (customMessages.length !== 1 || !String(customMessages[0].content ?? "").includes("on")) {
     fail("hindsight: status receipt does not report the on state");
-  }
-  if (statusCalls.length !== 1 || statusCalls[0] !== "Hindsight: on") {
-    fail("hindsight: status did not set the footer status line");
   }
   if (notifyCalls.length !== 1) {
     fail("hindsight: status did not toast");
@@ -524,7 +516,7 @@ if (!sessionStop) {
   customMessages.length = 0;
   notifyCalls.length = 0;
   await registered["hindsight"].handler("on", {
-    ui: { setStatus: () => {}, notify: (message: string) => notifyCalls.push(message) },
+    ui: { notify: (message: string) => notifyCalls.push(message) },
   });
   if (sent.length !== 0) fail("hindsight: toggle emitted a user message (model would reply)");
   if (customMessages.length !== 1 || customMessages[0].customType !== "hindsight") {

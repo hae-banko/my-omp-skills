@@ -82,12 +82,10 @@ worth the risk for a package. Not implemented.
 
 - The nudge is `display: false` (forced by the runtime); the user sees the
   reflection turn's output. The toggle is **silent**: the handler flips the
-  state, emits a `hindsight` receipt card, sets a persistent footer status
-  line (`Hindsight: on` / `Hindsight: off`) via `ui.setStatus`, and notifies
-  via `ui.notify` — it sends no user message, so the model never replies to an
-  on/off toggle. The footer indicator is synchronous UI, so it appears even
-  when the session is mid-stream (where a receipt card would be queued
-  invisibly).
+  state, emits a `hindsight` receipt card, and toasts the configurable
+  `onMessage`/`offMessage` via `ui.notify` — it sends no user message, so the
+  model never replies to an on/off toggle. Feedback is one-shot; nothing
+  persists on screen.
 
 ## Gating rules
 
@@ -120,9 +118,8 @@ invocation). Fields, all optional with defaults:
 | `onMessage` | `"Hindsight enabled"` | Toast shown when the pass turns on / is reported on |
 | `offMessage` | `"Hindsight disabled"` | Toast shown when the pass turns off / is reported off |
 
-The footer status line (`Hindsight: on/off`) and the receipt card
-(`HINDSIGHT — ON/OFF`) keep fixed glyphs; only the toast text is
-configurable.
+The receipt card (`HINDSIGHT — ON/OFF`) keeps a fixed glyph; only the toast
+text is configurable. Feedback is one-shot — nothing persists on screen.
 
 Missing files, invalid JSON, and invalid fields all fall back to the defaults
 — a broken config never takes the nudge down. The `<my-omp-skills:hindsight>`

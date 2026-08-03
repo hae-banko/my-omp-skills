@@ -178,14 +178,12 @@ const COMMANDS: CommandSpec[] = [
       reloadHindsightConfig(); // edits to ~/.omp/hindsight.json apply on any invocation
       const arg = args.trim().toLowerCase();
       const on = isHindsightEnabled();
-      // Advisor-style feedback: a persistent footer status line ("Hindsight:
-      // on/off") plus a transition toast. The footer indicator is synchronous
-      // UI, so it shows even when the session is mid-stream (where the receipt
-      // card would be queued invisibly). No user message — the model never
-      // replies to a toggle.
+      // One-shot feedback: a toast with the configurable message plus the
+      // receipt card in the transcript — both transient, nothing persistent
+      // on screen. The state itself is just saved. No user message, so the
+      // model never replies to a toggle.
       const report = (state: boolean) => {
         const { onMessage, offMessage } = hindsightToggleMessages();
-        ctx.ui?.setStatus?.("hindsight", `Hindsight: ${state ? "on" : "off"}`);
         ctx.ui?.notify?.(state ? onMessage : offMessage, "info");
       };
       // Status: report the current state without toggling.

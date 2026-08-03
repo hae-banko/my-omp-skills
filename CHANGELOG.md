@@ -4,6 +4,15 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.14.3 — hindsight feedback is one-shot, not persistent
+
+- The persistent footer status line (`Hindsight: on/off`) from v0.14.0 is
+  removed — the user wanted the state shown once after each toggle, then
+  saved silently, not a permanent on-screen indicator. `/hindsight` now
+  toasts the configurable `onMessage`/`offMessage` and emits the receipt
+  card; nothing stays on screen.
+- `ui.setStatus` contract removed from `api.ts` and the selftest.
+
 ## v0.14.2 — configurable hindsight toggle messages
 
 - `onMessage` / `offMessage` are back in `~/.omp/hindsight.json` — they were

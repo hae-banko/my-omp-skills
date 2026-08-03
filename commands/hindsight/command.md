@@ -17,13 +17,12 @@ have made the whole approach simpler.
 ## How it works
 
 - **Toggle**: `/hindsight` (bare, toggles), `/hindsight on`, or `/hindsight off`.
-  The toggle is **silent** — the extension flips the state and shows
-  advisor-style feedback: a persistent footer status line (`Hindsight: on` /
-  `Hindsight: off`) plus a transition toast; the model does not reply. The
-  model's only job is to follow the hidden nudge when it arrives.
+  The toggle is **silent** — the extension flips the state and shows it once:
+  a toast with the configurable `onMessage`/`offMessage` text plus a receipt
+  card (`HINDSIGHT — ON/OFF`) in the transcript. Nothing stays on screen —
+  the state is just saved. The model does not reply.
 - **Check the state**: `/hindsight status` reports the current state (same
-  footer indicator) without toggling. The footer line is set on every
-  invocation and always reflects the live state.
+  one-shot toast + card) without toggling.
 - **Once per yield**: the pass fires at most once per user message. Internal
   turns within the same yield (advisor cards, reminders, follow-up drains)
   never re-nudge; only a new user prompt re-arms the pass. A turn that was
@@ -56,8 +55,7 @@ again (any invocation re-reads the file):
 - `nudge` — the reflection question itself.
 - `leadIn` — the one-line prefix a revision leads with.
 - `onMessage` / `offMessage` — the toast text shown when the pass turns on
-  (or is reported on) / off (or is reported off). The footer status line and
-  the receipt card keep their fixed `Hindsight: on/off` / `HINDSIGHT — ON/OFF`
-  glyphs.
+  (or is reported on) / off (or is reported off). The receipt card keeps its
+  fixed `HINDSIGHT — ON/OFF` glyph.
 
 Missing or invalid fields fall back to the defaults.
