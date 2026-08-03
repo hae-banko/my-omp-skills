@@ -15,9 +15,11 @@ omp plugin install git@github.com:hae-banko/my-omp-skills.git
 (Private repo — your SSH key must have access. Local development instead:
 `omp plugin link /path/to/my-omp-skills`.)
 
-Then run **`/setup`** once per repo. It configures the issue tracker
+Then run **`/omp-setup`** once per repo. It configures the issue tracker
 (local `.scratch/` markdown by default, GitHub/GitLab available), triage
-labels, and domain doc layout that the other commands assume.
+labels, and domain doc layout that the other commands assume. (`/setup` and
+`/handoff` are omp built-ins; this package's versions are `/omp-setup` and
+`/omp-handoff`.)
 
 ## Reference
 
@@ -29,14 +31,14 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[/ask-matt](./commands/ask-matt.md)** — Ask which command or flow fits your situation. A router over this package.
 - **[/grill-me](./commands/grill-me.md)** — A relentless interview to sharpen a plan or design.
 - **[/grill-with-docs](./commands/grill-with-docs.md)** — A grilling session that also builds your project's domain model, sharpening terminology and updating `CONTEXT.md` and ADRs inline.
-- **[/setup](./commands/setup/command.md)** — Configure this repo for the workflow commands (issue tracker, triage labels, domain doc layout). Run once per repo.
+- **[/omp-setup](./commands/setup/command.md)** — Configure this repo for the workflow commands (issue tracker, triage labels, domain doc layout). Run once per repo.
 - **[/to-spec](./commands/to-spec.md)** — Turn the current conversation into a spec and publish it to the issue tracker — no interview, just synthesis.
 - **[/to-tickets](./commands/to-tickets.md)** — Break a plan, spec, or conversation into tracer-bullet tickets, each declaring its blocking edges.
 - **[/implement](./commands/implement.md)** — Build the work described by a spec or tickets, driving TDD at pre-agreed seams and closing out with code review.
 - **[/triage](./commands/triage/command.md)** — Move issues and external PRs through a state machine of triage roles and write agent-ready briefs.
 - **[/wayfinder](./commands/wayfinder.md)** — Plan a huge chunk of work as a shared map of decision tickets on the issue tracker, resolved one at a time.
 - **[/improve-codebase-architecture](./commands/improve-codebase-architecture/command.md)** — Scan for deepening opportunities, present an HTML report, then grill through whichever you pick.
-- **[/handoff](./commands/handoff.md)** — Compact the current conversation into a handoff document so another agent can continue.
+- **[/omp-handoff](./commands/handoff.md)** — Compact the current conversation into a handoff document so another agent can continue.
 - **[/teach](./commands/teach/command.md)** — Teach a new skill or concept over multiple sessions, using the current directory as a stateful workspace.
 - **[/writing-great-skills](./commands/writing-great-skills/command.md)** — Reference for writing and editing skills well.
 
@@ -55,7 +57,8 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 ## Attribution
 
 Derived from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
-Adaptations: `/setup` replaces `/setup-matt-pocock-skills` (local-first tracker
-default); slash references to model-invoked skills were normalized to skill
-names; subagent wording was mapped to omp task agents; commands ship as
-markdown bodies registered by a TS extension entry.
+Adaptations: `/omp-setup` replaces `/setup-matt-pocock-skills` (local-first
+tracker default; renamed because `/setup` is an omp built-in); `/omp-handoff`
+because `/handoff` is an omp built-in; slash references to model-invoked skills
+were normalized to skill names; subagent wording was mapped to omp task agents;
+commands ship as markdown bodies registered by a TS extension entry.

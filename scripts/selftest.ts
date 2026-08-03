@@ -26,12 +26,12 @@ const EXPECTED: Record<string, { companions?: number }> = {
   "grill-with-docs": {},
   triage: { companions: 2 },
   "improve-codebase-architecture": { companions: 1 },
-  setup: { companions: 5 },
+  "omp-setup": { companions: 5 },
   "to-spec": {},
   "to-tickets": {},
   implement: {},
   wayfinder: {},
-  handoff: {},
+  "omp-handoff": {},
   teach: { companions: 4 },
   "writing-great-skills": { companions: 1 },
 };
@@ -83,8 +83,8 @@ for (const name of Object.keys(registered)) {
 
 // 3. Argument passthrough: args land in the injected message.
 sent.length = 0;
-await registered.handoff.handler("finish the auth flow", {});
-if (!sent[0]?.includes("finish the auth flow")) fail("handoff: args not injected");
+await registered["omp-handoff"].handler("finish the auth flow", {});
+if (!sent[0]?.includes("finish the auth flow")) fail("omp-handoff: args not injected");
 
 // 4. No command body is a frontmatter-stripping casualty.
 for (const name of Object.keys(registered)) {

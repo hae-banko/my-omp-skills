@@ -1,6 +1,6 @@
 {
   "name": "my-omp-skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Personal omp extensions: slash commands and model-invoked skills adapted from Matt Pocock's engineering workflow suite (grilling, spec/ticket flows, TDD, code review, triage, wayfinder, handoff, teach).",
   "license": "MIT",

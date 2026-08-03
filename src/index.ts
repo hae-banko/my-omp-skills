@@ -75,7 +75,7 @@ const COMMANDS: CommandSpec[] = [
     companions: ["commands/improve-codebase-architecture/HTML-REPORT.md"],
   },
   {
-    name: "setup",
+    name: "omp-setup",
     description: "Configure this repo for the workflow commands — issue tracker (local .scratch by default), triage label vocabulary, and domain doc layout. Run once per repo.",
     bodyPath: "commands/setup/command.md",
     companions: [
@@ -107,7 +107,7 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/wayfinder.md",
   },
   {
-    name: "handoff",
+    name: "omp-handoff",
     description: "Compact the current conversation into a handoff document for another agent to pick up.",
     bodyPath: "commands/handoff.md",
   },

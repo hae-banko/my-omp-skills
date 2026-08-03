@@ -45,8 +45,9 @@ authoring contract.
   There is no non-promoted bucket; put drafts outside the repo.
 - Command bodies and skills are plain markdown — edit content without touching
   code. Keep companion files referenced by the names the body uses.
-- `/setup` must run once per target repo before the tracker-dependent commands
-  (`/to-spec`, `/to-tickets`, `/triage`, `/wayfinder`, `code-review`) work.
+- `/omp-setup` must run once per target repo before the tracker-dependent
+  commands (`/to-spec`, `/to-tickets`, `/triage`, `/wayfinder`, `code-review`)
+  work.
   It writes `docs/agents/issue-tracker.md`, `triage-labels.md`, `domain.md`
   and an `## Agent skills` block into the target repo's `AGENTS.md`/`CLAUDE.md`.
 

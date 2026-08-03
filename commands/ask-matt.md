@@ -7,10 +7,10 @@ A **flow** is a path through the commands and skills in this package. Most paths
 The route most work travels. You have an idea and want it built.
 
 1. **`/grill-with-docs`** — sharpen the idea by interview. Start here when you **have a codebase**: it's stateful, retaining what it learns in `CONTEXT.md` and ADRs. (No codebase? Use `/grill-me` — see Standalone. Both run the same `grilling` loop; `grill-with-docs` is the one that leaves a paper trail.)
-2. **Branch — can you settle every question in conversation?** If a question needs a runnable answer (state, business logic, a UI you have to see), detour through a prototype, bridged by **`/handoff`** in both directions (see Crossing sessions):
-   - **`/handoff`** out, then open a fresh session against that file,
+2. **Branch — can you settle every question in conversation?** If a question needs a runnable answer (state, business logic, a UI you have to see), detour through a prototype, bridged by **`/omp-handoff`** in both directions (see Crossing sessions):
+   - **`/omp-handoff`** out, then open a fresh session against that file,
    - **`prototype`** to answer the question with throwaway code,
-   - **`/handoff`** back what you learned, and reference it from the original idea thread.
+   - **`/omp-handoff`** back what you learned, and reference it from the original idea thread.
 3. **Branch — is this a multi-session build?**
    - **Yes** → **`/to-spec`** (turn the thread into a spec), then **`/to-tickets`** to split it into tracer-bullet tickets, each declaring its **blocking edges**. On a local tracker that's one file per ticket under `.scratch/<feature>/issues/`, worked blockers-first by hand; on a real tracker the edges become native blocking links, so any ticket whose blockers are done can be grabbed — kick off **`/implement`** per ticket, **clearing context between each one**.
    - **No** → **`/implement`** right here, in the same context window.
@@ -21,7 +21,7 @@ The route most work travels. You have an idea and want it built.
 
 Keep steps 1–3 in **one unbroken context window** — don't compact or clear until after `/to-tickets` — so the grilling, spec, and tickets all build on the same thinking. Each `/implement` then starts fresh, working from the ticket.
 
-The limit on this is the **smart zone**: the window within which the model still reasons sharply. If a session approaches it before `/to-tickets`, don't push on degraded — `/handoff` and continue in a fresh thread.
+The limit on this is the **smart zone**: the window within which the model still reasons sharply. If a session approaches it before `/to-tickets`, don't push on degraded — `/omp-handoff` and continue in a fresh thread.
 
 ## On-ramps
 
@@ -52,8 +52,8 @@ Two model-invoked references that run *beneath* the other skills — each the si
 
 ## Crossing sessions
 
-- **`/handoff`** — when a thread is full or you need to branch off (e.g. into a prototype session), this compacts the conversation into a markdown file. You don't continue in place — you **open a new session and reference that file** to carry the context across. It's the bridge between context windows, in either direction. Use it when you want a **fresh session** but need the **current conversation preserved**.
-- **`/compact`** (built-in) — stay in the **same conversation**, letting the earlier turns be summarized. Use it at **intentional breaks between phases**, when you don't mind losing the verbatim history. Don't compact mid-phase — the agent can lose its way. `/handoff` forks; `/compact` continues.
+- **`/omp-handoff`** — when a thread is full or you need to branch off (e.g. into a prototype session), this compacts the conversation into a markdown file. You don't continue in place — you **open a new session and reference that file** to carry the context across. It's the bridge between context windows, in either direction. Use it when you want a **fresh session** but need the **current conversation preserved**.
+- **`/compact`** (built-in) — stay in the **same conversation**, letting the earlier turns be summarized. Use it at **intentional breaks between phases**, when you don't mind losing the verbatim history. Don't compact mid-phase — the agent can lose its way. `/omp-handoff` forks; `/compact` continues.
 
 ## Standalone
 
@@ -67,4 +67,4 @@ Off the main flow entirely.
 
 ## Precondition
 
-**`/setup`** — run before your first engineering flow to configure the issue tracker, triage labels, and doc layout the other commands assume. Custom issue trackers also work.
+**`/omp-setup`** — run before your first engineering flow to configure the issue tracker, triage labels, and doc layout the other commands assume. Custom issue trackers also work.
