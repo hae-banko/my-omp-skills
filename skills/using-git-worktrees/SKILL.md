@@ -1,6 +1,7 @@
 ---
 name: using-git-worktrees
-description: Use when starting feature work that needs isolation from the current workspace or before executing implementation plans — ensures an isolated workspace exists via git worktree. Also use when a task could dirty the user's working tree.
+description: Set up an isolated git worktree for feature work (.worktrees/ convention, clean baseline). Runs only when you ask.
+disable-model-invocation: true
 ---
 
 # Using Git Worktrees
@@ -9,11 +10,11 @@ description: Use when starting feature work that needs isolation from the curren
 
 ## Overview
 
-Ensure work happens in an isolated workspace. omp has no native worktree tool, so the git worktree fallback is the primary path.
+Ensure work happens in an isolated workspace. omp has no native worktree tool, so the git worktree path is primary.
 
 **Core principle:** Detect existing isolation first. Then create an isolated workspace with git. Never fight the harness.
 
-**Announce at start:** "I'm setting up an isolated worktree."
+This skill runs only when the user asks — never auto-triggered. On invocation: "I'm setting up an isolated worktree."
 
 ## Step 0: Detect Existing Isolation
 
@@ -40,11 +41,7 @@ Report with branch state:
 
 **If `GIT_DIR == GIT_COMMON` (or in a submodule):** You are in a normal repo checkout.
 
-Has the user already indicated a worktree preference in your instructions? If not, ask for consent before creating a worktree:
-
-> "Would you like me to set up an isolated worktree? It protects your current branch from changes."
-
-Honor any existing declared preference without asking. If the user declines consent, work in place and skip to Step 2.
+The user invoked this skill, so consent to create a worktree is implied. Check for a declared worktree directory preference in your instructions and honor it without asking.
 
 ## Step 1: Create Isolated Workspace
 

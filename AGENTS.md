@@ -43,7 +43,8 @@ authoring contract.
 the project root (falling back to an existing `worktrees/` dir or an explicit
 user preference). The directory must be gitignored (`git check-ignore`) before
 a worktree is created there. omp has no native worktree tool, so the git CLI
-path is primary.
+path is primary. The skill is user-invoked (`disable-model-invocation`) — it
+must never auto-trigger; only run it when the user asks.
 
 ## Deep research convention
 

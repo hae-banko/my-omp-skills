@@ -61,7 +61,7 @@ them; **model-invoked** skills are reachable by the agent when the task fits.
 - **[domain-modeling](./skills/domain-modeling/SKILL.md)** — Build and sharpen the project's domain model; maintain `CONTEXT.md` and ADRs inline.
 - **[codebase-design](./skills/codebase-design/SKILL.md)** — Shared vocabulary for designing deep modules: a lot of behaviour behind a small interface at a clean seam.
 - **[resolving-merge-conflicts](./skills/resolving-merge-conflicts/SKILL.md)** — Resolve an in-progress merge/rebase by intent, hunk by hunk; never `--abort`.
-- **[using-git-worktrees](./skills/using-git-worktrees/SKILL.md)** — Ensure feature work happens in an isolated workspace: detection guards (submodules), `.worktrees/` convention, clean-baseline verification.
+- **[using-git-worktrees](./skills/using-git-worktrees/SKILL.md)** — Set up an isolated git worktree for feature work: detection guards (submodules), `.worktrees/` convention, clean-baseline verification. User-invoked — runs only when you ask.
 
 ## Attribution
 
