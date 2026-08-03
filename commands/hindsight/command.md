@@ -23,6 +23,10 @@ have made the whole approach simpler.
   the state is just saved. The model does not reply.
 - **Check the state**: `/hindsight status` reports the current state (same
   one-shot toast + card) without toggling.
+- **TUI options**: typing `/hindsight ` shows the subcommands (`on`, `off`,
+  `status`) with the live state in their descriptions — e.g. "Enable the
+  reflection pass (currently off)" — so the state is visible in the input
+  autocomplete without anything persisting on screen.
 - **Once per yield**: the pass fires at most once per user message. Internal
   turns within the same yield (advisor cards, reminders, follow-up drains)
   never re-nudge; only a new user prompt re-arms the pass. A turn that was

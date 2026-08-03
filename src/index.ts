@@ -40,6 +40,8 @@ interface CommandSpec {
   customType?: string;
   /** custom handler replacing the default body-send handler (e.g. toggles) */
   handler?: (pi: ExtensionApi) => (args: string, ctx: CommandContext) => Promise<void> | void;
+  /** live argument completions shown when the command's argument is typed */
+  getArgumentCompletions?: (argumentPrefix: string) => Array<{ value: string; label: string; description?: string }> | null;
 }
 
 const RESEARCH_ASSETS: string[] = [
@@ -213,6 +215,22 @@ const COMMANDS: CommandSpec[] = [
       );
       report(next);
     },
+    // TUI options: typing "/hindsight " shows the subcommands with the live
+    // state in their descriptions — the intuitive on/off affordance, with
+    // nothing persistent on screen.
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const lower = argumentPrefix.toLowerCase();
+      const on = isHindsightEnabled();
+      const state = on ? "on" : "off";
+      const options = [
+        { value: "on ", label: "on", description: `Enable the reflection pass (currently ${state})` },
+        { value: "off ", label: "off", description: `Disable the reflection pass (currently ${state})` },
+        { value: "status ", label: "status", description: `Show the current state (${state})` },
+      ];
+      const matches = options.filter((o) => o.label.startsWith(lower));
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "math",
@@ -278,6 +296,7 @@ export default function (pi: ExtensionApi): void {
 
     pi.registerCommand(spec.name, {
       description: spec.description,
+      getArgumentCompletions: spec.getArgumentCompletions,
       handler: async (args: string, ctx: CommandContext) => {
         if (spec.handler) {
           await spec.handler(pi)(args, ctx);

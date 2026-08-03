@@ -4,6 +4,18 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.14.4 — hindsight state in the TUI options
+
+- Typing `/hindsight ` in the input box now shows the subcommands (`on`,
+  `off`, `status`) as completions with the **live state** in their
+  descriptions — "Enable the reflection pass (currently on/off)" — the
+  advisor-style intuitive on/off affordance, with nothing persistent on
+  screen. The dim one-shot footer line (toggle toast) and receipt card stay
+  as before.
+- Selftest: completion items, prefix filtering, and state-bearing
+  descriptions asserted; `getArgumentCompletions` added to the `api.ts`
+  command contract.
+
 ## v0.14.3 — hindsight feedback is one-shot, not persistent
 
 - The persistent footer status line (`Hindsight: on/off`) from v0.14.0 is

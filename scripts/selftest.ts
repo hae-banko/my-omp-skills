@@ -29,6 +29,11 @@ interface HandlerContext {
 
 interface RegisteredCommand {
   description: string;
+  getArgumentCompletions?: (argumentPrefix: string) => Array<{
+    value: string;
+    label: string;
+    description?: string;
+  }> | null;
   handler: (args: string, ctx: HandlerContext) => Promise<void>;
 }
 
@@ -112,7 +117,7 @@ const zod = {
 const mockPi = {
   registerCommand(
     name: string,
-    def: { description: string; handler: RegisteredCommand["handler"] },
+    def: { description: string; handler: RegisteredCommand["handler"]; getArgumentCompletions?: RegisteredCommand["getArgumentCompletions"] },
   ): void {
     registered[name] = def;
   },
@@ -489,6 +494,25 @@ if (!sessionStop) {
     fail("hindsight: status did not toast");
   }
   if (!isHindsightEnabled()) fail("hindsight: status toggled the state");
+
+  // TUI options: argument completions show the live state in descriptions.
+  const completions = registered["hindsight"].getArgumentCompletions?.("") ?? null;
+  if (!completions || completions.length !== 3) {
+    fail("hindsight: expected on/off/status argument completions");
+  } else {
+    const labels = completions.map((c) => c.label).sort().join(",");
+    if (labels !== "off,on,status") fail(`hindsight: unexpected completion labels: ${labels}`);
+    if (!String(completions[0].description ?? "").includes("currently on")) {
+      fail("hindsight: completion descriptions do not carry the live state");
+    }
+  }
+  const offOnly = registered["hindsight"].getArgumentCompletions?.("of") ?? null;
+  if (!offOnly || offOnly.length !== 1 || offOnly[0]?.label !== "off") {
+    fail("hindsight: prefix-filtered completions wrong");
+  }
+  if (registered["hindsight"].getArgumentCompletions?.("on x") !== null) {
+    fail("hindsight: completions offered past the subcommand");
+  }
 
   await registered["hindsight"].handler("off", {});
 

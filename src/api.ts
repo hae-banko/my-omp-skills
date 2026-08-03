@@ -11,6 +11,9 @@ export interface CommandContext {
 
 export interface CommandHandlerDef {
   description?: string;
+  getArgumentCompletions?: (
+    argumentPrefix: string,
+  ) => Array<{ value: string; label: string; description?: string }> | null;
   handler: (args: string, ctx: CommandContext) => Promise<void> | void;
 }
 
