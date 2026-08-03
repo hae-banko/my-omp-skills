@@ -118,9 +118,9 @@ const COMMANDS: CommandSpec[] = [
     companions: ["commands/record/RECORD-FORMAT.md"],
   },
   {
-    name: "omfg",
+    name: "pitfall",
     description: "Something just went wrong — instantly capture the pitfall into the repo's knowledge base (.omp/knowledge/) before the context fades. Supports --recent.",
-    bodyPath: "commands/omfg/command.md",
+    bodyPath: "commands/pitfall/command.md",
     companions: ["commands/record/RECORD-FORMAT.md"],
   },
   {

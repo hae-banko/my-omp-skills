@@ -39,7 +39,7 @@ authoring contract.
 
 ## Knowledge base convention
 
-`/record` and `/omfg` write to `<target-repo>/.omp/knowledge/` — the repo-local
+`/record` and `/pitfall` write to `<target-repo>/.omp/knowledge/` — the repo-local
 knowledge base. Shape is defined in `commands/record/RECORD-FORMAT.md`. Three
 rules, and they apply only to records:
 

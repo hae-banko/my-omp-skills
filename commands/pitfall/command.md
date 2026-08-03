@@ -2,7 +2,7 @@ Something just went wrong. Capture the pitfall before the context fades.
 
 ## When to use
 
-The moment a dead end, costly mistake, or wrong approach becomes obvious — mid-task, not at the end. The difference from `/record`: `/omfg` is reactive and instant; `/record` is the deliberate end-of-work capture.
+The moment a dead end, costly mistake, or wrong approach becomes obvious — mid-task, not at the end. The difference from `/record`: `/pitfall` is reactive and instant; `/record` is the deliberate end-of-work capture.
 
 ## Behavior
 

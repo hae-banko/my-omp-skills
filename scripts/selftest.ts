@@ -33,7 +33,7 @@ const EXPECTED: Record<string, { companions?: number }> = {
   wayfinder: {},
   "omp-handoff": {},
   record: { companions: 1 },
-  omfg: { companions: 1 },
+  pitfall: { companions: 1 },
   teach: { companions: 4 },
   "writing-great-skills": { companions: 1 },
 };

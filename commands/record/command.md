@@ -2,12 +2,12 @@ Record a durable finding into this repo's local knowledge base at `.omp/knowledg
 
 ## When to use
 
-The end of an investigation, a finished task, a conclusion worth keeping, a lesson learned, or a decision with a rationale a future session should find. NOT for work-in-progress status or chat messages. (For things that just went wrong mid-task, use `/omfg` instead.)
+The end of an investigation, a finished task, a conclusion worth keeping, a lesson learned, or a decision with a rationale a future session should find. NOT for work-in-progress status or chat messages. (For things that just went wrong mid-task, use `/pitfall` instead.)
 
 ## Behavior
 
 1. **Identify the finding.** Take it from the user's argument or the just-finished conversation. If the user passed nothing and the conversation has no obvious finding, ask exactly one question: "What should we record?"
-2. **Infer a kind.** `lesson` (something we learned), `audit` (an investigation conclusion), or `note` (anything else durable). Pitfalls belong to `/omfg`, which pins `kind: pitfall`.
+2. **Infer a kind.** `lesson` (something we learned), `audit` (an investigation conclusion), or `note` (anything else durable). Pitfalls belong to `/pitfall`, which pins `kind: pitfall`.
 3. **Compose the record** using the `RECORD-FORMAT.md` companion file (listed below). Keep the title to one greppable line.
 4. **Choose the filename.** `YYYY-MM-DD_<slug>.md` under `.omp/knowledge/`, slug = dash-case of the title. If a file with that name already exists, append `-2`, `-3`, … — **never overwrite**.
 5. **Write the file.** Create `.omp/knowledge/` if missing.
