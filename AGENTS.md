@@ -94,6 +94,12 @@ rules, and they apply to every entry:
 
 ## Rules
 
+- **`main` moves via reviewed PRs, never direct pushes.** This is a
+  convention, not enforcement: GitHub branch protection requires Pro for
+  private repos, and this repo is on the free plan. Integrity relies on
+  release tags + the single-collaborator reality. If the repo ever gains
+  collaborators or Pro, enable branch protection (required PR reviews, block
+  force pushes) and this rule becomes mechanical.
 - A user-invoked command must never invoke another user-invoked command —
   delegate to model-invoked skills instead.
 - `commands/` and `skills/` are both promoted: everything in them ships.
