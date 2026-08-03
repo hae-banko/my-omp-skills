@@ -4,6 +4,12 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.6.2 — docs: setup-after-update FAQ
+
+- README: answers "I already ran `/omp-setup` — do I need to re-run it after
+  updating?" — no; the setup output is per-repo configuration, not a plugin
+  snapshot, and re-running is safe/idempotent whenever desired.
+
 ## v0.6.1 — docs: plugin update & management guide
 
 - README: expanded "Updating" into a full management guide — `omp plugin

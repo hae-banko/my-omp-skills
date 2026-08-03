@@ -102,6 +102,24 @@ available), triage labels, and domain doc layout that the other commands
 assume. (`/setup` and `/handoff` are omp built-ins; this package's versions
 are `/omp-setup` and `/omp-handoff`.)
 
+**"I already ran `/omp-setup` before — do I need to re-run it after updating?"**
+
+No. `/omp-setup` writes *per-repo configuration* (which issue tracker, triage
+labels, domain-doc layout — into `docs/agents/*.md` and the `## Agent skills`
+block of your `AGENTS.md`/`CLAUDE.md`), not a snapshot of this package's
+version. Its output does not change between releases, so a plugin update needs
+nothing:
+
+- New runtime behaviors (bootstrap message, knowledge-base policy, rules,
+  `knowledge_read` tool) activate on their own once you re-enter omp — no
+  setup involved.
+- The knowledge base (`.omp/knowledge/`) is created on demand the first time
+  you run `/record` or `/pitfall` — no setup needed either.
+- Re-running `/omp-setup` is always safe: it detects existing state and
+  updates the `## Agent skills` block in place instead of duplicating it.
+  Re-run only when you want to switch issue trackers or restart the
+  configuration from scratch.
+
 ## Reference
 
 Two axes, like the source: **user-invoked** commands fire only when you type
