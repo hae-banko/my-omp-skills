@@ -4,6 +4,15 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.22.0 — Deep Research TUI telemetry cards & ergonomic shortcuts
+
+- **Ergonomic Shortcuts**: Added `/research 1 [topic]`, `/research 2 [slug]`, `/research 3 [slug]`, and `/research dashboard [slug]`.
+- **TUI Card Renderers (`src/research-renderer.ts`)**:
+  - `ResearchWaveProgressCard` (`research-wave-progress`): Real-time wave execution card showing wave number (`[WAVE 2/3]`), field completion progress bar, active subagents, active strategy modules, and uncertainty reduction delta ($\Delta U$).
+  - `ResearchReportPreviewCard` (`research-report-preview`): Pre-flight preview card rendered before writing `report.md`, showing coverage percentage, verified sources count, executive summary preview, and unresolved field provenance.
+  - `ResearchDashboardCard` (`research-dashboard`): End-to-end project lifecycle card showing pipeline status ($\text{Phase 1} \rightarrow \text{Phase 2} \rightarrow \text{Phase 3}$), global completion metrics, and project artifacts status.
+  - Upgraded `ResearchReviewCard` (`research-review`): Visual ASCII completion progress bars and source yield badges.
+
 ## v0.21.3 — `/research` Phase 1 emits a draft Research Review window immediately
 
 - **`/research` Phase 1 draft window**: invoking `/research` (bare) or `/research 1 [topic]` now opens the TUI Research Review Window with `status: "DRAFT REVIEW"` and a placeholder `${YYYY-MM-DD}_${topic-slug}` slug, so the user sees the planned project before the workflow body reaches the model. The agent then replaces the draft with the real outline payload via the same `research-review` custom message. Subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `2`, `3`, `dashboard`) fall through to the default body-send + user-prompt flow unchanged.
