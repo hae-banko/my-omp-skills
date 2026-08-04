@@ -95,7 +95,7 @@ suggest the right one when your situation fits.
 | `/research` | Phase 1: drafts a research outline (items + fields) for a topic | Start a deep research project |
 | `/research-add-items` | Adds research items to an existing outline | Expand your research outline |
 | `/research-add-fields` | Adds field definitions to an existing outline | Extend the field framework |
-| `/research-deep` | Phase 2: researches each item with parallel agents into validated JSON | Gather evidence per outline item |
+| `/research-deep` | Phase 2: researches each item with parallel agents in feedback-driven OODA waves into validated JSON — presets `small`/`medium`/`high`, no per-wave approval (`--approve-each` to restore) | Gather evidence per outline item |
 | `/research-report` | Phase 3: turns research JSON into a markdown report with a table of contents | Compile findings into a report |
 | **Knowledge & memory** | | |
 | `/record` | Saves a durable lesson, audit, or note to the local knowledge base | Persist a finding worth keeping |

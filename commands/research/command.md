@@ -81,8 +81,12 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
 - `topic`: research topic
 - `items`: research objects list
 - `execution`:
-  - `batch_size`: number of parallel agents (confirm with `ask`)
-  - `items_per_agent`: items per agent (confirm with `ask`)
+  - `preset`: optional execution scale — `small` | `medium` | `high` (default `medium`); explicit `batch_size`/`items_per_agent` values override it:
+    - `small`: 1–2 parallel agents per wave, `items_per_agent` 1
+    - `medium`: 3–5 parallel agents per wave, `items_per_agent` 2
+    - `high`: as many parallel agents as pending items (no artificial cap), `items_per_agent` 1
+  - `batch_size`: number of parallel agents per wave (optional — overrides `preset`; confirm the preset or the explicit number with `ask`)
+  - `items_per_agent`: items per agent (optional — overrides `preset`; confirm the preset or the explicit number with `ask`)
   - `output_dir`: results output directory (default: `./results`, resolved relative to this project directory)
 
 **`fields.yaml`** (field definitions):
@@ -117,4 +121,4 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
 
 - `/research-add-items` — supplement items
 - `/research-add-fields` — supplement fields
-- `/research-deep` — start deep research
+- `/research-deep` — start deep research: it runs in feedback-driven OODA waves (no per-wave approval by default; `--approve-each` restores it)

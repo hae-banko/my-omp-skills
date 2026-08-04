@@ -4,6 +4,34 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.15.0 — deep research: OODA waves, presets, no batch approval
+
+Implements GitHub issues #2, #3, #4 — workflow-body changes (no code).
+
+- **No batch approval (#2)**: `/research-deep` no longer asks before each
+  batch. Waves dispatch automatically; `--approve-each` restores the ask-tool
+  gate.
+- **Presets (#3)**: `/research-deep [small|medium|high]` (or
+  `execution.preset` in `outline.yaml`) sets the per-wave scale — small
+  (1–2 parallel agents, items_per_agent 1), medium (3–5, 2), high (as many as
+  pending items, 1). Explicit `batch_size`/`items_per_agent` in the outline
+  override presets; default medium.
+- **OODA waves (#4)**: phase 2 runs repeated Orient → Decide → Act → Observe
+  waves. Each wave's results feed the next: per-item JSON gains internal
+  `_attempts` (`{wave, angles, modules, outcome}`) and `_wave`; `[uncertain]`
+  values resolve in place and the `uncertain` array prunes as later waves
+  confirm fields; follow-up waves reroute modules/angles instead of repeating
+  them. Convergence: zero new uncertain/empty items, two consecutive
+  non-improving waves, `max_waves` (default 3, `--max-waves N` overrides), or
+  user stop.
+- **Report provenance (#4)**: `/research-report` now documents what was tried
+  for unresolved fields — per-item provenance note listing the unresolved
+  field names and the `_attempts` (wave/angles/modules/outcome); falls back
+  to names-only for pre-OODA results. Underscore internal fields stay out of
+  the report body.
+- Docs: README row updated; `commands/research/command.md` documents the
+  `preset` execution field.
+
 ## v0.14.4 — hindsight state in the TUI options
 
 - Typing `/hindsight ` in the input box now shows the subcommands (`on`,

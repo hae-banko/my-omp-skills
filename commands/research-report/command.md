@@ -68,7 +68,7 @@ CATEGORY_MAPPING = {
 - Long text strings (>100 chars): add `<br>` line breaks or use blockquote for readability
 
 **4. Extra fields collection** — collect fields present in JSON but not in fields.yaml into an "Other Info" category. Filter out:
-- Internal fields: `_source_file`, `uncertain`
+- Internal fields: any underscore-prefixed field — `_source_file`, `_attempts`, `_wave`, plus `uncertain`. `_attempts` and `_wave` are internal bookkeeping and are NEVER displayed as regular fields: `_attempts` is consumed by requirement 6 (attempts provenance), `_wave` is wave bookkeeping only.
 - Nested-structure top-level keys: `basic_info`, `technical_features`, etc.
 - `uncertain` array: display each field name on a separate line
 
@@ -76,6 +76,13 @@ CATEGORY_MAPPING = {
 - Field value contains `[uncertain]`
 - Field name is in the `uncertain` array
 - Field value is `None` or empty string
+
+**6. Attempts provenance** — for each item whose JSON still has unresolved uncertain fields (per requirement 5: `[uncertain]` value, name in the `uncertain` array, or empty/`None`), the report must document what was tried instead of silently skipping. Render a per-item provenance note listing:
+- The unresolved field names.
+- The attempts made, read from the item's internal `_attempts` array. Each entry is `{wave, angles, modules, outcome}` — render the wave number, the query angles tried, the strategy modules used, and the outcome.
+- Format: a subsection under the item, e.g. `**Unresolved:** field_a, field_b` followed by an attempts list (`Wave 1 — angles: [...], modules: [...], outcome: ...`), so a reader sees the fields that could not be filled and exactly what was tried.
+- If `_attempts` is absent (pre-OODA results), fall back to listing just the unresolved field names without an attempts list.
+- `_attempts` entries are never rendered as part of the regular field body — only inside this provenance note.
 
 ### Step 4: Execute Script
 
