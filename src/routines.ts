@@ -4,6 +4,8 @@ import { basename, dirname, join } from "node:path";
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolResult } from "./api.ts";
 
+const UNDERSCORE_RE = /_/g;
+const repoRootCache = new Map<string, string>();
 export interface RoutineParameter {
   name: string;
   default?: string;
@@ -37,10 +39,13 @@ export interface RoutineExecutionDetails {
 }
 
 export function findRoutinesRepoRoot(startDir: string = process.cwd()): string {
+  const cached = repoRootCache.get(startDir);
+  if (cached !== undefined) return cached;
   let dir = startDir;
   for (;;) {
     const manifestPath = join(dir, "scripts", "routines", "manifest.json");
     if (existsSync(manifestPath)) {
+      repoRootCache.set(startDir, dir);
       return dir;
     }
     const parent = dirname(dir);
@@ -56,10 +61,14 @@ export function findRoutinesRepoRoot(startDir: string = process.cwd()): string {
       existsSync(join(dir, ".scratch")) ||
       existsSync(join(dir, "package.json"))
     ) {
+      repoRootCache.set(startDir, dir);
       return dir;
     }
     const parent = dirname(dir);
-    if (parent === dir) return startDir;
+    if (parent === dir) {
+      repoRootCache.set(startDir, startDir);
+      return startDir;
+    }
     dir = parent;
   }
 }
@@ -186,7 +195,7 @@ export function installRoutinesTool(pi: ExtensionApi): void {
         } else if (k.length === 1) {
           cliFlags.push(`-${k}`, v);
         } else {
-          cliFlags.push(`--${k.toLowerCase().replace(/_/g, "-")}`, v);
+          cliFlags.push(`--${k.toLowerCase().replace(UNDERSCORE_RE, "-")}`, v);
         }
       }
 

@@ -69,11 +69,12 @@ function refersToProtected(command: string): boolean {
   );
 }
 
+const DESTRUCTIVE_SHELL_RE =
+  /(?:^|\s)sed\s+-i\b|\btee\b|(?<!>)>(?!>)|\bmv\b|\brm\b|\bcp\b|\btruncate\b|\bshred\b|\bunlink\b/;
+
 /** True when the shell command can mutate a file (append `>>` excluded — INDEX.md grows by appending). */
 function isDestructiveShell(command: string): boolean {
-  return /(?:^|\s)sed\s+-i\b|\btee\b|(?<!>)>(?!>)|\bmv\b|\brm\b|\bcp\b|\btruncate\b|\bshred\b|\bunlink\b/.test(
-    command,
-  );
+  return DESTRUCTIVE_SHELL_RE.test(command);
 }
 
 export function installPolicy(pi: ExtensionApi): void {

@@ -29,7 +29,7 @@
 // itself is silent — no user message, so the model never replies; a receipt
 // card and a UI notification are the only feedback.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Container, Text } from "@oh-my-pi/pi-tui";
@@ -75,16 +75,35 @@ let enabled = false;
  */
 let nudgedUserMessageCount = -1;
 
+let cachedPath: string | null = null;
+let cachedMtime: number | null = null;
+
 /**
  * Re-read the config file (default: ~/.omp/hindsight.json). A missing file,
  * invalid JSON, or invalid fields all fall back to the defaults — a broken
  * config must never take the nudge down.
  */
 export function reloadHindsightConfig(path: string = hindsightConfigPath()): void {
+  let stat;
+  try {
+    stat = statSync(path);
+  } catch {
+    cachedPath = null;
+    cachedMtime = null;
+    config = DEFAULT_CONFIG;
+    return;
+  }
+
+  if (cachedPath === path && cachedMtime === stat.mtimeMs) {
+    return;
+  }
+
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
+    cachedPath = path;
+    cachedMtime = stat.mtimeMs;
     config = DEFAULT_CONFIG;
     return;
   }
@@ -92,6 +111,8 @@ export function reloadHindsightConfig(path: string = hindsightConfigPath()): voi
   try {
     parsed = JSON.parse(raw);
   } catch {
+    cachedPath = path;
+    cachedMtime = stat.mtimeMs;
     config = DEFAULT_CONFIG;
     return;
   }
@@ -107,6 +128,8 @@ export function reloadHindsightConfig(path: string = hindsightConfigPath()): voi
     onMessage: pick("onMessage"),
     offMessage: pick("offMessage"),
   };
+  cachedPath = path;
+  cachedMtime = stat.mtimeMs;
 }
 
 export function isHindsightEnabled(): boolean {

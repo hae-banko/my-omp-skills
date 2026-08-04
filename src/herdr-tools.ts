@@ -16,6 +16,7 @@
 import { execFile } from "node:child_process";
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolDefinition, ToolResult } from "./api.ts";
+const WHITESPACE_RE = /\s+/;
 
 function inHerdr(): boolean {
   return process.env.HERDR_ENV === "1" && Boolean(process.env.HERDR_PANE_ID);
@@ -325,7 +326,7 @@ export function installHerdrTools(pi: ExtensionApi): void {
             args = ["pane", "send-text", pane, String(p.text ?? "")];
             break;
           case "send_keys":
-            args = ["pane", "send-keys", pane, ...String(p.keys ?? "").split(/\s+/).filter(Boolean)];
+            args = ["pane", "send-keys", pane, ...String(p.keys ?? "").split(WHITESPACE_RE).filter(Boolean)];
             break;
           case "close":
             args = ["pane", "close", pane];
@@ -400,7 +401,7 @@ export function installHerdrTools(pi: ExtensionApi): void {
           if (p.split) args.push("--split", String(p.split));
           if (p.focus) args.push("--focus");
           const argv = String(p.argv ?? "").trim();
-          if (argv) args.push("--", ...argv.split(/\s+/));
+          if (argv) args.push("--", ...argv.split(WHITESPACE_RE));
           result = await runHerdr(args, signal);
           break;
         }

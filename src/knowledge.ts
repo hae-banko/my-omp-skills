@@ -27,13 +27,22 @@ export interface KnowledgeReadResult {
 }
 
 /** Nearest directory containing `.omp/knowledge/`, walking up from startDir. */
+const knowledgeRootCache = new Map<string, string | null>();
 export function findKnowledgeRoot(startDir: string): string | null {
+  const cached = knowledgeRootCache.get(startDir);
+  if (cached !== undefined) return cached;
   let dir = startDir;
   for (;;) {
     const candidate = join(dir, ".omp", "knowledge");
-    if (existsSync(candidate) && statSync(candidate).isDirectory()) return dir;
+    if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+      knowledgeRootCache.set(startDir, dir);
+      return dir;
+    }
     const parent = dirname(dir);
-    if (parent === dir) return null;
+    if (parent === dir) {
+      knowledgeRootCache.set(startDir, null);
+      return null;
+    }
     dir = parent;
   }
 }
@@ -114,9 +123,16 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
 
   // research projects
   const researchDir = join(base, "research");
-  const projects = existsSync(researchDir)
-    ? readdirSync(researchDir).filter((name) => statSync(join(researchDir, name)).isDirectory()).sort().reverse()
-    : [];
+  let projects: string[] = [];
+  try {
+    projects = readdirSync(researchDir, { withFileTypes: true })
+      .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+      .map((ent) => ent.name)
+      .sort()
+      .reverse();
+  } catch {
+    projects = [];
+  }
   if (query.slug) {
     const match = projects.find((p) => p.startsWith(query.slug ?? "") || p.includes(query.slug ?? ""));
     if (!match) {

@@ -30,7 +30,14 @@ import { installRoutinesTool } from "./routines.ts";
 import { installResearchReviewCardRenderer } from "./research-renderer.ts";
 
 const ROOT = join(import.meta.dirname, "..");
+const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
+const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
+const ARGUMENTS_RE = /\$ARGUMENTS/g;
+
+const repoRootCache = new Map<string, string>();
 function findRepoRoot(startDir: string = process.cwd()): string {
+  const cached = repoRootCache.get(startDir);
+  if (cached !== undefined) return cached;
   let dir = startDir;
   for (;;) {
     if (
@@ -38,10 +45,14 @@ function findRepoRoot(startDir: string = process.cwd()): string {
       existsSync(join(dir, ".omp")) ||
       existsSync(join(dir, ".scratch"))
     ) {
+      repoRootCache.set(startDir, dir);
       return dir;
     }
     const parent = dirname(dir);
-    if (parent === dir) return startDir;
+    if (parent === dir) {
+      repoRootCache.set(startDir, startDir);
+      return startDir;
+    }
     dir = parent;
   }
 }
@@ -104,17 +115,16 @@ const COMMANDS: CommandSpec[] = [
       if (slugSubcommands.includes(firstWord)) {
         const root = findRepoRoot();
         const researchDir = join(root, ".omp", "knowledge", "research");
-        const slugs =
-          existsSync(researchDir) && statSync(researchDir).isDirectory()
-            ? readdirSync(researchDir)
-                .filter(
-                  (name) =>
-                    statSync(join(researchDir, name)).isDirectory() &&
-                    !name.startsWith("."),
-                )
-                .sort()
-                .reverse()
-            : [];
+        let slugs: string[] = [];
+        try {
+          slugs = readdirSync(researchDir, { withFileTypes: true })
+            .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+            .map((ent) => ent.name)
+            .sort()
+            .reverse();
+        } catch {
+          slugs = [];
+        }
         const matches = slugs
           .filter((slug) => slug.toLowerCase().startsWith(rest))
           .map((slug) => ({
@@ -153,28 +163,28 @@ const COMMANDS: CommandSpec[] = [
         { value: "high", label: "high", description: "Execution preset: max parallel agents per wave" },
       ];
 
-      const root = findRepoRoot();
-      const researchDir = join(root, ".omp", "knowledge", "research");
-      const slugs =
-        existsSync(researchDir) && statSync(researchDir).isDirectory()
-          ? readdirSync(researchDir)
-              .filter(
-                (name) =>
-                  statSync(join(researchDir, name)).isDirectory() &&
-                  /^\d{4}-\d{2}-\d{2}_/.test(name),
-              )
-              .sort()
-              .reverse()
-          : [];
-
-      const slugOptions = slugs.map((slug) => ({
-        value: slug,
-        label: slug,
-        description: "Research project directory",
-      }));
+      const getDatedSlugs = (): string[] => {
+        const root = findRepoRoot();
+        const researchDir = join(root, ".omp", "knowledge", "research");
+        try {
+          return readdirSync(researchDir, { withFileTypes: true })
+            .filter((ent) => ent.isDirectory() && DATED_SLUG_RE.test(ent.name))
+            .map((ent) => ent.name)
+            .sort()
+            .reverse();
+        } catch {
+          return [];
+        }
+      };
 
       const lower = argumentPrefix.toLowerCase();
       if (!argumentPrefix.includes(" ")) {
+        const slugs = getDatedSlugs();
+        const slugOptions = slugs.map((slug) => ({
+          value: slug,
+          label: slug,
+          description: "Research project directory",
+        }));
         const matches = [...presets, ...slugOptions].filter(
           (o) => o.label.toLowerCase().startsWith(lower) || o.value.toLowerCase().startsWith(lower),
         );
@@ -186,6 +196,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (["small", "medium", "high"].includes(firstWord)) {
+        const slugs = getDatedSlugs();
         const matches = slugs
           .filter((slug) => slug.toLowerCase().startsWith(rest))
           .map((slug) => ({
@@ -209,12 +220,16 @@ const COMMANDS: CommandSpec[] = [
 
       const root = findRepoRoot();
       const researchDir = join(root, ".omp", "knowledge", "research");
-      if (!existsSync(researchDir) || !statSync(researchDir).isDirectory()) return null;
-
-      const slugs = readdirSync(researchDir)
-        .filter((name) => statSync(join(researchDir, name)).isDirectory())
-        .sort()
-        .reverse();
+      let slugs: string[] = [];
+      try {
+        slugs = readdirSync(researchDir, { withFileTypes: true })
+          .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+          .map((ent) => ent.name)
+          .sort()
+          .reverse();
+      } catch {
+        return null;
+      }
 
       const lower = argumentPrefix.toLowerCase();
       const matches = slugs
@@ -301,20 +316,22 @@ const COMMANDS: CommandSpec[] = [
       const files: string[] = [];
 
       for (const dir of dirs) {
-        if (existsSync(dir) && statSync(dir).isDirectory()) {
-          const collect = (currentDir: string) => {
-            for (const entry of readdirSync(currentDir)) {
-              const fullPath = join(currentDir, entry);
-              const stat = statSync(fullPath);
-              if (stat.isDirectory()) {
+        const collect = (currentDir: string) => {
+          try {
+            const entries = readdirSync(currentDir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = join(currentDir, entry.name);
+              if (entry.isDirectory()) {
                 collect(fullPath);
-              } else if (stat.isFile() && entry.endsWith(".md")) {
+              } else if (entry.isFile() && entry.name.endsWith(".md")) {
                 files.push(relative(root, fullPath));
               }
             }
-          };
-          collect(dir);
-        }
+          } catch {
+            // ignore missing dirs
+          }
+        };
+        collect(dir);
       }
 
       files.sort();
@@ -381,11 +398,15 @@ const COMMANDS: CommandSpec[] = [
       if (sub === "update" || sub === "remove") {
         const root = findRepoRoot();
         const dir = join(root, ".omp", "references");
-        if (!existsSync(dir) || !statSync(dir).isDirectory()) return null;
-
-        const dirs = readdirSync(dir)
-          .filter((name) => statSync(join(dir, name)).isDirectory())
-          .sort();
+        let dirs: string[] = [];
+        try {
+          dirs = readdirSync(dir, { withFileTypes: true })
+            .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+            .map((ent) => ent.name)
+            .sort();
+        } catch {
+          return null;
+        }
         const matches = dirs
           .filter((name) => name.toLowerCase().startsWith(rest))
           .map((name) => ({
@@ -428,8 +449,6 @@ const COMMANDS: CommandSpec[] = [
       if (sub === "run") {
         const root = findRepoRoot();
         const routinesDir = join(root, "scripts", "routines");
-        if (!existsSync(routinesDir) || !statSync(routinesDir).isDirectory()) return null;
-
         const idsSet = new Set<string>();
 
         const manifestPath = join(routinesDir, "manifest.json");
@@ -452,13 +471,17 @@ const COMMANDS: CommandSpec[] = [
           }
         }
 
-        for (const entry of readdirSync(routinesDir)) {
-          const fullPath = join(routinesDir, entry);
-          if (statSync(fullPath).isFile() && entry.endsWith(".sh")) {
-            const idWithoutExt = entry.slice(0, -3);
-            idsSet.add(idWithoutExt);
-            idsSet.add(entry);
+        try {
+          const entries = readdirSync(routinesDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isFile() && entry.name.endsWith(".sh")) {
+              const idWithoutExt = entry.name.slice(0, -3);
+              idsSet.add(idWithoutExt);
+              idsSet.add(entry.name);
+            }
           }
+        } catch {
+          // ignore missing routines directory
         }
 
         const sortedIds = Array.from(idsSet).sort();
@@ -609,11 +632,7 @@ const COMMANDS: CommandSpec[] = [
 
 function loadBody(rel: string): string {
   const raw = readFileSync(join(ROOT, rel), "utf8");
-  if (raw.startsWith("---")) {
-    const end = raw.indexOf("\n---", 3);
-    if (end !== -1) return raw.slice(end + 4).trim();
-  }
-  return raw.trim();
+  return raw.replace(FRONTMATTER_RE, "").trim();
 }
 
 export default function (pi: ExtensionApi): void {
@@ -642,10 +661,10 @@ export default function (pi: ExtensionApi): void {
         const argText = args.trim();
         let text = body;
         if (argText) {
-          text = text.replace(/\$ARGUMENTS/g, argText);
+          text = text.replace(ARGUMENTS_RE, argText);
           text += `\n\n## User's arguments\n${argText}`;
         } else {
-          text = text.replace(/\$ARGUMENTS/g, "");
+          text = text.replace(ARGUMENTS_RE, "");
         }
         if (companionPaths.length > 0) {
           text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${companionPaths.join(

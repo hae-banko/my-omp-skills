@@ -3,6 +3,13 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+
+## v0.20.0 — performance optimizations
+
+- **Hindsight Config mtime Caching**: `reloadHindsightConfig()` in `src/hindsight.ts` now uses `statSync` `mtimeMs` caching, skipping redundant disk reads and JSON parsing when `~/.omp/hindsight.json` is untouched.
+- **Directory & Root Resolution Memoization**: `findRepoRoot()`, `findRoutinesRepoRoot()`, and `findKnowledgeRoot()` memoize directory hierarchy lookups with `Map` caches, eliminating repetitive `existsSync`/`statSync` walks.
+- **Completion & Directory Scanning**: `readdirSync` in `getArgumentCompletions` now uses `{ withFileTypes: true }` and early argument-prefix filtering, eliminating redundant filesystem queries on completion keystrokes.
+- **Pre-compiled Module-Level Regexes**: Static regular expressions across `src/index.ts`, `src/policy.ts`, `src/routines.ts`, `src/herdr-tools.ts` pre-compiled at load time.
 ## v0.19.1 — README documentation overhaul
 
 - **README Overhaul**: Updated `README.md` to document all features through v0.19.0 while preserving the top banner header image (`assets/banner.png`).
