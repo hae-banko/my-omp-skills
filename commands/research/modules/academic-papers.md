@@ -13,16 +13,25 @@
 - **Semantic Scholar** (semanticscholar.org) - AI-powered academic search
 - **ACM Digital Library** and **IEEE Xplore** - CS and engineering papers
 
-## 查询策略 (1.3 Academic Paper Search)
-- Use Google Scholar as primary source with advanced search operators
+## Exact Search Operators (Non-Redundant Patterns)
+- **Google Scholar**: `site:scholar.google.com "exact paper title"` | `author:"Author Name" "keyword"`
+- **arXiv**: `site:arxiv.org/abs "paper title"` | `arxiv:2501.12345` | `site:arxiv.org "algorithm name"`
+- **Hugging Face Papers**: `site:huggingface.co/papers "model/paper name"`
+- **bioRxiv / medRxiv**: `site:biorxiv.org "topic"` | `site:medrxiv.org "topic"`
+- **Semantic Scholar**: `site:semanticscholar.org/paper "title"`
+- **ResearchGate**: `site:researchgate.net/publication "title"`
+- **ACM / IEEE**: `site:dl.acm.org "topic"` | `site:ieeexplore.ieee.org "topic"`
+
+## Recommended Query Templates
+1. `"exact paper title" site:arxiv.org`
+2. `author:"First Last" intitle:"keyword"`
+3. `site:huggingface.co/papers "topic"`
+
+## 查询策略 (Academic Paper Search)
+- Use Google Scholar & arXiv as primary sources with exact search operators
 - Search by author names, paper titles, DOI numbers, institutions, and publication years
 - Use quotation marks for exact titles and author name combinations
 - Include year ranges to find seminal works and recent publications
-- Look for related papers and citation patterns to identify seminal works
-- Search for preprints on arXiv, bioRxiv, and institutional repositories
+- Look for preprints on arXiv, bioRxiv, and institutional repositories
 - Check author profiles and ResearchGate for publications and PDFs
-- Identify open-access versions and legal paper download sources
 - Track citation networks to understand research evolution
-- Note impact factors, h-index, and citation counts for relevance assessment
-- Search for conference proceedings, journals, and workshop papers
-- Identify funding agencies and research grants for context

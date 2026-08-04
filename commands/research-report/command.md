@@ -40,13 +40,18 @@ Generate `generate_report.py` in `{project_dir}`. Requirements:
 
 #### Script technical requirements (must follow)
 
-**1. JSON structure compatibility** — support two structures:
+**1. Single-pass processing & fast lookups** — optimize execution speed and resource usage:
+- Single-pass processing: open and parse each JSON file exactly once with context managers; compile markdown outputs into in-memory lists before writing.
+- Precomputed dictionary lookups: invert `CATEGORY_MAPPING` into an $O(1)$ lookup dictionary `CATEGORY_LOOKUP = {alt.lower(): canonical for canonical, alts in CATEGORY_MAPPING.items() for alt in alts}` at top level.
+- Minimal file handles & string building: use `'\n'.join(...)` list buffers instead of repeated string concatenations (`+=`).
+
+**2. JSON structure compatibility** — support two structures:
 - Flat: fields directly at top level `{"name": "xxx", "release_date": "xxx"}`
 - Nested: fields in category sub-dicts `{"basic_info": {"name": "xxx"}, "technical_features": {...}}`
 
 Field lookup order: top level → category mapping key → traverse all nested dicts.
 
-**2. Category multi-language mapping** — fields.yaml category names and JSON keys may be any combination (CN-CN, CN-EN, EN-CN, EN-EN). Build bidirectional mapping:
+**3. Category multi-language mapping** — fields.yaml category names and JSON keys may be any combination (CN-CN, CN-EN, EN-CN, EN-EN). Build bidirectional mapping:
 
 ```python
 CATEGORY_MAPPING = {
@@ -61,29 +66,28 @@ CATEGORY_MAPPING = {
 }
 ```
 
-**3. Complex value formatting**
+**4. Complex value formatting**
 - List of dicts (e.g. `key_events`, `funding_history`): one line per dict, kv separated by ` | `
 - Normal lists: short lists joined with commas; long lists with line breaks
 - Nested dicts: recursive formatting, semicolon or line breaks
 - Long text strings (>100 chars): add `<br>` line breaks or use blockquote for readability
 
-**4. Extra fields collection** — collect fields present in JSON but not in fields.yaml into an "Other Info" category. Filter out:
-- Internal fields: any underscore-prefixed field — `_source_file`, `_attempts`, `_wave`, plus `uncertain`. `_attempts` and `_wave` are internal bookkeeping and are NEVER displayed as regular fields: `_attempts` is consumed by requirement 6 (attempts provenance), `_wave` is wave bookkeeping only.
+**5. Extra fields collection** — collect fields present in JSON but not in fields.yaml into an "Other Info" category. Filter out:
+- Internal fields: any underscore-prefixed field — `_source_file`, `_attempts`, `_wave`, plus `uncertain`. `_attempts` and `_wave` are internal bookkeeping and are NEVER displayed as regular fields: `_attempts` is consumed by requirement 7 (attempts provenance), `_wave` is wave bookkeeping only.
 - Nested-structure top-level keys: `basic_info`, `technical_features`, etc.
 - `uncertain` array: display each field name on a separate line
 
-**5. Uncertain value skipping** — skip when:
+**6. Uncertain value skipping** — skip when:
 - Field value contains `[uncertain]`
 - Field name is in the `uncertain` array
 - Field value is `None` or empty string
 
-**6. Attempts provenance** — for each item whose JSON still has unresolved uncertain fields (per requirement 5: `[uncertain]` value, name in the `uncertain` array, or empty/`None`), the report must document what was tried instead of silently skipping. Render a per-item provenance note listing:
+**7. Attempts provenance** — for each item whose JSON still has unresolved uncertain fields (per requirement 6: `[uncertain]` value, name in the `uncertain` array, or empty/`None`), the report must document what was tried instead of silently skipping. Render a per-item provenance note listing:
 - The unresolved field names.
 - The attempts made, read from the item's internal `_attempts` array. Each entry is `{wave, angles, modules, outcome}` — render the wave number, the query angles tried, the strategy modules used, and the outcome.
 - Format: a subsection under the item, e.g. `**Unresolved:** field_a, field_b` followed by an attempts list (`Wave 1 — angles: [...], modules: [...], outcome: ...`), so a reader sees the fields that could not be filled and exactly what was tried.
 - If `_attempts` is absent (pre-OODA results), fall back to listing just the unresolved field names without an attempts list.
 - `_attempts` entries are never rendered as part of the regular field body — only inside this provenance note.
-
 ### Step 4: Execute Script
 
 Run `python {project_dir}/generate_report.py`

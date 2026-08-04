@@ -20,25 +20,30 @@ CATEGORY_MAPPING = {
 }
 
 _SKIP_KEYS = {"_source_file", "uncertain"}
+_NESTED_KEYS = {k for keys in CATEGORY_MAPPING.values() for k in keys}
 
 
 def load_fields_yaml(fields_path):
     with fields_path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    items = [
-        (field["name"], category["category"], field.get("required", False))
-        for category in data.get("field_categories", [])
-        for field in category.get("fields", [])
-    ]
-    all_fields = {name for name, _, _ in items}
-    required_fields = {name for name, _, required in items if required}
-    field_categories = {name: category for name, category, _ in items}
+    all_fields = set()
+    required_fields = set()
+    field_categories = {}
+    for category in data.get("field_categories", []):
+        cat_name = category.get("category", "Unknown")
+        for field in category.get("fields", []):
+            fname = field.get("name")
+            if not fname:
+                continue
+            all_fields.add(fname)
+            if field.get("required", False):
+                required_fields.add(fname)
+            field_categories[fname] = cat_name
     return all_fields, required_fields, field_categories
 
 
 def extract_json_fields(data, category_mapping=None):
-    category_mapping = CATEGORY_MAPPING if category_mapping is None else category_mapping
-    nested_keys = {k for keys in category_mapping.values() for k in keys}
+    nested_keys = _NESTED_KEYS if category_mapping is None else {k for keys in category_mapping.values() for k in keys}
     fields = set()
     stack = [(data, True)]
     while stack:
@@ -53,7 +58,9 @@ def extract_json_fields(data, category_mapping=None):
                     continue
                 fields.add(k)
         elif isinstance(obj, list):
-            stack.extend((item, is_category_level) for item in obj if isinstance(item, dict))
+            for item in obj:
+                if isinstance(item, dict):
+                    stack.append((item, is_category_level))
     return fields
 
 
@@ -61,22 +68,23 @@ def validate_json(json_path, all_fields, required_fields, field_categories):
     with json_path.open(encoding="utf-8") as f:
         data = json.load(f)
     json_fields = extract_json_fields(data)
-    covered = all_fields & json_fields
     missing = all_fields - json_fields
+    covered_count = len(all_fields) - len(missing)
     extra = json_fields - all_fields
     missing_required = missing & required_fields
+    missing_optional = missing - required_fields
     missing_by_category = defaultdict(list)
     for field in missing:
         missing_by_category[field_categories.get(field, "Unknown")].append(field)
     return {
         "file": json_path.name,
         "total_defined": len(all_fields),
-        "covered": len(covered),
+        "covered": covered_count,
         "missing": len(missing),
         "extra": len(extra),
-        "coverage_rate": len(covered) / len(all_fields) * 100 if all_fields else 100,
+        "coverage_rate": covered_count / len(all_fields) * 100 if all_fields else 100.0,
         "missing_required": sorted(missing_required),
-        "missing_optional": sorted(missing - required_fields),
+        "missing_optional": sorted(missing_optional),
         "missing_by_category": {k: sorted(v) for k, v in missing_by_category.items()},
         "extra_fields": sorted(extra),
         "valid": len(missing_required) == 0,

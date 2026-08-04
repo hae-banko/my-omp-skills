@@ -6,8 +6,21 @@
 
 ## 搜索源
 - **GitHub Issues** (both open and closed) - excellent for known bugs and workarounds
+- **GitHub Discussions & Pull Requests** - patch references and community workarounds
 
-## 查询策略 (1.1 Debugging Assistance)
+## Exact Search Operators (Non-Redundant Patterns)
+- **Specific Repo Issues**: `site:github.com/<owner>/<repo>/issues "exact error message"`
+- **Global GitHub Issues**: `site:github.com "exact error message"`
+- **Closed / Resolved Issues**: `site:github.com "error message" is:closed`
+- **Pull Requests / Commits**: `site:github.com "fix" "error message"`
+- **Code Search**: `site:github.com "function_name" "error"`
+
+## Recommended Query Templates
+1. `site:github.com/owner/repo/issues "exact error line"`
+2. `site:github.com "error message" is:closed`
+3. `site:github.com "workaround" "library_name"`
+
+## 查询策略 (Debugging Assistance)
 - Search for exact error messages in quotes
 - Look for issue templates that match the problem pattern
 - Find workarounds, not just explanations
