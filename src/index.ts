@@ -27,7 +27,12 @@ import {
 import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
 import { installRoutinesTool } from "./routines.ts";
-import { installResearchReviewCardRenderer } from "./research-renderer.ts";
+import {
+  installResearchDashboardRenderer,
+  installResearchReportPreviewRenderer,
+  installResearchReviewCardRenderer,
+  installResearchWaveProgressRenderer,
+} from "./research-renderer.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
@@ -68,7 +73,10 @@ interface CommandSpec {
   /** customType for the transcript receipt emitted when the command runs */
   customType?: string;
   /** custom handler replacing the default body-send handler (e.g. toggles) */
-  handler?: (pi: ExtensionApi) => (args: string, ctx: CommandContext) => Promise<void> | void;
+  handler?: (
+    pi: ExtensionApi,
+    resources: { body: string; companionPaths: string[] },
+  ) => (args: string, ctx: CommandContext) => Promise<void> | void;
   /** live argument completions shown when the command's argument is typed */
   getArgumentCompletions?: (argumentPrefix: string) => Array<{ value: string; label: string; description?: string }> | null;
 }
@@ -89,8 +97,121 @@ const COMMANDS: CommandSpec[] = [
     description: "Phase 1 of deep research: generate a research outline (items + field framework) for a topic, human-in-the-loop. Follow with /research-deep and /research-report.",
     bodyPath: "commands/research/command.md",
     companions: RESEARCH_ASSETS,
+    handler: (pi, { body, companionPaths }) => async (args, ctx) => {
+      const argText = args.trim();
+      // Single-digit ergonomic subcommands. Anything else falls through to
+      // the default body-send + user-prompt flow so the workflow body can
+      // handle subcommands like `review`, `add-items`, `status`, etc.
+      const tokens = argText ? argText.split(/\s+/) : [];
+      const head = tokens[0] ?? "";
+      const rest = tokens.slice(1).join(" ");
+
+      // Phase 1 = bare `/research` or `/research 1 [topic]`.
+      if (argText === "" || head === "1") {
+        const topic = head === "1" ? rest : argText;
+        // Emit a draft Research Review window immediately so the user sees
+        // the planned project before the workflow body reaches the model.
+        // The agent later replaces this with the real outline payload.
+        const date = new Date().toISOString().slice(0, 10);
+        const topicSlug = topic
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        const slug = `${date}_${topicSlug}`;
+        pi.sendMessage({
+          customType: "research-review",
+          display: true,
+          attribution: "user",
+          details: {
+            slug,
+            topic,
+            status: "DRAFT REVIEW",
+            modules: [
+              "general-web",
+              "github-debug",
+              "stackoverflow",
+              "chinese-tech",
+              "academic-papers",
+            ],
+          },
+        });
+        await runDefaultHandler({
+          pi,
+          name: "research",
+          customType: undefined,
+          body,
+          args,
+          companionPaths,
+          ctx,
+        });
+        return;
+      }
+
+      // Phase 2 / Phase 3 = ergonomic shortcuts that delegate to the
+      // dedicated commands registered alongside `/research`.
+      if (head === "2") {
+        await pi.sendUserMessage(`/research-deep ${rest}`.trimEnd());
+        return;
+      }
+      if (head === "3") {
+        await pi.sendUserMessage(`/research-report ${rest}`.trimEnd());
+        return;
+      }
+
+      // `/research dashboard [slug]` = Research Lifecycle Dashboard. Emit a
+      // placeholder dashboard card immediately so the user sees the frame
+      // before the workflow body resolves real metrics; the agent replaces
+      // it with the populated payload.
+      if (head === "dashboard") {
+        const root = findRepoRoot();
+        const researchDir = join(root, ".omp", "knowledge", "research");
+        let slug = rest;
+        if (!slug) {
+          try {
+            const dated = readdirSync(researchDir, { withFileTypes: true })
+              .filter((ent) => ent.isDirectory() && DATED_SLUG_RE.test(ent.name))
+              .map((ent) => ent.name)
+              .sort()
+              .reverse();
+            slug = dated[0] ?? "";
+          } catch {
+            slug = "";
+          }
+        }
+        pi.sendMessage({
+          customType: "research-dashboard",
+          display: true,
+          attribution: "user",
+          details: { slug, current_phase: 1, pipeline_status: "LOADING" },
+        });
+        await runDefaultHandler({
+          pi,
+          name: "research",
+          customType: undefined,
+          body,
+          args,
+          companionPaths,
+          ctx,
+        });
+        return;
+      }
+
+      await runDefaultHandler({
+        pi,
+        name: "research",
+        customType: undefined,
+        body,
+        args,
+        companionPaths,
+        ctx,
+      });
+    },
     getArgumentCompletions: (argumentPrefix: string) => {
       const subcommands = [
+        { value: "1", label: "1", description: "Phase 1: generate an outline for a new topic" },
+        { value: "2", label: "2", description: "Phase 2: run deep research (alias for /research-deep)" },
+        { value: "3", label: "3", description: "Phase 3: generate the final report (alias for /research-report)" },
+        { value: "dashboard", label: "dashboard", description: "Open the research dashboard" },
         { value: "review", label: "review", description: "Open/emit Research Review Window for a project" },
         { value: "add-items", label: "add-items", description: "Add research items to an existing outline" },
         { value: "add-fields", label: "add-fields", description: "Add field definitions to an existing outline" },
@@ -109,9 +230,9 @@ const COMMANDS: CommandSpec[] = [
 
       const spaceIdx = argumentPrefix.indexOf(" ");
       const firstWord = lower.slice(0, spaceIdx);
+      const slugSubcommands = ["2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run"];
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
-      const slugSubcommands = ["review", "add-items", "add-fields", "status", "run"];
       if (slugSubcommands.includes(firstWord)) {
         const root = findRepoRoot();
         const researchDir = join(root, ".omp", "knowledge", "research");
@@ -544,21 +665,33 @@ const COMMANDS: CommandSpec[] = [
       );
       report(next);
     },
-    // TUI options: typing "/hindsight " shows the subcommands with the live
-    // state in their descriptions — the intuitive on/off affordance, with
-    // nothing persistent on screen.
+    // TUI options: typing "/hindsight" surfaces the live state as a dim
+    // header before the subcommands, then "on"/"off"/"status" with the
+    // state in their descriptions. The header has an empty value so it
+    // doesn't replace the input when selected — it's a read-only hint,
+    // matching the rest of the surfaces that show the state once.
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
       const lower = argumentPrefix.toLowerCase();
       const on = isHindsightEnabled();
       const state = on ? "on" : "off";
+      const stateIcon = on ? "●" : "○";
+      const header = {
+        value: "",
+        label: `${stateIcon}  Hindsight is currently ${state}`,
+        description: on
+          ? "reflection pass runs after each real-work turn"
+          : "turns settle after the first pass",
+      };
       const options = [
         { value: "on ", label: "on", description: `Enable the reflection pass (currently ${state})` },
         { value: "off ", label: "off", description: `Disable the reflection pass (currently ${state})` },
         { value: "status ", label: "status", description: `Show the current state (${state})` },
       ];
       const matches = options.filter((o) => o.label.startsWith(lower));
-      return matches.length > 0 ? matches : null;
+      // Only show the header when no subcommand is typed yet — once the
+      // user starts narrowing, the header is noise.
+      return lower === "" ? [header, ...matches] : matches.length > 0 ? matches : null;
     },
   },
   {
@@ -634,6 +767,57 @@ function loadBody(rel: string): string {
   const raw = readFileSync(join(ROOT, rel), "utf8");
   return raw.replace(FRONTMATTER_RE, "").trim();
 }
+/**
+ * Default body-send + user-prompt flow shared by every command that doesn't
+ * override `spec.handler`. Substitutes $ARGUMENTS, appends the user's args
+ * and a companion-pointer list, emits the hidden workflow body, queues the
+ * user prompt, and (for commands with a customType) appends a follow-up
+ * receipt card.
+ */
+async function runDefaultHandler(args: {
+  pi: ExtensionApi;
+  name: string;
+  customType: string | undefined;
+  body: string;
+  args: string;
+  companionPaths: string[];
+  ctx: CommandContext;
+}): Promise<void> {
+  const { pi, name, customType, body, args: rawArgs, companionPaths, ctx } = args;
+  const argText = rawArgs.trim();
+  let text = body;
+  if (argText) {
+    text = text.replace(ARGUMENTS_RE, argText);
+    text += `\n\n## User's arguments\n${argText}`;
+  } else {
+    text = text.replace(ARGUMENTS_RE, "");
+  }
+  if (companionPaths.length > 0) {
+    text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${companionPaths.join(
+      "\n",
+    )}`;
+  }
+  pi.sendMessage({
+    customType: customType ?? `command:${name}`,
+    content: text,
+    display: false,
+    attribution: "user",
+  });
+  const userPrompt = `/${name}${argText ? ` ${argText}` : ""}`;
+  await pi.sendUserMessage(userPrompt);
+  if (customType) {
+    pi.sendMessage(
+      {
+        customType,
+        content: `${name} requested${argText ? ` — ${argText}` : ""}`,
+        display: true,
+        attribution: "user",
+      },
+      { deliverAs: "followUp" },
+    );
+  }
+  ctx.ui?.notify?.(`Running ${name}`, "info");
+}
 
 export default function (pi: ExtensionApi): void {
   installBootstrap(
@@ -646,6 +830,9 @@ export default function (pi: ExtensionApi): void {
   installHerdrTools(pi);
   installRoutinesTool(pi);
   installResearchReviewCardRenderer(pi);
+  installResearchWaveProgressRenderer(pi);
+  installResearchReportPreviewRenderer(pi);
+  installResearchDashboardRenderer(pi);
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));
@@ -655,42 +842,18 @@ export default function (pi: ExtensionApi): void {
       getArgumentCompletions: spec.getArgumentCompletions,
       handler: async (args: string, ctx: CommandContext) => {
         if (spec.handler) {
-          await spec.handler(pi)(args, ctx);
+          await spec.handler(pi, { body, companionPaths })(args, ctx);
           return;
         }
-        const argText = args.trim();
-        let text = body;
-        if (argText) {
-          text = text.replace(ARGUMENTS_RE, argText);
-          text += `\n\n## User's arguments\n${argText}`;
-        } else {
-          text = text.replace(ARGUMENTS_RE, "");
-        }
-        if (companionPaths.length > 0) {
-          text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${companionPaths.join(
-            "\n",
-          )}`;
-        }
-        pi.sendMessage({
-          customType: spec.customType ?? `command:${spec.name}`,
-          content: text,
-          display: false,
-          attribution: "user",
+        await runDefaultHandler({
+          pi,
+          name: spec.name,
+          customType: spec.customType,
+          body,
+          args,
+          companionPaths,
+          ctx,
         });
-        const userPrompt = `/${spec.name}${argText ? ` ${argText}` : ""}`;
-        await pi.sendUserMessage(userPrompt);
-        if (spec.customType) {
-          pi.sendMessage(
-            {
-              customType: spec.customType,
-              content: `${spec.name} requested${argText ? ` — ${argText}` : ""}`,
-              display: true,
-              attribution: "user",
-            },
-            { deliverAs: "followUp" },
-          );
-        }
-        ctx.ui?.notify?.(`Running ${spec.name}`, "info");
       },
     });
   }

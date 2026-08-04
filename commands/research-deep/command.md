@@ -44,8 +44,23 @@ Phase 2 runs repeated waves until convergence (replaces single-pass batch execut
   - Append one entry to `_attempts` per touching wave: `{wave, angles, modules, outcome}` — `angles`/`modules` list what this wave tried (the agent records which strategies/angles returned nothing, per the template below); `outcome` is a short result (e.g. `filled`, `partial`, `failed`). If the agent left no valid entry, append one from the wave plan.
   - Set `_wave` to the last wave number
   - `_attempts` and `_wave` are internal underscore fields (the report script already filters `_source_file`-style fields)
-
-**Convergence** — stop the wave loop when ANY holds:
+- **Wave Progress Emission** — at the end of each wave iteration (after Observe and the per-item updates above), emit the wave progress custom message so the TUI updates between waves:
+  ```ts
+  pi.sendMessage({
+    customType: "research-wave-progress",
+    display: true,
+    details: wavePayload
+  })
+  ```
+  `wavePayload` is a `ResearchWaveProgressPayload` (see `src/research-renderer.ts`) populated from the wave's Observe step:
+  - `slug`, `topic`
+  - `wave` (current wave number, 1-indexed), `max_waves` (the convergence cap)
+  - `field_completion`, `completed_fields`, `total_fields` (resolved/total field coverage)
+  - `active_subagents` (count or list of dispatched names/ids for this wave), `active_modules` (modules used this wave)
+  - `uncertainty_delta` / `delta_u` (reduction in unresolved field count vs. the previous wave; `0` when none)
+  - Plus operational metrics the renderer reads: `total_items`, `completed_items`, `pending_items`, `wave_items`, `unresolved_fields_count`, `preset`
+  Emit on **every** wave (including wave 1) — do not skip the first emission; the TUI uses it to render the initial progress frame.
+- **Convergence Check** — stop the wave loop when ANY holds:
 - (a) the last wave produced zero new `[uncertain]`/empty items
 - (b) two consecutive waves produced no improvement (no reduction in the total `[uncertain]`/empty field count across items)
 - (c) `max_waves` reached (default 3; `--max-waves N` overrides)

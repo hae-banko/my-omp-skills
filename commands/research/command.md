@@ -4,17 +4,40 @@ Preliminary research on a topic, producing a research **outline** — items (res
 
 ## Trigger & Subcommands
 
-- `/research [topic]` — Run Phase 1 outline research workflow for a topic.
+- `/research 1 [topic]` — Phase 1: Outline Generation. Produce the research outline (items + field framework) for `{topic}`. The handler emits a draft Research Review Window immediately; the workflow body replaces it with the real outline payload.
+- `/research 2 [slug]` — Phase 2: Deep Research OODA Waves. Run deep research phase for a project (equivalent to `/research-deep [slug]`).
+- `/research 3 [slug]` — Phase 3: Summary Report Generation. Convert deep-research JSON results into a markdown report (equivalent to `/research-report [slug]`).
+- `/research dashboard [slug]` — Research Lifecycle Dashboard. Emit the lifecycle dashboard (`pi.sendMessage({ customType: "research-dashboard", display: true, details: payload })`) for a research project (or the most recent dated project if `slug` is omitted).
 - `/research review [slug]` — Open/emit the Research Review Window (`pi.sendMessage({ customType: "research-review", display: true, details: payload })`) for an existing research project slug (or the most recent if omitted).
 - `/research add-items [slug]` — Add items to an existing research outline, update `research.md`, and re-emit `research-review`.
 - `/research add-fields [slug]` — Add field definitions to an existing research fields framework, update `research.md`, and re-emit `research-review`.
-- `/research status [slug]` — Display current progress and status summary for a research project.
-- `/research run [slug]` — Start deep research phase for a project (equivalent to `/research-deep [slug]`).
+- `/research status [slug]` — Display current progress and status summary for a research project (emits `research-dashboard`).
+- `/research run [slug]` — Start deep research phase for a project (equivalent to `/research 2 [slug]` / `/research-deep [slug]`).
 
 ## Subcommand Execution Details
 
 When `/research` is invoked with a subcommand:
 
+- **`1 [topic]`**: Run Phase 1 outline generation workflow for `{topic}`.
+- **`2 [slug]`**: Delegate to Phase 2 deep research workflow (equivalent to `/research-deep [slug]`).
+- **`3 [slug]`**: Delegate to Phase 3 summary report compilation (equivalent to `/research-report [slug]`).
+- **`dashboard [slug]`** or **`status [slug]`** — Research Lifecycle Dashboard:
+  1. Locate the project directory under `<repo-root>/.omp/knowledge/research/` matching `slug` (or the most recent dated directory if `slug` is omitted).
+  2. Read `research.md` (or `outline.yaml` & `fields.yaml`), scan completed JSON results, and check whether `report.md` exists.
+  3. **Emit the `research-dashboard` custom message** to trigger the Research Lifecycle Dashboard card:
+     ```ts
+     pi.sendMessage({
+       customType: "research-dashboard",
+       display: true,
+       details: payload
+     })
+     ```
+     `payload` is a `ResearchDashboardPayload` (see `src/research-renderer.ts`) populated from the project directory:
+     - `slug`, `topic`, `current_phase` (1|2|3), `pipeline_status` (e.g. `OUTLINE`, `RUNNING`, `CONVERGED`, `REPORT_READY`)
+     - `global_metrics`: `total_items`, `completed_items`, `total_fields`, `completed_fields`, `coverage`
+     - `artifacts`: `outline_yaml`, `fields_yaml`, `results_json`, `report_md` (presence/size)
+     - `recommended_next_step` (the next subcommand the user should run)
+  4. Summarize progress and lifecycle status to the user in prose.
 - **`review [slug]`**:
   1. Locate the project directory under `<repo-root>/.omp/knowledge/research/` matching `slug` (or the most recent dated directory if `slug` is omitted).
   2. Read `research.md` (or `outline.yaml` & `fields.yaml`).
@@ -28,9 +51,7 @@ When `/research` is invoked with a subcommand:
      ```
 - **`add-items [slug]`**: Delegate to the item addition workflow (same as `/research-add-items [slug]`), then update `research.md` (counts, items list, `updated` timestamp) and re-emit `research-review`.
 - **`add-fields [slug]`**: Delegate to the field addition workflow (same as `/research-add-fields [slug]`), then update `research.md` (counts, required fields list, `updated` timestamp) and re-emit `research-review`.
-- **`status [slug]`**: Locate the project directory, read front-matter/status from `research.md`, and summarize progress to the user.
 - **`run [slug]`**: Delegate to the deep research workflow (equivalent to `/research-deep [slug]`).
-
 If invoked with `/research <topic>` (or a new research topic): execute Phase 1 workflow below.
 
 ## Workflow (Phase 1 Outline Generation)

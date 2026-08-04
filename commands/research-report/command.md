@@ -88,6 +88,30 @@ CATEGORY_MAPPING = {
 - Format: a subsection under the item, e.g. `**Unresolved:** field_a, field_b` followed by an attempts list (`Wave 1 — angles: [...], modules: [...], outcome: ...`), so a reader sees the fields that could not be filled and exactly what was tried.
 - If `_attempts` is absent (pre-OODA results), fall back to listing just the unresolved field names without an attempts list.
 - `_attempts` entries are never rendered as part of the regular field body — only inside this provenance note.
+
+### Step 3b: Report Preview Custom Message
+
+Before executing the script to write `report.md` (or before writing `report.md`), emit the report preview custom message so the TUI renders a preview card alongside the report run:
+
+```ts
+pi.sendMessage({
+  customType: "research-report-preview",
+  display: true,
+  details: previewPayload
+})
+```
+
+`previewPayload` is a `ResearchReportPreviewPayload` (see `src/research-renderer.ts`) populated from the JSON results and the user-selected TOC fields:
+
+- `slug`, `topic`
+- `coverage` (overall field-coverage ratio, 0–1)
+- `verified_sources_count` / `verified_sources` (count of distinct sources the report cites)
+- `executive_summary` / `summary_preview` (one-paragraph summary or the first ~500 chars of the rendered report body)
+- `unresolved_provenance` / `unresolved_fields_provenance` — the per-item provenance list of fields still marked `[uncertain]` or empty, each entry `{field, attempts, reason}` where `attempts` is a short list of `{wave, angles, modules, outcome}` (sourced from the item's `_attempts`)
+- Plus operational metrics the renderer reads: `toc` (TOC entries with anchor links + summary fields), `summary_fields` (the user-selected field names), `total_items`, `resolved_items`, `unresolved_fields_count`, `preview_content` (a short markdown excerpt suitable for the card body)
+
+Emit this **before** running `generate_report.py` (Step 4) — the preview reflects the planned report; if Step 4 fails or the user edits `generate_report.py`, re-emit with the updated `preview_content`.
+
 ### Step 4: Execute Script
 
 Run `python {project_dir}/generate_report.py`

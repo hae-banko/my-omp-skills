@@ -4,12 +4,26 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.21.3 — `/research` Phase 1 emits a draft Research Review window immediately
+
+- **`/research` Phase 1 draft window**: invoking `/research` (bare) or `/research 1 [topic]` now opens the TUI Research Review Window with `status: "DRAFT REVIEW"` and a placeholder `${YYYY-MM-DD}_${topic-slug}` slug, so the user sees the planned project before the workflow body reaches the model. The agent then replaces the draft with the real outline payload via the same `research-review` custom message. Subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `2`, `3`, `dashboard`) fall through to the default body-send + user-prompt flow unchanged.
+- **Custom handler pattern**: the `research` command spec now carries a `handler` field; the default body-send flow is factored into a `runDefaultHandler` helper so custom handlers can share the hidden-workflow + user-prompt logic. The `CommandSpec.handler` type now receives `{ body, companionPaths }` so handlers can re-use the default flow. Selftest green.
+
+## v0.21.2 — hindsight state shown in the bare-command autocomplete
+
+- **`/hindsight` completion header**: typing `/hindsight` (no argument) now surfaces a dim header item at the top of the autocomplete list showing the live sta…[+437]
+
+## v0.21.1 — don't-look-for-claude-md rule
+
+- **New always-apply rule** `rules/dont-look-for-claude-md.md`: tells the model not to proactively grep/glob/`read` for `CLAUDE.md` / `AGENTS.md` / `.cursorrules` at session start, on entering a new directory, or "just to check". The runtime already loads the relevant agent-context files into the system prompt; anything else is noise and the user has not asked for it. Workflow bodies that explicitly direct a read still take precedence.
+
 ## v0.21.0 — deep research performance optimizations
 
 - **Subagent Prompt Token Reduction**: Streamlined `commands/research/WEB-SEARCH-AGENT.md` from 173 lines to 52 concise lines, eliminating 120+ lines of dead prompt templates while preserving mandatory module loading and output format.
 - **Search Query Deduplication**: Added explicit knowledge deduplication check in `WEB-SEARCH-AGENT.md` and `commands/research-deep/command.md` to prevent re-querying identical URLs or search phrases across subagent OODA waves.
 - **Exact Operator Query Templates**: Added exact, non-redundant search operator patterns across all 5 strategy modules in `commands/research/modules/` (`arxiv:`, `site:scholar.google.com`, `site:github.com`, `site:zhihu.com`, `site:stackoverflow.com`).
 - **JSON Validation & Report Generation Speed**: Precomputed `_NESTED_KEYS` set in `validate_json.py` for single-pass field extraction; optimized `generate_report.py` template specifications in `commands/research-report/command.md` for single-pass JSON processing and O(1) dictionary lookups.
+
 ## v0.20.0 — performance optimizations
 
 - **Hindsight Config mtime Caching**: `reloadHindsightConfig()` in `src/hindsight.ts` now uses `statSync` `mtimeMs` caching, skipping redundant disk reads and JSON parsing when `~/.omp/hindsight.json` is untouched.

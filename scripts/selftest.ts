@@ -22,7 +22,13 @@ import extension from "../src/index.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 import {
   renderResearchReviewCard,
+  renderResearchWaveProgressCard,
+  renderResearchReportPreviewCard,
+  renderResearchDashboardCard,
   type ResearchReviewPayload,
+  type ResearchWaveProgressPayload,
+  type ResearchReportPreviewPayload,
+  type ResearchDashboardPayload,
 } from "../src/research-renderer.ts";
 
 interface HandlerContext {
@@ -421,6 +427,155 @@ if (!renderers["research-review"]) {
   }
 }
 
+if (!renderers["research-wave-progress"]) {
+  fail("renderers: research-wave-progress not registered");
+} else {
+  const wavePayload: ResearchWaveProgressPayload = {
+    slug: "wave-selftest",
+    wave: 2,
+    max_waves: 3,
+    field_completion: 0.5,
+    completed_fields: 6,
+    total_fields: 12,
+    active_subagents: ["academic-agent", "github-agent"],
+    active_modules: ["academic-papers", "github-debug"],
+    uncertainty_delta: "-0.25",
+  };
+  const directCard = renderResearchWaveProgressCard(wavePayload) as TuiContainer;
+  if (!(directCard instanceof TuiContainer)) {
+    fail("renderer: renderResearchWaveProgressCard did not return a Container");
+  }
+  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
+  const directTexts = directChildren
+    .map((c: unknown) => (c && typeof c === "object" && "text" in c ? String(c.text ?? "") : ""))
+    .join("\n");
+  if (!directTexts.includes("RESEARCH WAVE PROGRESS")) {
+    fail("research-wave-progress: output missing header");
+  }
+  if (!directTexts.includes("[WAVE 2/3]")) {
+    fail("research-wave-progress: output missing wave badge");
+  }
+  if (!directTexts.includes("[████░░░░]")) {
+    fail("research-wave-progress: output missing progress bar");
+  }
+  if (!directTexts.includes("Uncertainty Reduction (ΔU)")) {
+    fail("research-wave-progress: output missing ΔU metric");
+  }
+
+  const msgCard = renderers["research-wave-progress"](
+    { customType: "research-wave-progress", details: wavePayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered research-wave-progress renderer did not return a Container");
+  }
+}
+
+if (!renderers["research-report-preview"]) {
+  fail("renderers: research-report-preview not registered");
+} else {
+  const reportPayload: ResearchReportPreviewPayload = {
+    slug: "report-selftest",
+    coverage: 0.85,
+    verified_sources_count: 18,
+    executive_summary: "Comprehensive survey of agentic workflows and tool execution.",
+    unresolved_provenance: [
+      { field: "eval_benchmark", attempts: 3, reason: "No standardized benchmark dataset found" },
+    ],
+  };
+  const directCard = renderResearchReportPreviewCard(reportPayload) as TuiContainer;
+  if (!(directCard instanceof TuiContainer)) {
+    fail("renderer: renderResearchReportPreviewCard did not return a Container");
+  }
+  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
+  const directTexts = directChildren
+    .map((c: unknown) => (c && typeof c === "object" && "text" in c ? String(c.text ?? "") : ""))
+    .join("\n");
+  if (!directTexts.includes("RESEARCH REPORT PREVIEW")) {
+    fail("research-report-preview: output missing header");
+  }
+  if (!directTexts.includes("Coverage:")) {
+    fail("research-report-preview: output missing coverage");
+  }
+  if (!directTexts.includes("Verified Sources Count:")) {
+    fail("research-report-preview: output missing verified sources count");
+  }
+  if (!directTexts.includes("Executive Summary Preview:")) {
+    fail("research-report-preview: output missing summary preview");
+  }
+  if (!directTexts.includes("Unresolved Field Provenance:")) {
+    fail("research-report-preview: output missing unresolved field provenance");
+  }
+
+  const msgCard = renderers["research-report-preview"](
+    { customType: "research-report-preview", details: reportPayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered research-report-preview renderer did not return a Container");
+  }
+}
+
+if (!renderers["research-dashboard"]) {
+  fail("renderers: research-dashboard not registered");
+} else {
+  const dashPayload: ResearchDashboardPayload = {
+    slug: "dashboard-selftest",
+    current_phase: 2,
+    global_metrics: {
+      total_items: 10,
+      completed_items: 6,
+      total_fields: 12,
+      completed_fields: 8,
+      coverage: 0.6,
+    },
+    artifacts: {
+      outline_yaml: true,
+      fields_yaml: true,
+      results_json: 6,
+      report_md: false,
+    },
+    recommended_next_step: "Run /research-deep medium dashboard-selftest",
+  };
+  const directCard = renderResearchDashboardCard(dashPayload) as TuiContainer;
+  if (!(directCard instanceof TuiContainer)) {
+    fail("renderer: renderResearchDashboardCard did not return a Container");
+  }
+  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
+  const directTexts = directChildren
+    .map((c: unknown) => (c && typeof c === "object" && "text" in c ? String(c.text ?? "") : ""))
+    .join("\n");
+  if (!directTexts.includes("RESEARCH DASHBOARD")) {
+    fail("research-dashboard: output missing header");
+  }
+  if (!directTexts.includes("Pipeline Status:")) {
+    fail("research-dashboard: output missing pipeline status");
+  }
+  if (!directTexts.includes("Phase 1") || !directTexts.includes("Phase 2") || !directTexts.includes("Phase 3")) {
+    fail("research-dashboard: output missing phase indicators");
+  }
+  if (!directTexts.includes("Global Completion Metrics:")) {
+    fail("research-dashboard: output missing global completion metrics");
+  }
+  if (!directTexts.includes("Project Artifacts Status:")) {
+    fail("research-dashboard: output missing project artifacts status");
+  }
+  if (!directTexts.includes("Recommended Next Step:")) {
+    fail("research-dashboard: output missing recommended next step");
+  }
+
+  const msgCard = renderers["research-dashboard"](
+    { customType: "research-dashboard", details: dashPayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered research-dashboard renderer did not return a Container");
+  }
+}
+
 // Receipts: /record and /pitfall emit a custom message with the right type.
 customMessages.length = 0;
 await registered["record"].handler("remember the DTCM thing", {});
@@ -578,14 +733,20 @@ if (!sessionStop) {
   }
   if (!isHindsightEnabled()) fail("hindsight: status toggled the state");
 
-  // TUI options: argument completions show the live state in descriptions.
+  // TUI options: typing "/hindsight" surfaces the live state as a dim header
+  // before the subcommands, then "on"/"off"/"status" with the state in
+  // descriptions. The header (empty value) is a read-only hint.
   const completions = registered["hindsight"].getArgumentCompletions?.("") ?? null;
-  if (!completions || completions.length !== 3) {
-    fail("hindsight: expected on/off/status argument completions");
+  if (!completions || completions.length !== 4) {
+    fail("hindsight: expected header + on/off/status argument completions");
   } else {
-    const labels = completions.map((c) => c.label).sort().join(",");
-    if (labels !== "off,on,status") fail(`hindsight: unexpected completion labels: ${labels}`);
-    if (!String(completions[0].description ?? "").includes("currently on")) {
+    const header = completions[0];
+    if (header.value !== "" || !String(header.label).includes("currently on")) {
+      fail("hindsight: header item missing or wrong state");
+    }
+    const rest = completions.slice(1).map((c) => c.label).sort().join(",");
+    if (rest !== "off,on,status") fail(`hindsight: unexpected completion labels: ${rest}`);
+    if (!String(completions[1].description ?? "").includes("currently on")) {
       fail("hindsight: completion descriptions do not carry the live state");
     }
   }
@@ -820,12 +981,14 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     }
     // 1b. /research
     const researchEmpty = registered["research"].getArgumentCompletions?.("") ?? null;
-    if (!researchEmpty || researchEmpty.length !== 6) {
-      fail(`research: expected 6 subcommands for empty prefix, got ${researchEmpty?.length}`);
+    if (!researchEmpty || researchEmpty.length < 10) {
+      fail(`research: expected subcommands and project slugs for empty prefix, got ${researchEmpty?.length}`);
     } else {
-      const labels = researchEmpty.map((c) => c.label).sort().join(",");
-      if (labels !== "add-fields,add-items,off,review,run,status") {
-        fail(`research: unexpected subcommand labels: ${labels}`);
+      const labels = researchEmpty.map((c) => c.label);
+      for (const sub of ["1", "2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run", "off"]) {
+        if (!labels.includes(sub)) {
+          fail(`research: missing expected subcommand label ${sub}`);
+        }
       }
     }
 
