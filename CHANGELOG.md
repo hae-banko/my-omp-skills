@@ -3,6 +3,11 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+## v0.19.1 — README documentation overhaul
+
+- **README Overhaul**: Updated `README.md` to document all features through v0.19.0 while preserving the top banner header image (`assets/banner.png`).
+- **Documented Features**: TUI Research Review Window (`ResearchReviewCard`), living `research.md` outline, `/research` subcommands, deep research OODA waves, execution scale presets (`small`/`medium`/`high`), `_attempts` provenance notes, `/routinize` `manifest.json` & `run_routine` tool, and dynamic completions table.
+
 ## v0.19.0 — Plan-inspired TUI Research Review Window & living research.md outline
 
 - **Plan-inspired TUI Research Review Window (`src/research-renderer.ts`)**:

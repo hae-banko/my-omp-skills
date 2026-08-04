@@ -26,9 +26,13 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
 - **Triage** — `/triage` moves issues and external PRs through a state
   machine of roles — categorise, verify, grill if needed, and write
   agent-ready briefs.
-- **Deep research** — the `/research` family runs a three-phase flow: outline,
-  parallel background-agent research with validated JSON, and a report with
-  table of contents.
+- **Deep research** — the `/research` family runs a three-phase flow: outline
+  drafting with TUI Research Review Window (`ResearchReviewCard`), living outline
+  `research.md`, and subcommands (`review`, `add-items`, `add-fields`, `status`,
+  `run`, `off`); parallel background agent research in feedback-driven OODA waves
+  (Observe → Orient → Decide → Act) with presets (`small`, `medium`, `high`) and no
+  per-wave approval (`--approve-each` to restore); and a markdown report with
+  table of contents and `_attempts` provenance logging for unresolved fields.
 - **Knowledge base** — `/record` and `/pitfall` capture lessons and failures
   into an append-only, timestamped, indexed store at `.omp/knowledge/`,
   queryable by the model mid-session.
@@ -36,8 +40,9 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
   `.omp/references/` so the model consults them instead of reconstructing
   behavior from memory.
 - **Routines** — `/routinize` turns repeated ad-hoc work into canonical,
-  parameterized scripts under `scripts/routines/`, with a proposal you
-  approve before each write.
+  parameterized scripts indexed in `scripts/routines/manifest.json`, validated via
+  `bash -n`, with subcommands (`scan`, `run <id>`, `list`) and the model-invoked
+  `run_routine` tool.
 - **Hindsight** — `/hindsight` adds a settle-time reflection pass: before a
   turn settles, the model gets one hidden look back at its own reasoning and
   tool results to catch design-level changes that would simplify the
@@ -49,12 +54,12 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
 
 ## Install
 
-Requires an SSH key with access to the private repo. Latest release: v0.13.0.
+Requires an SSH key with access to the private repo. Latest release: v0.19.0.
 
 1. Install pinned to the latest release:
 
    ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.13.0
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.19.0
    ```
 
 2. Prefer maximum immutability? Pin to a full commit SHA instead:
@@ -92,16 +97,16 @@ suggest the right one when your situation fits.
 | `/implement` | Builds from spec or tickets with TDD and a final code review | Deliver work described by tickets |
 | `/triage` | Moves issues and PRs through triage roles into agent-ready briefs | Process an incoming issue backlog |
 | **Research** | | |
-| `/research` | Phase 1: drafts a research outline (items + fields) for a topic | Start a deep research project |
-| `/research-add-items` | Adds research items to an existing outline | Expand your research outline |
-| `/research-add-fields` | Adds field definitions to an existing outline | Extend the field framework |
-| `/research-deep` | Phase 2: researches each item with parallel agents in feedback-driven OODA waves into validated JSON — presets `small`/`medium`/`high`, no per-wave approval (`--approve-each` to restore) | Gather evidence per outline item |
-| `/research-report` | Phase 3: turns research JSON into a markdown report with a table of contents | Compile findings into a report |
+| `/research` | Phase 1: drafts outline (items + fields + living `research.md`), TUI Research Review Window (`ResearchReviewCard`) & subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `off`) | Start a deep research project |
+| `/research-add-items` | Adds research items to an existing outline.yaml and updates living `research.md` | Expand your research outline |
+| `/research-add-fields` | Adds field definitions to an existing fields.yaml and updates living `research.md` | Extend the field framework |
+| `/research-deep` | Phase 2: researches items with parallel agents in feedback-driven OODA waves into validated JSON — presets `small`/`medium`/`high`, no per-wave approval (`--approve-each` to restore) | Gather evidence per outline item |
+| `/research-report` | Phase 3: turns research JSON into a markdown report with table of contents & `_attempts` provenance notes for unresolved fields | Compile findings into a report |
 | **Knowledge & memory** | | |
 | `/record` | Saves a durable lesson, audit, or note to the local knowledge base | Persist a finding worth keeping |
 | `/pitfall` | Captures a fresh mistake into the knowledge base before context fades | Something just went wrong |
-| `/routinize` | Turns repeated ad-hoc work into parameterized scripts under `scripts/routines/` | You keep doing the same thing |
-| `/reference` | Manages cloned reference material in `.omp/references/` (add, update, remove, list) | Acquire external docs for the repo |
+| `/routinize` | Turns repeated ad-hoc work into parameterized scripts (`scripts/routines/manifest.json`) & `run_routine` tool; `bash -n` check & subcommands (`scan`, `run <id>`, `list`) | You keep doing the same thing |
+| `/reference` | Manages cloned reference material in `.omp/references/` (`add`, `update`, `remove`, `list`) | Acquire external docs for the repo |
 | **Session & support** | | |
 | `/omp-setup` | Configures the repo: issue tracker, triage labels, domain doc layout | First run in a new repo |
 | `/hindsight` | Toggle the settle-time reflection pass: after turns that did real work, one hidden pass reconsiders design-level changes before the turn settles | You want answers reconsidered before they settle |
@@ -110,6 +115,23 @@ suggest the right one when your situation fits.
 | `/plugin-issue` | Files a bug or feature request on this plugin's GitHub repo | The plugin misbehaves or lacks something |
 | `/teach` | Teaches a skill or concept over multiple sessions in a stateful workspace | Learn something over time |
 | `/writing-great-skills` | Reference for the vocabulary and principles of well-written skills | Write or edit a skill |
+
+## Dynamic completions
+
+Commands provide intelligent, context-aware argument completion in the TUI:
+
+| Command | Completion Behavior |
+| --- | --- |
+| `/research` | Offers subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `off`) and live research project directory slugs from `.omp/knowledge/research/` |
+| `/research-deep` | Offers execution presets (`small`, `medium`, `high`) and dated research project slugs (e.g., `small 2026-08-02_demo`) |
+| `/research-report` | Offers research project directory slugs from `.omp/knowledge/research/` |
+| `/routinize` | Offers subcommands (`scan`, `run <id>`, `list`) and live routine IDs from `manifest.json` and `scripts/routines/` |
+| `/reference` | Offers subcommands (`add`, `update`, `remove`, `list`) when empty, and cloned reference names for `update <name>` and `remove <name>` |
+| `/triage` | Offers `--unlabeled` and `--needs-triage` |
+| `/to-tickets` | Offers spec markdown files from `.scratch/specs/` and `docs/specs/` |
+| `/record` | Offers `--recent` |
+| `/pitfall` | Offers `--recent` |
+| `/hindsight` | Offers subcommands (`on`, `off`, `status`) with live state indicators in descriptions |
 
 ## Skills
 
@@ -138,12 +160,14 @@ A few behaviors kick in without you invoking anything:
 
 | Behavior | What it does |
 |---|---|
+| Hidden Workflow Prompt Execution | Slash commands dispatch heavy workflow markdown bodies, argument substitutions, and companion file pointers as hidden context messages (`display: false`, `attribution: "user"`). The visible TUI prompt stays clean (`/command args`) while the model receives full workflow context. |
 | Bootstrap | At session start the model gets a one-time message listing every command, so it knows the package exists without `/help`. |
 | Knowledge-base policy | An append-only guard on `.omp/knowledge/`: records, pitfalls, and `INDEX.md` are never rewritten in place. New timestamped entries and index appends pass; research working files stay editable. |
 | Rules | A TTSR rule (a mid-conversation interrupt that stops the model just before it acts) blocks edits to knowledge-base entries; always-apply rules keep the right command discoverable during a conversation. |
 | `knowledge_read` tool | The model can look up past findings on demand — the index, records, pitfalls, and research projects. |
+| `run_routine` tool | Model-invoked tool to execute parameterized routine scripts specified in `scripts/routines/manifest.json`. |
 | Herdr tools | `herdr_layout`/`herdr_pane`/`herdr_agent` wrap the herdr CLI for structured workspace/pane/agent control when the session runs inside a herdr pane (opt-in; gate message outside). |
-| Transcript renderers | How results show up in the terminal: `/record` and `/pitfall` print a compact receipt card; `knowledge_read` results render as labeled cards. |
+| Transcript renderers | Custom TUI message renderers: `/record` and `/pitfall` compact receipt cards, `knowledge_read` cards, `ResearchReviewCard` TUI research review window, and `run_routine` execution cards. |
 
 The append-only guard exists because the knowledge base is a durable,
 append-only memory: entries are timestamped records of what happened, and
@@ -182,12 +206,29 @@ Example:
 
 ## Deep Research internals
 
-`/research-deep` dispatches per-item searches through strategy modules under
-`commands/research/modules/` (`academic-papers.md`, `github-debug.md`,
-`stackoverflow.md`, `general-web.md`, `chinese-tech.md`). Each module is a
-short brief telling the background agent which sources to favour and how to
-phrase queries; the default dispatch picks by item type. Add or edit modules
-there to extend coverage without touching the workflow code.
+The `/research` workflow operates in three feedback-driven phases:
+
+1. **Outline & Review Window (`/research`)**: Creates `outline.yaml`, `fields.yaml`, and a human-readable living outline `research.md`. Emits the TUI Research Review Window (`ResearchReviewCard`) displaying header status, field framework definitions, strategy modules, and execution scale settings. Subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `off`) allow interactive project management.
+2. **OODA Feedback Waves (`/research-deep`)**: Executes repeated Observe → Orient → Decide → Act waves with parallel background agents. Results per item are written to validated JSON and track internal `_attempts` (`{wave, angles, modules, outcome}`) and `_wave`. Unresolved fields are re-evaluated across waves. Execution presets adjust concurrency:
+   - `small`: 1–2 parallel agents, 1 item per agent.
+   - `medium`: 3–5 parallel agents, 2 items per agent (default).
+   - `high`: Max parallel agents, 1 item per agent.
+   By default, waves proceed without per-wave prompts (use `--approve-each` to restore approval gates).
+3. **Report Compilation & Provenance (`/research-report`)**: Compiles item JSON into a markdown report with a table of contents. For any unresolved fields, it appends `_attempts` provenance notes detailing what was tried across waves.
+
+Searches are dispatched through strategy modules under `commands/research/modules/` (`academic-papers.md`, `github-debug.md`, `stackoverflow.md`, `general-web.md`, `chinese-tech.md`). Each module is a short brief telling the background agent which sources to favour and how to phrase queries. Add or edit modules there to extend coverage without touching workflow code.
+
+## Routines internals
+
+`/routinize` manages repeated ad-hoc tasks by converting them into canonical scripts:
+
+- **Manifest Index (`scripts/routines/manifest.json`)**: Tracks routine metadata (`id`, `name`, `file`, `description`, `parameters`, `tags`).
+- **Subcommands**:
+  - `/routinize scan`: Scans conversation history for repeated patterns and proposes routine scripts.
+  - `/routinize run <id>`: Executes an indexed routine by ID or file.
+  - `/routinize list`: Displays all registered routine scripts.
+- **Safety & Validation**: Pre-flight validation runs `bash -n` syntax checks on proposed routine scripts before writing.
+- **`run_routine` Tool**: Allows the model to execute parameterized scripts using `manifest.json` parameter schemas, rendering execution output cards in the TUI.
 
 ## Updating & troubleshooting
 
@@ -200,7 +241,7 @@ applying it.
 2. **List available releases** —
    `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.13.0`.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.19.0`.
    Installs are immutable copies, so the old version keeps working until the
    reinstall succeeds.
 4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools
