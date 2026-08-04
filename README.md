@@ -1,5 +1,9 @@
 # my-omp-skills
 
+<p align="center">
+  <img src="assets/banner.png" alt="my-omp-skills banner" width="100%" />
+</p>
+
 An extension package for the oh-my-pi (omp) agent harness that turns a plain
 repo into a workflow engine: 23 user-invoked slash commands and 11
 model-invoked skills covering planning, research, review, and learning. Ideas
