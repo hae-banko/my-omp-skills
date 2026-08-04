@@ -82,6 +82,7 @@ export interface ZodLike {
   object(shape: Record<string, unknown>): unknown;
   enum(values: readonly string[]): { default(value: string): unknown; optional(): unknown };
   string(): { optional(): unknown };
+  record(keyType: unknown, valueType?: unknown): { optional(): unknown };
   number(): { int(): { min(n: number): { max(n: number): { optional(): unknown } } } };
   boolean(): { optional(): unknown };
 }

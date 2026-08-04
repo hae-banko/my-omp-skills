@@ -26,6 +26,7 @@ import {
 } from "./hindsight.ts";
 import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
+import { installRoutinesTool } from "./routines.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 function findRepoRoot(startDir: string = process.cwd()): string {
@@ -350,12 +351,80 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "routinize",
-    description: "Routinize repeated ad-hoc work from the conversation into canonical, parameterized scripts under scripts/routines/ — DRY for programmatic routines. Proposals first; you approve each write.",
+    description:
+      "Routinize repeated ad-hoc work from the conversation into canonical, parameterized scripts under scripts/routines/ — /routinize [scan|run <id>|list]. Proposals first; you approve each write.",
     bodyPath: "commands/routinize/command.md",
     companions: [
       "commands/routinize/ROUTINIZE-BRIEF.md",
       "commands/routinize/ROUTINE-FORMAT.md",
     ],
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const lower = argumentPrefix.toLowerCase();
+      const options = [
+        { value: "scan", label: "scan", description: "Scan conversation for repeated ad-hoc work to routinize" },
+        { value: "run ", label: "run", description: "Execute a routine from scripts/routines/" },
+        { value: "list", label: "list", description: "List available routines in scripts/routines/" },
+      ];
+
+      if (!argumentPrefix.includes(" ")) {
+        const matches = options.filter((o) => o.label.startsWith(lower));
+        return matches.length > 0 ? matches : null;
+      }
+
+      const spaceIdx = argumentPrefix.indexOf(" ");
+      const sub = lower.slice(0, spaceIdx);
+      const rest = lower.slice(spaceIdx + 1).trimStart();
+
+      if (sub === "run") {
+        const root = findRepoRoot();
+        const routinesDir = join(root, "scripts", "routines");
+        if (!existsSync(routinesDir) || !statSync(routinesDir).isDirectory()) return null;
+
+        const idsSet = new Set<string>();
+
+        const manifestPath = join(routinesDir, "manifest.json");
+        if (existsSync(manifestPath)) {
+          try {
+            const raw = readFileSync(manifestPath, "utf8");
+            interface ManifestData { routines?: Array<{ id?: string; file?: string }>; }
+            const parsed: ManifestData = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.routines)) {
+              for (const r of parsed.routines) {
+                if (r && typeof r.id === "string") {
+                  idsSet.add(r.id);
+                } else if (r && typeof r.file === "string") {
+                  idsSet.add(r.file);
+                }
+              }
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+
+        for (const entry of readdirSync(routinesDir)) {
+          const fullPath = join(routinesDir, entry);
+          if (statSync(fullPath).isFile() && entry.endsWith(".sh")) {
+            const idWithoutExt = entry.slice(0, -3);
+            idsSet.add(idWithoutExt);
+            idsSet.add(entry);
+          }
+        }
+
+        const sortedIds = Array.from(idsSet).sort();
+        const matches = sortedIds
+          .filter((id) => id.toLowerCase().startsWith(rest))
+          .map((id) => ({
+            value: `run ${id}`,
+            label: id,
+            description: "Execute routine",
+          }));
+
+        return matches.length > 0 ? matches : null;
+      }
+
+      return null;
+    },
   },
   {
     name: "hindsight",
@@ -506,7 +575,7 @@ export default function (pi: ExtensionApi): void {
   installKnowledgeTool(pi);
   installHindsight(pi);
   installHerdrTools(pi);
-
+  installRoutinesTool(pi);
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));

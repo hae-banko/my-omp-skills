@@ -104,6 +104,7 @@ const zod = {
     optional: () => ({ kind: "enum", values }),
   }),
   string: () => ({ optional: () => ({ kind: "string" }) }),
+  record: (keyType?: unknown, valueType?: unknown) => ({ optional: () => ({ kind: "record" }) }),
   number: () => ({
     int: () => ({
       min: (n: number) => ({
@@ -630,6 +631,70 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
   }
 }
 
+// --- run_routine tool + renderer -------------------------------------------
+{
+  const runRoutineTool = tools.find((t) => t.name === "run_routine");
+  if (!runRoutineTool) {
+    fail("tool: run_routine not registered");
+  } else {
+    if (!runRoutineTool.description) fail("run_routine: missing description");
+    if (!runRoutineTool.parameters) fail("run_routine: missing zod parameters");
+
+    const routinesDir = join(fixtureRoot, "scripts", "routines");
+    mkdirSync(routinesDir, { recursive: true });
+    writeFileSync(
+      join(routinesDir, "manifest.json"),
+      JSON.stringify({
+        routines: [
+          {
+            id: "echo-test",
+            name: "Echo Test",
+            file: "echo_test.sh",
+            description: "Test routine script",
+            parameters: [{ name: "MSG", default: "hello", description: "Message" }],
+          },
+        ],
+      }),
+    );
+    writeFileSync(
+      join(routinesDir, "echo_test.sh"),
+      `#!/usr/bin/env bash\nMSG="\${MSG:-hello}"\necho "Routine MSG: \${MSG}"\n`,
+    );
+
+    const res = await runRoutineTool.execute(
+      "selftest-routine",
+      { routineId: "echo-test", args: { MSG: "world" } },
+      undefined,
+      undefined,
+      { cwd: fixtureRoot },
+    );
+
+    const resContentText = (res.content ?? []).map((b) => (b.type === "text" ? b.text : "")).join(" ");
+    if (!resContentText.includes("Routine MSG: world")) {
+      fail(`run_routine: execution stdout missing expected output (got: ${resContentText})`);
+    }
+
+    interface DetailsResult {
+      routineId?: string;
+      exitCode?: number;
+      success?: boolean;
+    }
+    const details = res.details as DetailsResult | undefined;
+    if (!details || details.exitCode !== 0 || details.success !== true) {
+      fail(`run_routine: execution details failed (exitCode: ${details?.exitCode})`);
+    }
+
+    if (runRoutineTool.renderResult) {
+      const card = runRoutineTool.renderResult(res, { expanded: false }, {}) as TuiContainer;
+      if (!card || !(card instanceof TuiContainer)) {
+        fail("run_routine: renderResult did not return a Container");
+      }
+    } else {
+      fail("run_routine: missing renderResult renderer");
+    }
+  }
+}
+
 // --- Command Argument Completions -------------------------------------------
 
 {
@@ -743,6 +808,34 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
       const values = toTicketsEmpty.map((c) => c.value).sort().join(",");
       if (values !== ".scratch/specs/spec-a.md,docs/specs/spec-b.md") {
         fail(`to-tickets: unexpected spec file completion values: ${values}`);
+      }
+    }
+
+    // 8. /routinize
+    const routinizeEmpty = registered["routinize"].getArgumentCompletions?.("") ?? null;
+    if (!routinizeEmpty || routinizeEmpty.length !== 3) {
+      fail("routinize: expected 3 subcommands (scan, run, list) for empty prefix");
+    } else {
+      const labels = routinizeEmpty.map((c) => c.label).sort().join(",");
+      if (labels !== "list,run,scan") fail(`routinize: unexpected subcommand labels: ${labels}`);
+    }
+
+    const routinizeRunSpace = registered["routinize"].getArgumentCompletions?.("run ") ?? null;
+    if (!routinizeRunSpace || routinizeRunSpace.length === 0) {
+      fail("routinize: expected routine ID completions for 'run '");
+    } else {
+      const labels = routinizeRunSpace.map((c) => c.label).sort();
+      if (!labels.includes("echo-test")) {
+        fail(`routinize: expected 'echo-test' routine ID in completions (got: ${labels.join(",")})`);
+      }
+    }
+
+    const routinizeRunFilter = registered["routinize"].getArgumentCompletions?.("run echo") ?? null;
+    if (!routinizeRunFilter || routinizeRunFilter.length === 0) {
+      fail("routinize: expected filtered routine ID completion for 'run echo'");
+    } else {
+      if (routinizeRunFilter[0].value !== "run echo-test") {
+        fail(`routinize: unexpected completion value for 'run echo': ${routinizeRunFilter[0].value}`);
       }
     }
   } finally {

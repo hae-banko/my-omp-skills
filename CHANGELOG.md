@@ -4,6 +4,26 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.17.0 — routinize OMFG-inspired enhancements & run_routine tool
+
+- **OMFG-inspired `/routinize` enhancements**:
+
+  - `scripts/routines/manifest.json`: JSON metadata index (`id`, `name`, `file`,
+    `description`, `parameters`, `tags`) — every routine script has a
+    matching manifest entry.
+  - Subcommands: `/routinize scan` (pattern scan & proposal flow),
+    `/routinize run <id>` (execute routine by ID or file), `/routinize list`
+    (display indexed routines).
+  - Automated pre-flight validation: `ROUTINIZE-BRIEF.md` now runs
+    `bash -n` syntax check before offering routine proposals.
+- **`run_routine` Tool (`src/routines.ts`)**:
+  - Model-invoked tool to execute parameterized routine scripts using
+    `manifest.json` parameter schemas.
+  - Custom TUI card renderer displaying execution exit codes and outputs.
+- **Autocomplete & TUI**:
+  - `/routinize` argument completions for `scan`, `run <id>`, `list`, and
+    live routine ID suggestions from `manifest.json` and `scripts/routines/`.
+
 ## v0.16.0 — dynamic completions, actionable policy hints, docs overhaul
 
 - **Dynamic argument completions** across the user-invoked surface:
