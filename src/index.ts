@@ -27,6 +27,7 @@ import {
 import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
 import { installRoutinesTool } from "./routines.ts";
+import { installResearchReviewCardRenderer } from "./research-renderer.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 function findRepoRoot(startDir: string = process.cwd()): string {
@@ -77,6 +78,55 @@ const COMMANDS: CommandSpec[] = [
     description: "Phase 1 of deep research: generate a research outline (items + field framework) for a topic, human-in-the-loop. Follow with /research-deep and /research-report.",
     bodyPath: "commands/research/command.md",
     companions: RESEARCH_ASSETS,
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const subcommands = [
+        { value: "review", label: "review", description: "Open/emit Research Review Window for a project" },
+        { value: "add-items", label: "add-items", description: "Add research items to an existing outline" },
+        { value: "add-fields", label: "add-fields", description: "Add field definitions to an existing outline" },
+        { value: "status", label: "status", description: "Show status of a research project" },
+        { value: "run", label: "run", description: "Run deep research phase for a project" },
+        { value: "off", label: "off", description: "Close/disable Research Review Window" },
+      ];
+
+      const lower = argumentPrefix.toLowerCase();
+      if (!argumentPrefix.includes(" ")) {
+        const matches = subcommands.filter(
+          (sc) => sc.label.toLowerCase().startsWith(lower) || sc.value.toLowerCase().startsWith(lower),
+        );
+        return matches.length > 0 ? matches : null;
+      }
+
+      const spaceIdx = argumentPrefix.indexOf(" ");
+      const firstWord = lower.slice(0, spaceIdx);
+      const rest = lower.slice(spaceIdx + 1).trimStart();
+
+      const slugSubcommands = ["review", "add-items", "add-fields", "status", "run"];
+      if (slugSubcommands.includes(firstWord)) {
+        const root = findRepoRoot();
+        const researchDir = join(root, ".omp", "knowledge", "research");
+        const slugs =
+          existsSync(researchDir) && statSync(researchDir).isDirectory()
+            ? readdirSync(researchDir)
+                .filter(
+                  (name) =>
+                    statSync(join(researchDir, name)).isDirectory() &&
+                    !name.startsWith("."),
+                )
+                .sort()
+                .reverse()
+            : [];
+        const matches = slugs
+          .filter((slug) => slug.toLowerCase().startsWith(rest))
+          .map((slug) => ({
+            value: `${firstWord} ${slug}`,
+            label: slug,
+            description: "Research project directory",
+          }));
+        return matches.length > 0 ? matches : null;
+      }
+
+      return null;
+    },
   },
   {
     name: "research-add-items",
@@ -576,6 +626,7 @@ export default function (pi: ExtensionApi): void {
   installHindsight(pi);
   installHerdrTools(pi);
   installRoutinesTool(pi);
+  installResearchReviewCardRenderer(pi);
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));

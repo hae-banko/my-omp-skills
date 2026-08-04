@@ -26,8 +26,24 @@ Ask the user to choose:
 
 ### Step 4: Save Update
 
-Append confirmed fields to `fields.yaml` and save.
+- Append confirmed fields to `fields.yaml` and save.
+- Update `research.md` living outline:
+  - Update `counts.fields` (and `updated` ISO timestamp) in YAML front-matter
+  - Append/update new fields in the `## Required fields` category sections in `research.md`
+  - Save updated `research.md`
+
+### Step 5: Re-emit Research Review Message
+
+- Emit custom message to trigger/refresh the TUI Research Review Window:
+  ```ts
+  pi.sendMessage({
+    customType: "research-review",
+    display: true,
+    details: payload
+  })
+  ```
+  Where `payload` contains updated project details (`project`, `topic`, `status`, `phase`, `counts`, `execution`, `path`, `researchMdPath`, `modules`).
 
 ## Output
 
-Updated `<project>/.omp/knowledge/research/<date>_<topic_slug>/fields.yaml` (in-place modification, requires user confirmation; allowed while the project is in its outline phase).
+Updated `<project>/.omp/knowledge/research/<date>_<topic_slug>/fields.yaml` & `research.md` (in-place modification, requires user confirmation; allowed while the project is in its outline phase).

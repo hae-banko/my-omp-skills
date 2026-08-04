@@ -20,6 +20,10 @@ import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
 
 import extension from "../src/index.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
+import {
+  renderResearchReviewCard,
+  type ResearchReviewPayload,
+} from "../src/research-renderer.ts";
 
 interface HandlerContext {
   ui?: {
@@ -350,6 +354,71 @@ if (!renderers["hindsight"]) {
 } else {
   const card = renderers["hindsight"]({ content: "hindsight on" }, {}, null);
   if (!(card instanceof TuiContainer)) fail("renderer: hindsight did not produce a component");
+}
+if (!renderers["research-review"]) {
+  fail("renderers: research-review not registered");
+} else {
+  const samplePayload: ResearchReviewPayload = {
+    slug: "ai-agents-selftest",
+    status: "DRAFT REVIEW",
+    items: [
+      { name: "AutoGPT", category: "open-source", description: "Autonomous GPT agent" },
+      { name: "LangGraph", category: "orchestration", description: "Graph framework" },
+      { name: "CrewAI", category: "multi-agent", description: "Role-based multi-agent" },
+      { name: "BabyAGI", category: "open-source", description: "Task loop" },
+      { name: "MetaGPT", category: "multi-agent", description: "Software company" },
+      { name: "ChatDev", category: "multi-agent", description: "Virtual company" },
+    ],
+    fields: [
+      { name: "architecture", category: "Tech", detail_level: "detailed", description: "Control flow" },
+      { name: "license", category: "Basic", detail_level: "brief", description: "OSS License" },
+      { name: "memory", category: "Tech", detail_level: "moderate", description: "Memory strategy" },
+      { name: "tools", category: "Tech", detail_level: "moderate", description: "Tool use" },
+      { name: "eval", category: "Eval", detail_level: "detailed", description: "Evaluation" },
+    ],
+    modules: ["general-web", "github-debug", "academic-papers"],
+    execution: {
+      preset: "medium",
+      agents_per_wave: 4,
+      max_waves: 3,
+      approval_mode: "auto",
+    },
+  };
+
+  const directCard = renderResearchReviewCard(samplePayload) as TuiContainer;
+  if (!(directCard instanceof TuiContainer)) {
+    fail("renderer: renderResearchReviewCard did not return a Container");
+  }
+  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
+  const directTexts = directChildren
+    .map((c: unknown) => {
+      if (c && typeof c === "object" && "text" in c) {
+        return String(c.text ?? "");
+      }
+      return "";
+    })
+    .join("\n");
+  if (!directTexts.includes("RESEARCH DRAFT REVIEW")) {
+    fail("research-review: output missing RESEARCH DRAFT REVIEW header");
+  }
+  if (!directTexts.includes("Section 1: Living Outline")) {
+    fail("research-review: output missing Section 1 title");
+  }
+  if (!directTexts.includes("Section 2: Execution Settings")) {
+    fail("research-review: output missing Section 2 title");
+  }
+  if (!directTexts.includes("Section 3: Interactive Action Options")) {
+    fail("research-review: output missing Section 3 title");
+  }
+
+  const msgCard = renderers["research-review"](
+    { customType: "research-review", details: samplePayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered research-review renderer did not return a Container");
+  }
 }
 
 // Receipts: /record and /pitfall emit a custom message with the right type.
@@ -749,7 +818,30 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     if (registered["reference"].getArgumentCompletions?.("add ") !== null) {
       fail("reference: add offered unexpected completions");
     }
+    // 1b. /research
+    const researchEmpty = registered["research"].getArgumentCompletions?.("") ?? null;
+    if (!researchEmpty || researchEmpty.length !== 6) {
+      fail(`research: expected 6 subcommands for empty prefix, got ${researchEmpty?.length}`);
+    } else {
+      const labels = researchEmpty.map((c) => c.label).sort().join(",");
+      if (labels !== "add-fields,add-items,off,review,run,status") {
+        fail(`research: unexpected subcommand labels: ${labels}`);
+      }
+    }
 
+    const researchRev = registered["research"].getArgumentCompletions?.("rev") ?? null;
+    if (!researchRev || researchRev.length !== 1 || researchRev[0].label !== "review") {
+      fail("research: expected review completion for 'rev'");
+    }
+
+    const researchSubSpace = registered["research"].getArgumentCompletions?.("review ") ?? null;
+    if (!researchSubSpace || researchSubSpace.length < 2) {
+      fail(`research: expected research slugs for 'review ', got ${researchSubSpace?.length}`);
+    } else {
+      if (researchSubSpace[0].value !== "review other-slug") {
+        fail(`research: unexpected completion value for subcommand space: ${researchSubSpace[0].value}`);
+      }
+    }
     // 2. /research-deep
     const deepEmpty = registered["research-deep"].getArgumentCompletions?.("") ?? null;
     if (!deepEmpty || deepEmpty.length < 5) {

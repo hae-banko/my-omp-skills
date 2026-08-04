@@ -5,6 +5,7 @@
 
 declare module "@oh-my-pi/pi-tui" {
   export class Container {
+    children?: unknown[];
     addChild(child: unknown): void;
   }
   export class Text {

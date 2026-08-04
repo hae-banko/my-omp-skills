@@ -22,8 +22,24 @@ Anchor to the repo root (`git rev-parse --show-toplevel`). Locate the project un
 - Append new items to `outline.yaml`
 - Display to the user for confirmation
 - Avoid duplicates
-- Save the updated outline
+- Save the updated `outline.yaml`
+- Update `research.md` living outline:
+  - Update `counts.items` and `counts.pending` (and `updated` ISO timestamp) in YAML front-matter
+  - Append/update new items in the `## Items` table in `research.md`
+  - Save updated `research.md`
+
+### Step 4: Re-emit Research Review Message
+
+- Emit custom message to trigger/refresh the TUI Research Review Window:
+  ```ts
+  pi.sendMessage({
+    customType: "research-review",
+    display: true,
+    details: payload
+  })
+  ```
+  Where `payload` contains updated project details (`project`, `topic`, `status`, `phase`, `counts`, `execution`, `path`, `researchMdPath`, `modules`).
 
 ## Output
 
-Updated `<project>/.omp/knowledge/research/<date>_<topic_slug>/outline.yaml` (in-place modification; allowed while the project is in its outline phase).
+Updated `<project>/.omp/knowledge/research/<date>_<topic_slug>/outline.yaml` & `research.md` (in-place modification; allowed while the project is in its outline phase).

@@ -3,6 +3,31 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+## v0.19.0 — Plan-inspired TUI Research Review Window & living research.md outline
+
+- **Plan-inspired TUI Research Review Window (`src/research-renderer.ts`)**:
+
+  - Custom message renderer `research-review` that renders a framed,
+    76-column Unicode TUI review card displaying header status, Living Outline
+    preview (`research.md`), field framework definitions, strategy modules, and
+    execution scale settings, with interactive action options.
+- **Living Outline (`research.md`) & Command Bodies**:
+
+  - `commands/research/command.md`: writes living outline `research.md`
+    alongside `outline.yaml` and `fields.yaml`, and emits `research-review`
+    custom message.
+  - Subcommands: `/research review [slug]`, `/research add-items [slug]`,
+    `/research add-fields [slug]`, `/research status [slug]`,
+    `/research run [slug]`.
+  - `commands/research-add-items/` & `commands/research-add-fields/`:
+    update `research.md` and re-emit `research-review` custom message to
+    refresh the TUI draft review window preview.
+- **Autocomplete & TUI**:
+
+  - `/research` argument completions for `review`, `add-items`,
+    `add-fields`, `status`, `run`, `off`, and live research project
+    directory slugs.
+
 ## v0.18.0 — hidden workflow prompt execution for clean TUI transcripts
 
 - **Hidden Workflow Prompts**: Slash commands now dispatch heavy workflow
