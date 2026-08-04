@@ -601,7 +601,14 @@ export default function (pi: ExtensionApi): void {
             "\n",
           )}`;
         }
-        await pi.sendUserMessage(text);
+        pi.sendMessage({
+          customType: spec.customType ?? `command:${spec.name}`,
+          content: text,
+          display: false,
+          attribution: "user",
+        });
+        const userPrompt = `/${spec.name}${argText ? ` ${argText}` : ""}`;
+        await pi.sendUserMessage(userPrompt);
         if (spec.customType) {
           pi.sendMessage(
             {

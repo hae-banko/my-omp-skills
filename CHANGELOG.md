@@ -3,6 +3,22 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+## v0.18.0 — hidden workflow prompt execution for clean TUI transcripts
+
+- **Hidden Workflow Prompts**: Slash commands now dispatch heavy workflow
+  markdown bodies, argument substitutions, and companion file pointers as
+  hidden context messages (`display: false`, `attribution: "user"`). The
+  full workflow guidance reaches the model without polluting the visible
+  chat history.
+- **Clean TUI Transcript**: The visible user-attributed message in the TUI
+  transcript now shows only the clean command prompt (e.g.
+  `/grill-me my idea`), eliminating 100+ lines of prompt template bloat
+  while preserving full workflow guidance for the model. Every TUI
+  transcript now reads as the user typed it.
+- **Selftest Updates**: Updated `scripts/selftest.ts` assertions to verify
+  clean visible user prompts (`/${name}` exactly) and hidden workflow body
+  payloads (`display: false`). Companion-pointer, arg-passthrough, and
+  frontmatter-stripping checks now key off the hidden custom message.
 
 ## v0.17.0 — routinize OMFG-inspired enhancements & run_routine tool
 

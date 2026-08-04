@@ -155,7 +155,7 @@ const extras = Object.keys(registered).filter((n) => !(n in EXPECTED));
 if (extras.length > 0) fail(`unexpected commands registered: ${extras.join(", ")}`);
 console.log(`registered: ${Object.keys(registered).sort().join(", ")}`);
 
-// 2. Every command has a description and injects a non-empty body.
+// 2. Every command has a description, injects a hidden workflow body, and sends a clean user prompt.
 for (const name of Object.keys(registered)) {
   const def = registered[name];
   if (!def.description) fail(`${name}: missing description`);
@@ -163,25 +163,36 @@ for (const name of Object.keys(registered)) {
   // message — the model must not reply. They are checked for silence below.
   if (EXPECTED[name]?.silent) continue;
   sent.length = 0;
+  customMessages.length = 0;
   await def.handler("", {});
-  const injected = sent[0] ?? "";
-  if (injected.length === 0) fail(`${name}: empty injected body`);
+  const userPrompt = sent[0] ?? "";
+  if (userPrompt !== `/${name}`) fail(`${name}: expected clean user prompt "/${name}", got "${userPrompt}"`);
+  const hiddenMsg = customMessages.find((m) => m.display === false);
+  const injected = (hiddenMsg?.content as string) ?? "";
+  if (injected.length === 0) fail(`${name}: empty injected workflow body in custom message`);
   const expectedCompanions = EXPECTED[name]?.companions ?? 0;
   const hasPointer = injected.includes("Companion reference files");
   if (expectedCompanions > 0 && !hasPointer) fail(`${name}: companion pointer missing`);
   if (expectedCompanions === 0 && hasPointer) fail(`${name}: unexpected companion pointer`);
 }
 
-// 3. Argument passthrough: args land in the injected message.
+// 3. Argument passthrough: args land in the hidden workflow body and visible user prompt.
 sent.length = 0;
+customMessages.length = 0;
 await registered["omp-handoff"].handler("finish the auth flow", {});
-if (!sent[0]?.includes("finish the auth flow")) fail("omp-handoff: args not injected");
+if (!sent[0]?.includes("/omp-handoff finish the auth flow")) fail("omp-handoff: args not in visible prompt");
+const handoffHidden = customMessages.find((m) => m.display === false);
+if (!((handoffHidden?.content as string) ?? "").includes("finish the auth flow")) {
+  fail("omp-handoff: args not injected into hidden workflow body");
+}
 
 // 4. No command body is a frontmatter-stripping casualty.
 for (const name of Object.keys(registered)) {
-  sent.length = 0;
+  customMessages.length = 0;
   await registered[name].handler("", {});
-  if (sent[0]?.startsWith("---")) fail(`${name}: frontmatter not stripped`);
+  const hiddenMsg = customMessages.find((m) => m.display === false);
+  const injected = (hiddenMsg?.content as string) ?? "";
+  if (injected.startsWith("---")) fail(`${name}: frontmatter not stripped`);
 }
 
 // --- Bootstrap -------------------------------------------------------------
@@ -344,14 +355,16 @@ if (!renderers["hindsight"]) {
 // Receipts: /record and /pitfall emit a custom message with the right type.
 customMessages.length = 0;
 await registered["record"].handler("remember the DTCM thing", {});
-if (customMessages.length !== 1 || customMessages[0].customType !== "knowledge-record") {
+const recordReceipt = customMessages.find((m) => m.display === true);
+if (!recordReceipt || recordReceipt.customType !== "knowledge-record") {
   fail("record: receipt custom message missing or wrong type");
-} else if (!String(customMessages[0].content ?? "").includes("remember the DTCM thing")) {
+} else if (!String(recordReceipt.content ?? "").includes("remember the DTCM thing")) {
   fail("record: receipt content missing the finding");
 }
 customMessages.length = 0;
 await registered["pitfall"].handler("memory backend was off", {});
-if (customMessages.length !== 1 || customMessages[0].customType !== "knowledge-pitfall") {
+const pitfallReceipt = customMessages.find((m) => m.display === true);
+if (!pitfallReceipt || pitfallReceipt.customType !== "knowledge-pitfall") {
   fail("pitfall: receipt custom message missing or wrong type");
 }
 
