@@ -4,6 +4,42 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 
+## v0.16.0 — dynamic completions, actionable policy hints, docs overhaul
+
+- **Dynamic argument completions** across the user-invoked surface:
+  - `/reference` offers the four subcommands (`add`, `update`, `remove`,
+    `list`) when the prefix is empty, then narrowed subcommand-specific
+    arguments — `add` keeps the cursor for the URL, `update <name>` and
+    `remove <name>` enumerate the cloned reference names under
+    `.omp/references/`, `list` stays plain.
+  - `/research-deep` and `/research-report` offer dated research project
+    slugs from `.omp/knowledge/research/`. `/research-deep` additionally
+    lists the `small` / `medium` / `high` execution presets and accepts
+    `preset slug` (e.g. `small 2026-08-02_demo`); dated-name filter keeps
+    stray directories out of the picker. `/research-report` shows every
+    project, dated or not.
+  - `/record` and `/pitfall` offer `--recent` as the sole completion —
+    discoverable, terse, mirrors the existing option.
+  - `/triage` offers `--unlabeled` and `--needs-triage`.
+  - `/to-tickets` offers tracked markdown spec files under `.scratch/specs/`
+    and `docs/specs/`.
+  - The runtime contract `api.ts` gains `getArgumentCompletions?`; the
+    selftest exercises every picker (subcommand shape, prefix filtering,
+    `add` cursor, dated vs undated slugs, single-arg no-past-end).
+- **Actionable policy hints** (`src/policy.ts`): the blocked-edit reason
+  text now points the model at `/record <title>` (save a finding),
+  `/pitfall <description>` (capture the failure), the `knowledge_read` tool
+  (or `/record --recent`) to query past entries, and the add-a-correcting-
+  one rule for overwrites. Previously it only named `/record` and
+  `/pitfall`.
+- **Documentation overhaul** (`README.md`): prose counts updated to 25 slash
+  commands / 12 skills (matching the registered inventory); the `/hindsight`
+  configuration table documents every field in `~/.omp/hindsight.json`
+  (`name`, `nudge`, `leadIn`, `onMessage`, `offMessage`) with types, purpose,
+  and a worked example; a new "Deep Research internals" section documents
+  the `commands/research/modules/` strategy modules directory and how to
+  extend coverage without touching workflow code.
+
 ## v0.15.0 — deep research: OODA waves, presets, no batch approval
 
 Implements GitHub issues #2, #3, #4 — workflow-body changes (no code).

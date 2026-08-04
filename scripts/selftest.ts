@@ -630,6 +630,127 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
   }
 }
 
+// --- Command Argument Completions -------------------------------------------
+
+{
+  mkdirSync(join(fixtureRoot, ".omp", "references", "ref-a"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "references", "ref-b"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-02_deep-demo"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "other-slug"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".scratch", "specs"), { recursive: true });
+  mkdirSync(join(fixtureRoot, "docs", "specs"), { recursive: true });
+  writeFileSync(join(fixtureRoot, ".scratch", "specs", "spec-a.md"), "# Spec A");
+  writeFileSync(join(fixtureRoot, "docs", "specs", "spec-b.md"), "# Spec B");
+
+  const prevCwd = process.cwd();
+  process.chdir(fixtureRoot);
+  try {
+    // 1. /reference
+    const refSub = registered["reference"].getArgumentCompletions?.("") ?? null;
+    if (!refSub || refSub.length !== 4) {
+      fail("reference: expected 4 subcommands for empty prefix");
+    } else {
+      const labels = refSub.map((c) => c.label).sort().join(",");
+      if (labels !== "add,list,remove,update") fail(`reference: unexpected subcommand labels: ${labels}`);
+    }
+
+    const refUpdate = registered["reference"].getArgumentCompletions?.("update ") ?? null;
+    if (!refUpdate || refUpdate.length !== 2) {
+      fail("reference: expected 2 reference names for 'update '");
+    } else {
+      const labels = refUpdate.map((c) => c.label).sort().join(",");
+      if (labels !== "ref-a,ref-b") fail(`reference: unexpected update completion labels: ${labels}`);
+      if (refUpdate[0].value !== "update ref-a") fail(`reference: unexpected completion value: ${refUpdate[0].value}`);
+    }
+
+    const refRemoveFiltered = registered["reference"].getArgumentCompletions?.("remove ref-a") ?? null;
+    if (!refRemoveFiltered || refRemoveFiltered.length !== 1 || refRemoveFiltered[0].label !== "ref-a") {
+      fail("reference: remove prefix filtering failed");
+    }
+
+    if (registered["reference"].getArgumentCompletions?.("add ") !== null) {
+      fail("reference: add offered unexpected completions");
+    }
+
+    // 2. /research-deep
+    const deepEmpty = registered["research-deep"].getArgumentCompletions?.("") ?? null;
+    if (!deepEmpty || deepEmpty.length < 5) {
+      fail("research-deep: expected presets and dated research slugs for empty prefix");
+    } else {
+      const labels = deepEmpty.map((c) => c.label);
+      if (!labels.includes("small") || !labels.includes("medium") || !labels.includes("high")) {
+        fail("research-deep: missing preset completions");
+      }
+      if (!labels.includes("2026-08-01_demo") || !labels.includes("2026-08-02_deep-demo")) {
+        fail("research-deep: missing dated research slug completions");
+      }
+      if (labels.includes("other-slug")) {
+        fail("research-deep: non-dated research slug was not filtered out");
+      }
+    }
+
+    const deepPresetSpace = registered["research-deep"].getArgumentCompletions?.("small ") ?? null;
+    if (!deepPresetSpace || deepPresetSpace.length !== 2) {
+      fail("research-deep: expected 2 research slugs for 'small '");
+    } else {
+      if (deepPresetSpace[0].value !== "small 2026-08-02_deep-demo") {
+        fail(`research-deep: unexpected completion value for preset space: ${deepPresetSpace[0].value}`);
+      }
+    }
+
+    // 3. /research-report
+    const reportEmpty = registered["research-report"].getArgumentCompletions?.("") ?? null;
+    if (!reportEmpty || reportEmpty.length !== 3) {
+      fail("research-report: expected all research slugs including non-dated for empty prefix");
+    } else {
+      const labels = reportEmpty.map((c) => c.label).sort().join(",");
+      if (!labels.includes("other-slug")) fail("research-report: expected all research slugs");
+    }
+
+    if (registered["research-report"].getArgumentCompletions?.("slug ") !== null) {
+      fail("research-report: completions offered past single slug argument");
+    }
+
+    // 4. /record
+    const recordEmpty = registered["record"].getArgumentCompletions?.("") ?? null;
+    if (!recordEmpty || recordEmpty.length !== 1 || recordEmpty[0].label !== "--recent") {
+      fail("record: expected --recent completion");
+    }
+    if (registered["record"].getArgumentCompletions?.("--recent ") !== null) {
+      fail("record: completions offered past --recent");
+    }
+
+    // 5. /pitfall
+    const pitfallEmpty = registered["pitfall"].getArgumentCompletions?.("") ?? null;
+    if (!pitfallEmpty || pitfallEmpty.length !== 1 || pitfallEmpty[0].label !== "--recent") {
+      fail("pitfall: expected --recent completion");
+    }
+
+    // 6. /triage
+    const triageEmpty = registered["triage"].getArgumentCompletions?.("") ?? null;
+    if (!triageEmpty || triageEmpty.length !== 2) {
+      fail("triage: expected --unlabeled and --needs-triage completions");
+    } else {
+      const labels = triageEmpty.map((c) => c.label).sort().join(",");
+      if (labels !== "--needs-triage,--unlabeled") fail(`triage: unexpected completion labels: ${labels}`);
+    }
+
+    // 7. /to-tickets
+    const toTicketsEmpty = registered["to-tickets"].getArgumentCompletions?.("") ?? null;
+    if (!toTicketsEmpty || toTicketsEmpty.length !== 2) {
+      fail("to-tickets: expected spec markdown files");
+    } else {
+      const values = toTicketsEmpty.map((c) => c.value).sort().join(",");
+      if (values !== ".scratch/specs/spec-a.md,docs/specs/spec-b.md") {
+        fail(`to-tickets: unexpected spec file completion values: ${values}`);
+      }
+    }
+  } finally {
+    process.chdir(prevCwd);
+  }
+}
+
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

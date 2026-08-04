@@ -12,8 +12,8 @@
 // omp ExtensionAPI this package uses; the runtime passes the full API, which
 // is a structural superset, so this remains assignable both ways.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
 import { installHerdrTools } from "./herdr-tools.ts";
@@ -28,6 +28,22 @@ import { installKnowledgeTool } from "./knowledge-tool.ts";
 import { installPolicy } from "./policy.ts";
 
 const ROOT = join(import.meta.dirname, "..");
+function findRepoRoot(startDir: string = process.cwd()): string {
+  let dir = startDir;
+  for (;;) {
+    if (
+      existsSync(join(dir, ".git")) ||
+      existsSync(join(dir, ".omp")) ||
+      existsSync(join(dir, ".scratch"))
+    ) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return startDir;
+    dir = parent;
+  }
+}
+
 
 interface CommandSpec {
   name: string;
@@ -75,14 +91,91 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "research-deep",
-    description: "Phase 2 of deep research: research each outline item with parallel background agents, outputting validated JSON per item.",
+    description:
+      "Phase 2 of deep research ([preset] [slug]): research each outline item with parallel background agents, outputting validated JSON per item.",
     bodyPath: "commands/research-deep/command.md",
     companions: RESEARCH_ASSETS,
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const presets = [
+        { value: "small", label: "small", description: "Execution preset: 1-2 parallel agents per wave" },
+        { value: "medium", label: "medium", description: "Execution preset: 3-5 parallel agents per wave" },
+        { value: "high", label: "high", description: "Execution preset: max parallel agents per wave" },
+      ];
+
+      const root = findRepoRoot();
+      const researchDir = join(root, ".omp", "knowledge", "research");
+      const slugs =
+        existsSync(researchDir) && statSync(researchDir).isDirectory()
+          ? readdirSync(researchDir)
+              .filter(
+                (name) =>
+                  statSync(join(researchDir, name)).isDirectory() &&
+                  /^\d{4}-\d{2}-\d{2}_/.test(name),
+              )
+              .sort()
+              .reverse()
+          : [];
+
+      const slugOptions = slugs.map((slug) => ({
+        value: slug,
+        label: slug,
+        description: "Research project directory",
+      }));
+
+      const lower = argumentPrefix.toLowerCase();
+      if (!argumentPrefix.includes(" ")) {
+        const matches = [...presets, ...slugOptions].filter(
+          (o) => o.label.toLowerCase().startsWith(lower) || o.value.toLowerCase().startsWith(lower),
+        );
+        return matches.length > 0 ? matches : null;
+      }
+
+      const spaceIdx = argumentPrefix.indexOf(" ");
+      const firstWord = lower.slice(0, spaceIdx);
+      const rest = lower.slice(spaceIdx + 1).trimStart();
+
+      if (["small", "medium", "high"].includes(firstWord)) {
+        const matches = slugs
+          .filter((slug) => slug.toLowerCase().startsWith(rest))
+          .map((slug) => ({
+            value: `${firstWord} ${slug}`,
+            label: slug,
+            description: "Research project directory",
+          }));
+        return matches.length > 0 ? matches : null;
+      }
+
+      return null;
+    },
   },
   {
     name: "research-report",
-    description: "Phase 3 of deep research: convert the deep-research JSON results into a markdown report with table of contents.",
+    description:
+      "Phase 3 of deep research ([slug]): convert the deep-research JSON results into a markdown report with table of contents.",
     bodyPath: "commands/research-report/command.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+
+      const root = findRepoRoot();
+      const researchDir = join(root, ".omp", "knowledge", "research");
+      if (!existsSync(researchDir) || !statSync(researchDir).isDirectory()) return null;
+
+      const slugs = readdirSync(researchDir)
+        .filter((name) => statSync(join(researchDir, name)).isDirectory())
+        .sort()
+        .reverse();
+
+      const lower = argumentPrefix.toLowerCase();
+      const matches = slugs
+        .filter((slug) => slug.toLowerCase().startsWith(lower))
+        .map((slug) => ({
+          value: slug,
+          label: slug,
+          description: "Research project directory",
+        }));
+
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "ask-me",
@@ -101,12 +194,23 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "triage",
-    description: "Move issues and external PRs through a state machine of triage roles — categorise, verify, grill if needed, and write agent-ready briefs.",
+    description:
+      "Move issues and external PRs through a state machine of triage roles [--unlabeled | --needs-triage] — categorise, verify, grill if needed, and write agent-ready briefs.",
     bodyPath: "commands/triage/command.md",
     companions: [
       "commands/triage/AGENT-BRIEF.md",
       "commands/triage/OUT-OF-SCOPE.md",
     ],
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const lower = argumentPrefix.toLowerCase();
+      const options = [
+        { value: "--unlabeled", label: "--unlabeled", description: "Show unlabeled items needing triage" },
+        { value: "--needs-triage", label: "--needs-triage", description: "Show items in needs-triage state" },
+      ];
+      const matches = options.filter((o) => o.label.startsWith(lower));
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "improve-codebase-architecture",
@@ -133,8 +237,52 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "to-tickets",
-    description: "Break a plan, spec, or conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker.",
+    description:
+      "Break a plan, spec, or conversation into a set of tracer-bullet tickets ([spec.md]), each declaring its blocking edges, published to the configured tracker.",
     bodyPath: "commands/to-tickets.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const root = findRepoRoot();
+      const dirs = [
+        join(root, ".scratch", "specs"),
+        join(root, "docs", "specs"),
+      ];
+      const files: string[] = [];
+
+      for (const dir of dirs) {
+        if (existsSync(dir) && statSync(dir).isDirectory()) {
+          const collect = (currentDir: string) => {
+            for (const entry of readdirSync(currentDir)) {
+              const fullPath = join(currentDir, entry);
+              const stat = statSync(fullPath);
+              if (stat.isDirectory()) {
+                collect(fullPath);
+              } else if (stat.isFile() && entry.endsWith(".md")) {
+                files.push(relative(root, fullPath));
+              }
+            }
+          };
+          collect(dir);
+        }
+      }
+
+      files.sort();
+
+      const lower = argumentPrefix.toLowerCase();
+      const matches = files
+        .filter(
+          (file) =>
+            file.toLowerCase().startsWith(lower) ||
+            basename(file).toLowerCase().startsWith(lower),
+        )
+        .map((file) => ({
+          value: file,
+          label: file,
+          description: "Spec markdown file",
+        }));
+
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "implement",
@@ -158,8 +306,47 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "reference",
-    description: "Manage the repo's reference corpus at .omp/references/ — add <url> (clone), update <name> (pull), remove <name>, list. User-invoked: acquisition happens only when you type it.",
+    description:
+      "Manage the repo's reference corpus at .omp/references/ — add <url> | update <name> | remove <name> | list. User-invoked: acquisition happens only when you type it.",
     bodyPath: "commands/reference.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const lower = argumentPrefix.toLowerCase();
+      const options = [
+        { value: "add ", label: "add", description: "Add reference repository from <url>" },
+        { value: "update ", label: "update", description: "Update reference repository by <name>" },
+        { value: "remove ", label: "remove", description: "Remove reference repository by <name>" },
+        { value: "list", label: "list", description: "List installed reference repositories" },
+      ];
+
+      if (!argumentPrefix.includes(" ")) {
+        const matches = options.filter((o) => o.label.startsWith(lower));
+        return matches.length > 0 ? matches : null;
+      }
+
+      const spaceIdx = argumentPrefix.indexOf(" ");
+      const sub = lower.slice(0, spaceIdx);
+      const rest = lower.slice(spaceIdx + 1).trimStart();
+
+      if (sub === "update" || sub === "remove") {
+        const root = findRepoRoot();
+        const dir = join(root, ".omp", "references");
+        if (!existsSync(dir) || !statSync(dir).isDirectory()) return null;
+
+        const dirs = readdirSync(dir)
+          .filter((name) => statSync(join(dir, name)).isDirectory())
+          .sort();
+        const matches = dirs
+          .filter((name) => name.toLowerCase().startsWith(rest))
+          .map((name) => ({
+            value: `${sub} ${name}`,
+            label: name,
+            description: sub === "update" ? "Update reference repository" : "Remove reference repository",
+          }));
+        return matches.length > 0 ? matches : null;
+      }
+
+      return null;
+    },
   },
   {
     name: "routinize",
@@ -240,17 +427,47 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "record",
-    description: "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/. Supports --recent to list entries.",
+    description:
+      "Record a durable finding (lesson, audit, or note) into the repo's local knowledge base at .omp/knowledge/ [<finding> | --recent].",
     bodyPath: "commands/record/command.md",
     companions: ["commands/record/RECORD-FORMAT.md"],
     customType: "knowledge-record",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const lower = argumentPrefix.toLowerCase();
+      if ("--recent".startsWith(lower)) {
+        return [
+          {
+            value: "--recent",
+            label: "--recent",
+            description: "List recent record entries",
+          },
+        ];
+      }
+      return null;
+    },
   },
   {
     name: "pitfall",
-    description: "Something just went wrong — instantly capture the pitfall into the repo's knowledge base (.omp/knowledge/) before the context fades. Supports --recent.",
+    description:
+      "Something just went wrong — instantly capture the pitfall into the repo's knowledge base (.omp/knowledge/) [<pitfall> | --recent].",
     bodyPath: "commands/pitfall/command.md",
     companions: ["commands/record/RECORD-FORMAT.md"],
     customType: "knowledge-pitfall",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const lower = argumentPrefix.toLowerCase();
+      if ("--recent".startsWith(lower)) {
+        return [
+          {
+            value: "--recent",
+            label: "--recent",
+            description: "List recent pitfall entries",
+          },
+        ];
+      }
+      return null;
+    },
   },
   {
     name: "teach",

@@ -5,7 +5,7 @@
 </p>
 
 An extension package for the oh-my-pi (omp) agent harness that turns a plain
-repo into a workflow engine: 23 user-invoked slash commands and 11
+repo into a workflow engine: 25 user-invoked slash commands and 12
 model-invoked skills covering planning, research, review, and learning. Ideas
 get grilled before they get built, specs become tracer-bullet tickets, and
 tickets get implemented test-first with a two-axis code review before commit.
@@ -113,7 +113,7 @@ suggest the right one when your situation fits.
 
 ## Skills
 
-The 11 skills are model-invoked: omp loads one automatically when the
+The 12 skills are model-invoked: omp loads one automatically when the
 situation fits, so you don't type anything. Exception: `using-git-worktrees`
 runs only when you ask.
 
@@ -152,11 +152,42 @@ correcting entry rather than editing the old one.
 
 ## Configuration
 
-`/hindsight` is configurable via `~/.omp/hindsight.json` — set the mode name,
-the reflection prompt, and the revision lead-in phrase. Any invocation of
-`/hindsight` re-reads the file; missing or invalid fields fall back to the
-defaults. The toggle itself is silent — a receipt card and notification
-appear, the model does not reply.
+`/hindsight` is configurable via `~/.omp/hindsight.json`. The file is a single
+JSON object whose every field is optional — missing or invalid fields fall
+back to the defaults, and any invocation of `/hindsight` re-reads the file so
+edits take effect without restarting omp. The toggle itself is silent: a
+receipt card and notification appear, the model does not reply.
+
+Supported fields:
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `name` | string | Human-readable label for this configuration. Shown in the receipt card and logs so you can tell which preset is active (e.g. `"strict"`, `"exploratory"`). |
+| `nudge` | string | The reflection prompt passed to the hidden settle-time pass. Replace this to redirect what the model reconsiders — design-level changes, tone, scope, alternative approaches. |
+| `leadIn` | string | The phrase prepended to the model's hidden reasoning so it knows it is in the hindsight pass (e.g. `"Reconsider your last turn…"`). Change this only if you are also rewriting the upstream expectations that look for the prefix. |
+| `onMessage` | string | The receipt text shown when hindsight is enabled. Set to `""` to suppress the receipt entirely. |
+| `offMessage` | string | The receipt text shown when hindsight is disabled. Set to `""` to suppress the receipt entirely. |
+
+Example:
+
+```json
+{
+  "name": "strict",
+  "nudge": "Before settling, re-read your last turn and identify any design-level change that would simplify the approach. Prefer deletion over addition.",
+  "leadIn": "Reconsider your last turn in light of the tool results.",
+  "onMessage": "Hindsight: on (strict)",
+  "offMessage": "Hindsight: off"
+}
+```
+
+## Deep Research internals
+
+`/research-deep` dispatches per-item searches through strategy modules under
+`commands/research/modules/` (`academic-papers.md`, `github-debug.md`,
+`stackoverflow.md`, `general-web.md`, `chinese-tech.md`). Each module is a
+short brief telling the background agent which sources to favour and how to
+phrase queries; the default dispatch picks by item type. Add or edit modules
+there to extend coverage without touching the workflow code.
 
 ## Updating & troubleshooting
 

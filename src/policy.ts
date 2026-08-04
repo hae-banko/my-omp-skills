@@ -9,8 +9,11 @@ import { isAbsolute, normalize, resolve, sep } from "node:path";
 import type { ExtensionApi, ToolCallEvent, ToolCallEventResult } from "./api.ts";
 
 const KB_REASON =
-  "Blocked: the knowledge base is append-only. Records and pitfalls are never edited in place — " +
-  "a new finding is a new file. Use the /record or /pitfall command (user-invoked slash command) instead.";
+  "Blocked: the knowledge base is append-only — records, pitfalls, and INDEX.md are never edited in place. " +
+  "A new finding is a new file. " +
+  "Save what you learned with /record <title>, capture the failure with /pitfall <description>, " +
+  "or query past entries with the knowledge_read tool (or /record --recent). " +
+  "To overwrite an outdated entry, add a correcting one instead of editing the old file.";
 
 /** Segments of a tool-call path below `.omp/knowledge/`, or null when outside the KB. */
 function knowledgeSubpath(cwd: string, raw: unknown): string[] | null {
