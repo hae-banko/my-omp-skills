@@ -2,7 +2,11 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
-this changelog.
+## v0.25.2 — Git hygiene: untrack .omp/ runtime directory
+
+- **Untrack `.omp/` from git index**: removed `git ls-files .omp` content from the index (`git rm -r --cached .omp/`) so local runtime session knowledge, audits, research files, and reference clones never leak into the remote repository. Local files on disk are preserved.
+- **Updated `.gitignore`**: now also excludes `.omp/` and `.scratch/` from tracking, alongside the existing `node_modules/`, `dist/`, and `*.log` entries.
+
 ## v0.25.0 — TUI Telemetry Cards & Autocomplete Overhaul
 ## v0.25.1 — Developer-focused README overhaul
 

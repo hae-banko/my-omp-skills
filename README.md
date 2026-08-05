@@ -45,12 +45,12 @@ graph TD
 
 ## Quick Install
 
-Requires an SSH key with access to the private repository. Latest release: **v0.25.1**.
+Requires an SSH key with access to the private repository. Latest release: **v0.25.2**.
 
-1. **Install pinned release v0.25.1**:
+1. **Install pinned release v0.25.2**:
 
    ```bash
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.1
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.2
    ```
 
 2. **Maximum Immutability (Commit SHA)**:
@@ -224,11 +224,11 @@ Configure `/hindsight` via `~/.omp/hindsight.json`. All fields are optional:
 
 All plugin management goes through `omp plugin`:
 
-1. **View Installed Plugins**: `omp plugin list` shows `my-omp-skills@v0.25.1`.
+1. **View Installed Plugins**: `omp plugin list` shows `my-omp-skills@v0.25.2`.
 2. **Check Tagged Releases**: `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Upgrade Version**: Reinstall pinned to the target release tag:
    ```bash
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.1
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.2
    ```
 4. **Fix Cached Mirror Mismatches**: If Bun's cache predates a new tag:
    ```bash
