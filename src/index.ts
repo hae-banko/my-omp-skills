@@ -33,6 +33,11 @@ import {
   installResearchReviewCardRenderer,
   installResearchWaveProgressRenderer,
 } from "./research-renderer.ts";
+import {
+  installAuditCardRenderer,
+  installTicketBreakdownRenderer,
+  installTriageStatusRenderer,
+} from "./telemetry-renderer.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
@@ -62,6 +67,61 @@ function findRepoRoot(startDir: string = process.cwd()): string {
   }
 }
 
+function getSpecAndFeatureCompletions(argumentPrefix: string): Array<{ value: string; label: string; description?: string }> | null {
+  if (argumentPrefix.includes(" ")) return null;
+  const root = findRepoRoot();
+  const options: Array<{ value: string; label: string; description?: string }> = [];
+  const addedValues = new Set<string>();
+
+  const scanDir = (baseDir: string, relBase: string) => {
+    if (!existsSync(baseDir)) return;
+    try {
+      const entries = readdirSync(baseDir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = join(baseDir, entry.name);
+        const relPath = join(relBase, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name.startsWith(".")) continue;
+          if (!addedValues.has(entry.name)) {
+            addedValues.add(entry.name);
+            options.push({
+              value: entry.name,
+              label: entry.name,
+              description: `Feature directory under ${relBase}/`,
+            });
+          }
+          scanDir(fullPath, relPath);
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          if (!addedValues.has(relPath)) {
+            addedValues.add(relPath);
+            options.push({
+              value: relPath,
+              label: relPath,
+              description: "Spec markdown file",
+            });
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  scanDir(join(root, ".scratch"), ".scratch");
+  scanDir(join(root, "docs"), "docs");
+
+  options.sort((a, b) => a.label.localeCompare(b.label));
+
+  const lower = argumentPrefix.toLowerCase();
+  const matches = options.filter(
+    (o) =>
+      o.label.toLowerCase().startsWith(lower) ||
+      o.label.toLowerCase().includes(lower) ||
+      o.value.toLowerCase().startsWith(lower),
+  );
+
+  return matches.length > 0 ? matches : null;
+}
 
 interface CommandSpec {
   name: string;
@@ -370,6 +430,7 @@ const COMMANDS: CommandSpec[] = [
       "Perform an independent audit of a codebase area, architecture, or idea into a formal report under .omp/audits/.",
     bodyPath: "commands/audit/command.md",
     companions: ["commands/audit/AUDIT-FORMAT.md"],
+    customType: "audit-card",
     getArgumentCompletions: (argumentPrefix: string) => {
       const root = findRepoRoot();
       const auditsDir = join(root, ".omp", "audits");
@@ -395,55 +456,89 @@ const COMMANDS: CommandSpec[] = [
           // ignore read error
         }
       }
+      const lower = argumentPrefix.toLowerCase();
+      const subcommands: Array<{ value: string; label: string; description?: string }> = [
+        { value: "status", label: "status", description: "Show active audit status" },
+        { value: "list", label: "list", description: "List all audit reports" },
+        { value: "view ", label: "view", description: "View audit report by slug" },
+        { value: "subtopics ", label: "subtopics", description: "List or view audit subtopics" },
+        { value: "--recent", label: "--recent", description: "List recent audit reports" },
+        { value: "--version ", label: "--version", description: "Specify or filter by audit version" },
+      ];
 
-      const tokens = argumentPrefix.split(/\s+/);
-      const lastToken = tokens[tokens.length - 1] ?? "";
-      const lower = lastToken.toLowerCase();
-
-      const options: Array<{ value: string; label: string; description?: string }> = [];
-
-      if ("--recent".startsWith(lower)) {
-        options.push({
-          value: "--recent",
-          label: "--recent",
-          description: "List recent audit reports",
-        });
+      if (!argumentPrefix.includes(" ")) {
+        const slugOptions = slugs.map((slug) => ({
+          value: slug,
+          label: slug,
+          description: "Existing audit report slug",
+        }));
+        const allOptions = [...subcommands, ...slugOptions];
+        const matches = allOptions.filter(
+          (o) =>
+            o.label.toLowerCase().startsWith(lower) ||
+            o.value.toLowerCase().startsWith(lower) ||
+            (o.description === "Existing audit report slug" && o.label.toLowerCase().includes(lower)),
+        );
+        return matches.length > 0 ? matches : null;
       }
-      if ("--version".startsWith(lower)) {
-        options.push({
-          value: "--version",
-          label: "--version",
-          description: "Specify or filter by audit version",
-        });
-      }
 
-      for (const slug of slugs) {
-        if (slug.toLowerCase().startsWith(lower) || slug.toLowerCase().includes(lower)) {
-          options.push({
-            value: slug,
+      const spaceIdx = argumentPrefix.indexOf(" ");
+      const sub = lower.slice(0, spaceIdx);
+      const rest = lower.slice(spaceIdx + 1).trimStart();
+
+      if (["view", "subtopics", "status", "--version"].includes(sub)) {
+        const matches = slugs
+          .filter((slug) => slug.toLowerCase().startsWith(rest) || slug.toLowerCase().includes(rest))
+          .map((slug) => ({
+            value: `${sub} ${slug}`,
             label: slug,
             description: "Existing audit report slug",
-          });
-        }
+          }));
+        return matches.length > 0 ? matches : null;
       }
 
-      return options.length > 0 ? options : null;
+      return null;
     },
   },
   {
     name: "ask-me",
     description: "Ask which command or flow fits your situation. A router over the commands in this package.",
     bodyPath: "commands/ask-me.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const lower = argumentPrefix.toLowerCase();
+      const categories: Array<{ value: string; label: string; description?: string }> = [
+        { value: "plan", label: "plan", description: "Planning & architecture workflows" },
+        { value: "ship", label: "ship", description: "Implementation & execution workflows" },
+        { value: "research", label: "research", description: "Research & investigation workflows" },
+        { value: "knowledge", label: "knowledge", description: "Knowledge base & learning workflows" },
+        { value: "upkeep", label: "upkeep", description: "Maintenance, setup & governance workflows" },
+      ];
+
+      const commandOptions = COMMANDS.map((c) => ({
+        value: c.name,
+        label: c.name,
+        description: c.description,
+      }));
+
+      const all = [...categories, ...commandOptions];
+      const matches = all.filter(
+        (o) => o.label.toLowerCase().startsWith(lower) || o.value.toLowerCase().startsWith(lower),
+      );
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "grill-me",
     description: "A relentless interview to sharpen a plan or design.",
     bodyPath: "commands/grill-me.md",
+    getArgumentCompletions: (argumentPrefix: string) => getSpecAndFeatureCompletions(argumentPrefix),
   },
   {
     name: "grill-with-docs",
     description: "A relentless interview to sharpen a plan or design, which also creates docs (ADRs and glossary) as we go.",
     bodyPath: "commands/grill-with-docs.md",
+    getArgumentCompletions: (argumentPrefix: string) => getSpecAndFeatureCompletions(argumentPrefix),
   },
   {
     name: "triage",
@@ -454,6 +549,7 @@ const COMMANDS: CommandSpec[] = [
       "commands/triage/AGENT-BRIEF.md",
       "commands/triage/OUT-OF-SCOPE.md",
     ],
+    customType: "triage-status",
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
       const lower = argumentPrefix.toLowerCase();
@@ -482,17 +578,94 @@ const COMMANDS: CommandSpec[] = [
       "commands/setup/triage-labels.md",
       "commands/setup/domain.md",
     ],
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const lower = argumentPrefix.toLowerCase();
+      const targets = [
+        { value: "local", label: "local", description: "Configure local Markdown issue tracker (.scratch/)" },
+        { value: "github", label: "github", description: "Configure GitHub Issues integration" },
+        { value: "gitlab", label: "gitlab", description: "Configure GitLab Issues integration" },
+        { value: "labels", label: "labels", description: "Configure triage label vocabulary" },
+        { value: "domain", label: "domain", description: "Configure domain documentation layout" },
+      ];
+      const matches = targets.filter((t) => t.label.toLowerCase().startsWith(lower));
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "to-spec",
     description: "Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.",
     bodyPath: "commands/to-spec.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const root = findRepoRoot();
+      const dirs = [
+        join(root, ".scratch", "specs"),
+        join(root, "docs", "specs"),
+      ];
+      const files: string[] = [];
+
+      for (const dir of dirs) {
+        const collect = (currentDir: string) => {
+          try {
+            const entries = readdirSync(currentDir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = join(currentDir, entry.name);
+              if (entry.isDirectory()) {
+                collect(fullPath);
+              } else if (entry.isFile() && entry.name.endsWith(".md")) {
+                files.push(relative(root, fullPath));
+              }
+            }
+          } catch {
+            // ignore missing dirs
+          }
+        };
+        collect(dir);
+      }
+
+      const scratchDir = join(root, ".scratch");
+      if (existsSync(scratchDir)) {
+        try {
+          const entries = readdirSync(scratchDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory() && entry.name !== "specs" && !entry.name.startsWith(".")) {
+              const specFile = join(scratchDir, entry.name, "spec.md");
+              if (existsSync(specFile)) {
+                files.push(relative(root, specFile));
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      files.sort();
+
+      const lower = argumentPrefix.toLowerCase();
+      const matches = files
+        .filter(
+          (file) =>
+            file.toLowerCase().startsWith(lower) ||
+            file.toLowerCase().includes(lower) ||
+            basename(file).toLowerCase().startsWith(lower),
+        )
+        .map((file) => ({
+          value: file,
+          label: file,
+          description: "Feature spec path",
+        }));
+
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "to-tickets",
     description:
       "Break a plan, spec, or conversation into a set of tracer-bullet tickets ([spec.md]), each declaring its blocking edges, published to the configured tracker.",
     bodyPath: "commands/to-tickets.md",
+    customType: "ticket-breakdown",
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
       const root = findRepoRoot();
@@ -543,11 +716,112 @@ const COMMANDS: CommandSpec[] = [
     name: "implement",
     description: "Build the work described by a spec or set of tickets, driving tdd at pre-agreed seams and closing out with code-review before committing.",
     bodyPath: "commands/implement.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
+      const root = findRepoRoot();
+      const files: string[] = [];
+
+      const collectMdFiles = (currentDir: string) => {
+        try {
+          const entries = readdirSync(currentDir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = join(currentDir, entry.name);
+            if (entry.isDirectory()) {
+              if (entry.name.startsWith(".")) continue;
+              collectMdFiles(fullPath);
+            } else if (entry.isFile() && entry.name.endsWith(".md")) {
+              files.push(relative(root, fullPath));
+            }
+          }
+        } catch {
+          // ignore missing dirs
+        }
+      };
+
+      const scratchDir = join(root, ".scratch");
+      const docsSpecsDir = join(root, "docs", "specs");
+
+      if (existsSync(scratchDir)) collectMdFiles(scratchDir);
+      if (existsSync(docsSpecsDir)) collectMdFiles(docsSpecsDir);
+
+      const uniqueFiles = Array.from(new Set(files)).sort();
+
+      const lower = argumentPrefix.toLowerCase();
+      const matches = uniqueFiles
+        .filter(
+          (file) =>
+            file.toLowerCase().startsWith(lower) ||
+            file.toLowerCase().includes(lower) ||
+            basename(file).toLowerCase().startsWith(lower),
+        )
+        .map((file) => ({
+          value: file,
+          label: file,
+          description: file.includes("/issues/") ? "Issue file path" : "Ticket / spec file path",
+        }));
+
+      return matches.length > 0 ? matches : null;
+    },
   },
   {
     name: "wayfinder",
     description: "Plan a huge chunk of work — more than one session can hold — as a shared map of decision tickets on the issue tracker, and resolve them one at a time until the way is clear.",
     bodyPath: "commands/wayfinder.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const lower = argumentPrefix.toLowerCase();
+      const subcommands = [
+        { value: "status", label: "status", description: "Show wayfinding map status and active frontier" },
+        { value: "map", label: "map", description: "Display the decision map" },
+        { value: "list", label: "list", description: "List decision tickets and questions" },
+        { value: "resolve ", label: "resolve", description: "Resolve a decision ticket" },
+      ];
+
+      if (!argumentPrefix.includes(" ")) {
+        const matches = subcommands.filter((sc) => sc.label.toLowerCase().startsWith(lower));
+        return matches.length > 0 ? matches : null;
+      }
+
+      const spaceIdx = argumentPrefix.indexOf(" ");
+      const sub = lower.slice(0, spaceIdx);
+      const rest = lower.slice(spaceIdx + 1).trimStart();
+
+      if (sub === "resolve") {
+        const root = findRepoRoot();
+        const scratchDir = join(root, ".scratch");
+        const files: string[] = [];
+        const collect = (currentDir: string) => {
+          try {
+            const entries = readdirSync(currentDir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = join(currentDir, entry.name);
+              if (entry.isDirectory()) {
+                if (!entry.name.startsWith(".")) collect(fullPath);
+              } else if (entry.isFile() && entry.name.endsWith(".md")) {
+                files.push(relative(root, fullPath));
+              }
+            }
+          } catch {
+            // ignore
+          }
+        };
+        if (existsSync(scratchDir)) collect(scratchDir);
+
+        const matches = files
+          .filter(
+            (file) =>
+              file.toLowerCase().includes(rest) ||
+              basename(file).toLowerCase().startsWith(rest),
+          )
+          .map((file) => ({
+            value: `resolve ${file}`,
+            label: file,
+            description: "Decision ticket file to resolve",
+          }));
+        return matches.length > 0 ? matches : null;
+      }
+
+      return null;
+    },
   },
   {
     name: "omp-handoff",
@@ -899,6 +1173,9 @@ export default function (pi: ExtensionApi): void {
   installResearchWaveProgressRenderer(pi);
   installResearchReportPreviewRenderer(pi);
   installResearchDashboardRenderer(pi);
+  installAuditCardRenderer(pi);
+  installTicketBreakdownRenderer(pi);
+  installTriageStatusRenderer(pi);
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));

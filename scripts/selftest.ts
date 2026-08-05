@@ -30,6 +30,14 @@ import {
   type ResearchReportPreviewPayload,
   type ResearchDashboardPayload,
 } from "../src/research-renderer.ts";
+import {
+  renderAuditCard,
+  renderTicketBreakdownCard,
+  renderTriageStatusCard,
+  type AuditCardPayload,
+  type TicketBreakdownPayload,
+  type TriageStatusPayload,
+} from "../src/telemetry-renderer.ts";
 
 interface HandlerContext {
   ui?: {
@@ -672,6 +680,120 @@ if (!renderers["research-dashboard"]) {
   }
 }
 
+if (!renderers["audit-card"]) {
+  fail("renderers: audit-card not registered");
+} else {
+  const auditPayload: AuditCardPayload = {
+    title: "Codebase Security Audit",
+    slug: "security-audit",
+    version: "v0.1.0",
+    status: "active",
+    root_report_path: ".omp/audits/security-audit/overview.md",
+    subtopics_count: 2,
+    latest_revision: "v0.1.0 (Initial draft)",
+  };
+  const card = renderAuditCard(auditPayload) as TuiContainer;
+  if (!(card instanceof TuiContainer)) {
+    fail("renderer: renderAuditCard did not return a Container");
+  }
+  const children = (card as unknown as { children: unknown[] }).children ?? [];
+  const texts = children
+    .map((c: unknown) => (c && typeof c === "object" && "text" in c && typeof c.text === "string" ? c.text : ""))
+    .join("\n");
+  if (!texts.includes("AUDIT REPORT")) fail("audit-card: output missing header");
+  if (!texts.includes("security-audit")) fail("audit-card: output missing slug");
+  if (!texts.includes("v0.1.0")) fail("audit-card: output missing version");
+  if (!texts.includes("active")) fail("audit-card: output missing status");
+  if (!texts.includes(".omp/audits/security-audit/overview.md")) fail("audit-card: output missing root report path");
+  if (!texts.includes("Subtopics Count: 2")) fail("audit-card: output missing subtopics count");
+  if (!texts.includes("Initial draft")) fail("audit-card: output missing latest revision");
+
+  const msgCard = renderers["audit-card"](
+    { customType: "audit-card", details: auditPayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered audit-card renderer did not return a Container");
+  }
+}
+
+if (!renderers["ticket-breakdown"]) {
+  fail("renderers: ticket-breakdown not registered");
+} else {
+  const ticketPayload: TicketBreakdownPayload = {
+    feature: "auth-flow",
+    ticket_count: 2,
+    tracker_path: ".scratch/auth-flow/issues/",
+    ready_status: "ready-for-agent",
+    tickets: [
+      { id: "01", title: "DB Schema", blocked_by: [] },
+      { id: "02", title: "API Handler", blocked_by: ["01"] },
+    ],
+  };
+  const card = renderTicketBreakdownCard(ticketPayload) as TuiContainer;
+  if (!(card instanceof TuiContainer)) {
+    fail("renderer: renderTicketBreakdownCard did not return a Container");
+  }
+  const children = (card as unknown as { children: unknown[] }).children ?? [];
+  const texts = children
+    .map((c: unknown) => (c && typeof c === "object" && "text" in c && typeof c.text === "string" ? c.text : ""))
+    .join("\n");
+  if (!texts.includes("TICKET BREAKDOWN")) fail("ticket-breakdown: output missing header");
+  if (!texts.includes(".scratch/auth-flow/issues/")) fail("ticket-breakdown: output missing tracker path");
+  if (!texts.includes("Ticket Count: 2")) fail("ticket-breakdown: output missing ticket count");
+  if (!texts.includes("ready-for-agent")) fail("ticket-breakdown: output missing ready status");
+  if (!texts.includes("Ticket 01 -> Ticket 02")) {
+    fail("ticket-breakdown: output missing blocking dependency arrow");
+  }
+
+  const msgCard = renderers["ticket-breakdown"](
+    { customType: "ticket-breakdown", details: ticketPayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered ticket-breakdown renderer did not return a Container");
+  }
+}
+
+if (!renderers["triage-status"]) {
+  fail("renderers: triage-status not registered");
+} else {
+  const triagePayload: TriageStatusPayload = {
+    total_items: 6,
+    backlog: {
+      unlabeled: 2,
+      needs_triage: 3,
+      agent_ready: 1,
+    },
+    next_action: "Categorize unlabeled issues",
+  };
+  const card = renderTriageStatusCard(triagePayload) as TuiContainer;
+  if (!(card instanceof TuiContainer)) {
+    fail("renderer: renderTriageStatusCard did not return a Container");
+  }
+  const children = (card as unknown as { children: unknown[] }).children ?? [];
+  const texts = children
+    .map((c: unknown) => (c && typeof c === "object" && "text" in c && typeof c.text === "string" ? c.text : ""))
+    .join("\n");
+  if (!texts.includes("TRIAGE STATUS")) fail("triage-status: output missing header");
+  if (!texts.includes("Total Items: 6")) fail("triage-status: output missing total items");
+  if (!texts.includes("unlabeled: 2")) fail("triage-status: output missing unlabeled count");
+  if (!texts.includes("needs-triage: 3")) fail("triage-status: output missing needs-triage count");
+  if (!texts.includes("agent-ready: 1")) fail("triage-status: output missing agent-ready count");
+  if (!texts.includes("Categorize unlabeled issues")) fail("triage-status: output missing next action");
+
+  const msgCard = renderers["triage-status"](
+    { customType: "triage-status", details: triagePayload },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(msgCard instanceof TuiContainer)) {
+    fail("renderer: registered triage-status renderer did not return a Container");
+  }
+}
+
 // Receipts: /record and /pitfall emit a custom message with the right type.
 customMessages.length = 0;
 await registered["record"].handler("remember the DTCM thing", {});
@@ -1077,8 +1199,17 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     }
     // 1b. /audit
     const auditEmpty = registered["audit"].getArgumentCompletions?.("") ?? null;
-    if (!auditEmpty || !auditEmpty.some((c) => c.label === "demo-audit") || !auditEmpty.some((c) => c.label === "complex-audit") || !auditEmpty.some((c) => c.label === "--recent")) {
-      fail("audit: expected demo-audit, complex-audit, and --recent completions for empty prefix");
+    if (
+      !auditEmpty ||
+      !auditEmpty.some((c) => c.label === "demo-audit") ||
+      !auditEmpty.some((c) => c.label === "complex-audit") ||
+      !auditEmpty.some((c) => c.label === "--recent") ||
+      !auditEmpty.some((c) => c.label === "status") ||
+      !auditEmpty.some((c) => c.label === "list") ||
+      !auditEmpty.some((c) => c.label === "view") ||
+      !auditEmpty.some((c) => c.label === "subtopics")
+    ) {
+      fail("audit: expected demo-audit, complex-audit, subcommands (status, list, view, subtopics), and --recent completions for empty prefix");
     }
     const auditFlags = registered["audit"].getArgumentCompletions?.("--") ?? null;
     if (!auditFlags || auditFlags.length !== 2 || !auditFlags.some((c) => c.label === "--recent") || !auditFlags.some((c) => c.label === "--version")) {
@@ -1088,6 +1219,7 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     if (!auditSlugMatch || !auditSlugMatch.some((c) => c.label === "demo-audit")) {
       fail("audit: expected demo-audit completion for prefix 'demo'");
     }
+
 
     // 1c. /research
     const researchEmpty = registered["research"].getArgumentCompletions?.("") ?? null;
@@ -1214,6 +1346,89 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     } else {
       if (routinizeRunFilter[0].value !== "run echo-test") {
         fail(`routinize: unexpected completion value for 'run echo': ${routinizeRunFilter[0].value}`);
+      }
+    }
+
+    // 9. /implement
+    const implementEmpty = registered["implement"].getArgumentCompletions?.("") ?? null;
+    if (!implementEmpty || implementEmpty.length < 2) {
+      fail("implement: expected ticket/spec markdown files for empty prefix");
+    } else {
+      const labels = implementEmpty.map((c) => c.label);
+      if (!labels.includes(".scratch/specs/spec-a.md") || !labels.includes("docs/specs/spec-b.md")) {
+        fail(`implement: missing expected markdown files (got: ${labels.join(",")})`);
+      }
+    }
+
+    // 10. /to-spec
+    const toSpecEmpty = registered["to-spec"].getArgumentCompletions?.("") ?? null;
+    if (!toSpecEmpty || toSpecEmpty.length < 2) {
+      fail("to-spec: expected spec markdown files for empty prefix");
+    } else {
+      const values = toSpecEmpty.map((c) => c.value).sort().join(",");
+      if (values !== ".scratch/specs/spec-a.md,docs/specs/spec-b.md") {
+        fail(`to-spec: unexpected spec file completion values: ${values}`);
+      }
+    }
+
+    // 11. /wayfinder
+    const wayfinderEmpty = registered["wayfinder"].getArgumentCompletions?.("") ?? null;
+    if (!wayfinderEmpty || wayfinderEmpty.length !== 4) {
+      fail("wayfinder: expected 4 subcommands (status, map, list, resolve) for empty prefix");
+    } else {
+      const labels = wayfinderEmpty.map((c) => c.label).sort().join(",");
+      if (labels !== "list,map,resolve,status") {
+        fail(`wayfinder: unexpected subcommand labels: ${labels}`);
+      }
+    }
+    const wayfinderRes = registered["wayfinder"].getArgumentCompletions?.("res") ?? null;
+    if (!wayfinderRes || wayfinderRes.length !== 1 || wayfinderRes[0].label !== "resolve") {
+      fail("wayfinder: expected resolve completion for 'res'");
+    }
+
+    // 12. /omp-setup
+    const setupEmpty = registered["omp-setup"].getArgumentCompletions?.("") ?? null;
+    if (!setupEmpty || setupEmpty.length !== 5) {
+      fail("omp-setup: expected 5 setup target completions for empty prefix");
+    } else {
+      const labels = setupEmpty.map((c) => c.label).sort().join(",");
+      if (labels !== "domain,github,gitlab,labels,local") {
+        fail(`omp-setup: unexpected setup target labels: ${labels}`);
+      }
+    }
+
+    // 13. /ask-me
+    const askMeEmpty = registered["ask-me"].getArgumentCompletions?.("") ?? null;
+    if (!askMeEmpty || askMeEmpty.length < 31) {
+      fail(`ask-me: expected 26 command names + 5 category keywords for empty prefix, got ${askMeEmpty?.length}`);
+    } else {
+      const labels = askMeEmpty.map((c) => c.label);
+      for (const cat of ["plan", "ship", "research", "knowledge", "upkeep"]) {
+        if (!labels.includes(cat)) fail(`ask-me: missing expected category keyword ${cat}`);
+      }
+      for (const cmd of ["audit", "implement", "to-spec", "wayfinder", "omp-setup"]) {
+        if (!labels.includes(cmd)) fail(`ask-me: missing expected command ${cmd}`);
+      }
+    }
+
+    // 14. /grill-me & /grill-with-docs
+    const grillMeEmpty = registered["grill-me"].getArgumentCompletions?.("") ?? null;
+    if (!grillMeEmpty || grillMeEmpty.length === 0) {
+      fail("grill-me: expected spec filenames / feature names for empty prefix");
+    } else {
+      const labels = grillMeEmpty.map((c) => c.label);
+      if (!labels.includes(".scratch/specs/spec-a.md") || !labels.includes("docs/specs/spec-b.md")) {
+        fail(`grill-me: missing expected spec file completions (got: ${labels.join(",")})`);
+      }
+    }
+
+    const grillDocsEmpty = registered["grill-with-docs"].getArgumentCompletions?.("") ?? null;
+    if (!grillDocsEmpty || grillDocsEmpty.length === 0) {
+      fail("grill-with-docs: expected spec filenames / feature names for empty prefix");
+    } else {
+      const labels = grillDocsEmpty.map((c) => c.label);
+      if (!labels.includes(".scratch/specs/spec-a.md") || !labels.includes("docs/specs/spec-b.md")) {
+        fail(`grill-with-docs: missing expected spec file completions (got: ${labels.join(",")})`);
       }
     }
   } finally {

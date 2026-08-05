@@ -102,3 +102,24 @@ Capture everything resolved during grilling under "established so far" so the wo
 ## Resuming a previous session
 
 If prior triage notes exist on the issue or PR, read them, check whether the reporter has answered any outstanding questions, and present an updated picture before continuing. Don't re-ask resolved questions.
+
+
+## Telemetry Card & Receipt
+
+Executing `/triage` emits the `triage-status` custom message (`customType: "triage-status"`):
+
+```ts
+pi.sendMessage({
+  customType: "triage-status",
+  display: true,
+  details: {
+    total_items: 5,
+    backlog: {
+      unlabeled: 2,
+      needs_triage: 2,
+      agent_ready: 1
+    },
+    next_action: "Review unlabeled issues"
+  }
+})
+```

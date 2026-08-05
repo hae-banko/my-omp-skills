@@ -95,3 +95,25 @@ The end-to-end behaviour this ticket makes work, from the user's perspective —
 </issue-template>
 
 In either form, avoid specific file paths or code snippets — they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+
+
+## Telemetry Card & Receipt
+
+Executing `/to-tickets` emits the `ticket-breakdown` custom message (`customType: "ticket-breakdown"`):
+
+```ts
+pi.sendMessage({
+  customType: "ticket-breakdown",
+  display: true,
+  details: {
+    feature: "<feature-slug>",
+    ticket_count: 2,
+    tracker_path: ".scratch/<feature-slug>/issues/",
+    ready_status: "ready-for-agent",
+    tickets: [
+      { id: "01", title: "Setup schema", blocked_by: [] },
+      { id: "02", title: "Implement API", blocked_by: ["01"] }
+    ]
+  }
+})
+```

@@ -3,6 +3,15 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+## v0.25.0 — TUI Telemetry Cards & Autocomplete Overhaul
+
+- **New TUI Telemetry Cards (`src/telemetry-renderer.ts`)**:
+  - `AuditCard` (`audit-card`): Displays audit title, slug, version (`v0.1.0`), status (`active`), root report path (`overview.md`), subtopics count, and latest revision.
+  - `TicketBreakdownCard` (`ticket-breakdown`): Emitted by `/to-tickets` / `/to-spec`. Displays ticket count, tracker path, blocking dependencies ($\text{Ticket 1} \rightarrow \text{Ticket 2}$), and readiness status.
+  - `TriageStatusCard` (`triage-status`): Emitted by `/triage`. Displays total backlog items, breakdown (`unlabeled`, `needs-triage`, `agent-ready`), and recommended next action.
+- **Autocomplete Overhaul**:
+  - Added rich argument completions for `/implement` (pending ticket files under `.scratch/` & `docs/`), `/to-spec` (spec files), `/wayfinder` (`status`, `map`, `list`, `resolve`), `/omp-setup` (`local`, `github`, `gitlab`, `labels`, `domain`), `/ask-me` (26 commands + category names), `/grill-me` & `/grill-with-docs` (feature spec names), and `/audit` (`status`, `list`, `view`, `subtopics`, `--recent`, `--version` + slugs).
+
 ## v0.24.0 — Audit topic hierarchies & overview.md index
 
 - **`overview.md` as Audit Root**: `.omp/audits/<slug>/overview.md` is now the primary root document, index, and executive summary for topic audits (with `report.md` preserved as a fallback alias).

@@ -60,3 +60,23 @@ If `/audit` is invoked as the sole purpose of the turn (e.g. wrapping up or perf
 3. **Compose Formal Report & Subtopics**: Format `overview.md` matching `AUDIT-FORMAT.md` with YAML frontmatter, all required sections, and relative links `[Subtopic Title](./subtopics/<subtopic-name>.md)` to subtopic breakdown files when auditing multi-component topics.
 4. **Write or Revise**: Save main report to `.omp/audits/<slug>/overview.md` (and subtopic files under `subtopics/`). When revising, bump the frontmatter `version` per SemVer policy, update `updated` date, update `## Revision History`, and optionally write snapshot to `.omp/audits/<slug>/archive/vX.Y.Z.md`.
 5. **Report Back**: Summarize the audit verdict and report path back to the user.
+
+## Telemetry Card & Receipt
+
+Executing `/audit` emits the `audit-card` custom message (`customType: "audit-card"`):
+
+```ts
+pi.sendMessage({
+  customType: "audit-card",
+  display: true,
+  details: {
+    title: "Audit: <slug>",
+    slug: "<slug>",
+    version: "v0.1.0",
+    status: "active",
+    root_report_path: ".omp/audits/<slug>/overview.md",
+    subtopics_count: 0,
+    latest_revision: "v0.1.0 (Initial draft)"
+  }
+})
+```
