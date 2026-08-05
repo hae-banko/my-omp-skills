@@ -3,10 +3,10 @@
 // walking up from cwd — no git subprocess, so it works in worktrees and in
 // plain directories alike.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 
-export type KnowledgeType = "index" | "records" | "pitfalls" | "research";
+export type KnowledgeType = "index" | "records" | "pitfalls" | "research" | "audits";
 
 export interface KnowledgeQuery {
   type: KnowledgeType;
@@ -33,8 +33,12 @@ export function findKnowledgeRoot(startDir: string): string | null {
   if (cached !== undefined) return cached;
   let dir = startDir;
   for (;;) {
-    const candidate = join(dir, ".omp", "knowledge");
-    if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+    const candidateKb = join(dir, ".omp", "knowledge");
+    const candidateAudits = join(dir, ".omp", "audits");
+    if (
+      (existsSync(candidateKb) && statSync(candidateKb).isDirectory()) ||
+      (existsSync(candidateAudits) && statSync(candidateAudits).isDirectory())
+    ) {
       knowledgeRootCache.set(startDir, dir);
       return dir;
     }
@@ -122,43 +126,142 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
   }
 
   // research projects
-  const researchDir = join(base, "research");
-  let projects: string[] = [];
-  try {
-    projects = readdirSync(researchDir, { withFileTypes: true })
-      .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
-      .map((ent) => ent.name)
-      .sort()
-      .reverse();
-  } catch {
-    projects = [];
-  }
-  if (query.slug) {
-    const match = projects.find((p) => p.startsWith(query.slug ?? "") || p.includes(query.slug ?? ""));
-    if (!match) {
+  if (type === "research") {
+    const researchDir = join(base, "research");
+    let projects: string[] = [];
+    try {
+      projects = readdirSync(researchDir, { withFileTypes: true })
+        .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+        .map((ent) => ent.name)
+        .sort()
+        .reverse();
+    } catch {
+      projects = [];
+    }
+    if (query.slug) {
+      const match = projects.find((p) => p.startsWith(query.slug ?? "") || p.includes(query.slug ?? ""));
+      if (!match) {
+        return {
+          found: true,
+          text: `No research project matching "${query.slug}".`,
+          details: { found: true, type, count: 0, paths: [] },
+        };
+      }
+      const projectDir = join(researchDir, match);
+      const entries = existsSync(projectDir) ? readdirSync(projectDir).sort() : [];
       return {
         found: true,
-        text: `No research project matching "${query.slug}".`,
+        text: `Research project: ${match}\n${entries.map((e) => `- ${e}`).join("\n")}`,
+        details: { found: true, type, count: entries.length, paths: [projectDir] },
+      };
+    }
+    const picked = projects.slice(0, limit);
+    return {
+      found: true,
+      text: picked.join("\n") || "No research projects yet.",
+      details: {
+        found: true,
+        type,
+        count: picked.length,
+        paths: picked.map((p) => join(researchDir, p)),
+      },
+    };
+  }
+  // audits
+  if (type === "audits") {
+    const auditsDir = join(root, ".omp", "audits");
+    interface AuditEntry {
+      slug: string;
+      path: string;
+      body: string;
+      version: string;
+      title: string;
+      status: string;
+    }
+    const auditsMap = new Map<string, AuditEntry>();
+    if (existsSync(auditsDir)) {
+      let entries: Dirent[] = [];
+      try {
+        entries = readdirSync(auditsDir, { withFileTypes: true });
+      } catch {
+        entries = [];
+      }
+      for (const ent of entries) {
+        if (ent.name.startsWith(".")) continue;
+        let filePath: string | null = null;
+        let slug = "";
+        if (ent.isDirectory()) {
+          const reportPath = join(auditsDir, ent.name, "report.md");
+          if (existsSync(reportPath)) {
+            filePath = reportPath;
+            slug = ent.name;
+          }
+        } else if (ent.isFile() && ent.name.endsWith(".md")) {
+          filePath = join(auditsDir, ent.name);
+          slug = ent.name.replace(/\.md$/, "");
+        }
+        if (filePath !== null && !auditsMap.has(slug)) {
+          const resolvedPath = filePath;
+          const body = readFileSync(resolvedPath, "utf8");
+          const versionMatch = body.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+          const version = versionMatch?.[1]?.trim() ?? "v0.1.0";
+          const titleMatch = body.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+          const title = titleMatch?.[1]?.trim() ?? firstLine(body);
+          const statusMatch = body.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
+          const status = statusMatch?.[1]?.trim() ?? "active";
+          auditsMap.set(slug, { slug, path: resolvedPath, body, version, title, status });
+        }
+      }
+    }
+    const audits = Array.from(auditsMap.values()).sort((a, b) => b.slug.localeCompare(a.slug));
+
+    if (typeof query.slug === "string" && query.slug.length > 0) {
+      const qSlug = query.slug;
+      const targetSlug = qSlug.toLowerCase();
+      const match = audits.find(
+        (a) => a.slug.toLowerCase().startsWith(targetSlug) || a.slug.toLowerCase().includes(targetSlug),
+      );
+      if (!match) {
+        return {
+          found: true,
+          text: `No audit matching "${qSlug}".`,
+          details: { found: true, type, count: 0, paths: [] },
+        };
+      }
+      return {
+        found: true,
+        text: match.body,
+        details: { found: true, type, count: 1, paths: [match.path] },
+      };
+    }
+
+    const picked = audits.slice(0, limit);
+    if (picked.length === 0) {
+      return {
+        found: true,
+        text: "No audits yet.",
         details: { found: true, type, count: 0, paths: [] },
       };
     }
-    const projectDir = join(researchDir, match);
-    const entries = existsSync(projectDir) ? readdirSync(projectDir).sort() : [];
+
+    const lines = picked.map((a) =>
+      query.full ? `## ${a.slug} (${a.version})\n${a.body}` : `- ${a.slug} (${a.version}) — ${a.title}`,
+    );
     return {
       found: true,
-      text: `Research project: ${match}\n${entries.map((e) => `- ${e}`).join("\n")}`,
-      details: { found: true, type, count: entries.length, paths: [projectDir] },
+      text: lines.join("\n"),
+      details: {
+        found: true,
+        type,
+        count: picked.length,
+        paths: picked.map((a) => a.path),
+      },
     };
   }
-  const picked = projects.slice(0, limit);
+
   return {
-    found: true,
-    text: picked.join("\n") || "No research projects yet.",
-    details: {
-      found: true,
-      type,
-      count: picked.length,
-      paths: picked.map((p) => join(researchDir, p)),
-    },
+    found: false,
+    text: "Unknown knowledge type.",
+    details: { found: false, type: query.type, count: 0, paths: [] },
   };
 }

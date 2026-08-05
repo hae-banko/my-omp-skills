@@ -72,6 +72,7 @@ const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   "grill-with-docs": {},
   hindsight: { silent: true },
   math: {},
+  audit: { companions: 1 },
   triage: { companions: 2 },
   "improve-codebase-architecture": { companions: 1 },
   "omp-setup": { companions: 5 },
@@ -267,6 +268,7 @@ mkdirSync(join(fixtureRoot, ".omp", "knowledge", "pitfalls"), { recursive: true 
 mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-01_demo"), {
   recursive: true,
 });
+mkdirSync(join(fixtureRoot, ".omp", "audits", "demo-audit", "archive"), { recursive: true });
 writeFileSync(
   join(fixtureRoot, ".omp", "knowledge", "records", "2026-08-03_dtcm.md"),
   "---\ntitle: DTCM\n---\nfound it",
@@ -274,6 +276,14 @@ writeFileSync(
 writeFileSync(
   join(fixtureRoot, ".omp", "knowledge", "INDEX.md"),
   "- 2026-08-03 DTCM — .omp/knowledge/records/2026-08-03_dtcm.md\n",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "audits", "demo-audit", "report.md"),
+  "---\ntitle: Demo Audit Report\nslug: demo-audit\nversion: v0.1.0\nstatus: active\n---\n## Executive Summary\nSummary here.\n## Revision History\n- **v0.1.0**: Initial report.",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "audits", "demo-audit", "archive", "v0.1.0.md"),
+  "---\nversion: v0.1.0\n---\nSnapshot",
 );
 
 const toolCall = (toolName: string, input: Record<string, unknown>) =>
@@ -293,6 +303,14 @@ const cases: Array<[string, string, Record<string, unknown>, boolean]> = [
   ["bash sed record", "bash", { command: "sed -i 's/a/b/' .omp/knowledge/records/2026-08-03_dtcm.md" }, true],
   ["bash rm record", "bash", { command: "rm .omp/knowledge/records/2026-08-03_dtcm.md" }, true],
   ["edit outside KB", "edit", { path: "src/index.ts", old_string: "a", new_string: "b" }, false],
+  ["audit: write new report", "write", { path: ".omp/audits/new-audit/report.md", content: "---\nversion: v0.1.0\n---" }, false],
+  ["audit: write existing report without version bump", "write", { path: ".omp/audits/demo-audit/report.md", content: "---\nversion: v0.1.0\n---\n## Revision History" }, true],
+  ["audit: write existing report without revision history", "write", { path: ".omp/audits/demo-audit/report.md", content: "---\nversion: v0.2.0\n---" }, true],
+  ["audit: controlled write update", "write", { path: ".omp/audits/demo-audit/report.md", content: "---\nversion: v0.2.0\n---\n## Revision History\n- **v0.2.0**: updated" }, false],
+  ["audit: write existing archive file", "write", { path: ".omp/audits/demo-audit/archive/v0.1.0.md", content: "new snapshot" }, true],
+  ["audit: edit existing report without version bump", "edit", { path: ".omp/audits/demo-audit/report.md", input: "PUT 1:\n+no version bump" }, true],
+  ["audit: controlled edit update", "edit", { path: ".omp/audits/demo-audit/report.md", input: "PUT 1:\n+version: v0.1.1\n+## Revision History\n+- **v0.1.1**: patch update" }, false],
+  ["audit: bash rm audit dir", "bash", { command: "rm -rf .omp/audits/demo-audit" }, true],
 ];
 
 for (const [label, toolName, input, expectBlock] of cases) {
@@ -341,6 +359,30 @@ if (!knowledgeTool) {
   const none = await knowledgeTool.execute("t3", { type: "index" }, undefined, undefined, { cwd: "/" });
   if (isFoundDetails(none.details) !== false) fail("tool: no-KB case not reported");
 
+  const auditsRes = await knowledgeTool.execute(
+    "t4",
+    { type: "audits", limit: 10 },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const auditsText = auditsRes.content.map((b) => b.text).join("");
+  if (isFoundDetails(auditsRes.details) !== true) fail("tool: audits read not found");
+  if (!auditsText.includes("demo-audit") || !auditsText.includes("v0.1.0")) {
+    fail("tool: audits read missing entry or version");
+  }
+
+  const singleAuditRes = await knowledgeTool.execute(
+    "t5",
+    { type: "audits", slug: "demo-audit" },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const singleText = singleAuditRes.content.map((b) => b.text).join("");
+  if (!singleText.includes("Demo Audit Report")) {
+    fail("tool: audits slug read missing full content");
+  }
   const rendered = knowledgeTool.renderResult?.(
     { content: [{ type: "text", text: "a record\nsecond line" }], details: { found: true, type: "records", count: 2, paths: [] } },
     { expanded: false },
@@ -979,7 +1021,21 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     if (registered["reference"].getArgumentCompletions?.("add ") !== null) {
       fail("reference: add offered unexpected completions");
     }
-    // 1b. /research
+    // 1b. /audit
+    const auditEmpty = registered["audit"].getArgumentCompletions?.("") ?? null;
+    if (!auditEmpty || !auditEmpty.some((c) => c.label === "demo-audit") || !auditEmpty.some((c) => c.label === "--recent")) {
+      fail("audit: expected demo-audit and --recent completions for empty prefix");
+    }
+    const auditFlags = registered["audit"].getArgumentCompletions?.("--") ?? null;
+    if (!auditFlags || auditFlags.length !== 2 || !auditFlags.some((c) => c.label === "--recent") || !auditFlags.some((c) => c.label === "--version")) {
+      fail("audit: expected --recent and --version for '--'");
+    }
+    const auditSlugMatch = registered["audit"].getArgumentCompletions?.("demo") ?? null;
+    if (!auditSlugMatch || !auditSlugMatch.some((c) => c.label === "demo-audit")) {
+      fail("audit: expected demo-audit completion for prefix 'demo'");
+    }
+
+    // 1c. /research
     const researchEmpty = registered["research"].getArgumentCompletions?.("") ?? null;
     if (!researchEmpty || researchEmpty.length < 10) {
       fail(`research: expected subcommands and project slugs for empty prefix, got ${researchEmpty?.length}`);

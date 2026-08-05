@@ -365,6 +365,69 @@ const COMMANDS: CommandSpec[] = [
     },
   },
   {
+    name: "audit",
+    description:
+      "Perform an independent audit of a codebase area, architecture, or idea into a formal report under .omp/audits/.",
+    bodyPath: "commands/audit/command.md",
+    companions: ["commands/audit/AUDIT-FORMAT.md"],
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const root = findRepoRoot();
+      const auditsDir = join(root, ".omp", "audits");
+      const slugs: string[] = [];
+
+      if (existsSync(auditsDir)) {
+        try {
+          const entries = readdirSync(auditsDir, { withFileTypes: true });
+          for (const ent of entries) {
+            if (ent.name.startsWith(".")) continue;
+            if (ent.isDirectory()) {
+              if (existsSync(join(auditsDir, ent.name, "report.md"))) {
+                slugs.push(ent.name);
+              }
+            } else if (ent.isFile() && ent.name.endsWith(".md")) {
+              slugs.push(ent.name.replace(/\.md$/, ""));
+            }
+          }
+        } catch {
+          // ignore read error
+        }
+      }
+
+      const tokens = argumentPrefix.split(/\s+/);
+      const lastToken = tokens[tokens.length - 1] ?? "";
+      const lower = lastToken.toLowerCase();
+
+      const options: Array<{ value: string; label: string; description?: string }> = [];
+
+      if ("--recent".startsWith(lower)) {
+        options.push({
+          value: "--recent",
+          label: "--recent",
+          description: "List recent audit reports",
+        });
+      }
+      if ("--version".startsWith(lower)) {
+        options.push({
+          value: "--version",
+          label: "--version",
+          description: "Specify or filter by audit version",
+        });
+      }
+
+      for (const slug of slugs) {
+        if (slug.toLowerCase().startsWith(lower) || slug.toLowerCase().includes(lower)) {
+          options.push({
+            value: slug,
+            label: slug,
+            description: "Existing audit report slug",
+          });
+        }
+      }
+
+      return options.length > 0 ? options : null;
+    },
+  },
+  {
     name: "ask-me",
     description: "Ask which command or flow fits your situation. A router over the commands in this package.",
     bodyPath: "commands/ask-me.md",

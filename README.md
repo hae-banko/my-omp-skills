@@ -5,7 +5,7 @@
 </p>
 
 An extension package for the oh-my-pi (omp) agent harness that turns a plain
-repo into a workflow engine: 25 user-invoked slash commands and 12
+repo into a workflow engine: 26 user-invoked slash commands and 12
 model-invoked skills covering planning, research, review, and learning. Ideas
 get grilled before they get built, specs become tracer-bullet tickets, and
 tickets get implemented test-first with a two-axis code review before commit.
@@ -54,12 +54,12 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
 
 ## Install
 
-Requires an SSH key with access to the private repo. Latest release: v0.19.0.
+Requires an SSH key with access to the private repo. Latest release: v0.23.0.
 
 1. Install pinned to the latest release:
 
    ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.19.0
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.23.0
    ```
 
 2. Prefer maximum immutability? Pin to a full commit SHA instead:
@@ -107,6 +107,7 @@ suggest the right one when your situation fits.
 | `/pitfall` | Captures a fresh mistake into the knowledge base before context fades | Something just went wrong |
 | `/routinize` | Turns repeated ad-hoc work into parameterized scripts (`scripts/routines/manifest.json`) & `run_routine` tool; `bash -n` check & subcommands (`scan`, `run <id>`, `list`) | You keep doing the same thing |
 | `/reference` | Manages cloned reference material in `.omp/references/` (`add`, `update`, `remove`, `list`) | Acquire external docs for the repo |
+| `/audit` | Performs an independent, critical audit of a codebase area or architecture, written to `.omp/audits/<slug>/report.md` with SemVer lineage and a 7-section report format | Evaluate or stress-test an existing design or implementation |
 | **Session & support** | | |
 | `/omp-setup` | Configures the repo: issue tracker, triage labels, domain doc layout | First run in a new repo |
 | `/hindsight` | Toggle the settle-time reflection pass: after turns that did real work, one hidden pass reconsiders design-level changes before the turn settles | You want answers reconsidered before they settle |
@@ -241,7 +242,7 @@ applying it.
 2. **List available releases** —
    `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.19.0`.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.23.0`.
    Installs are immutable copies, so the old version keeps working until the
    reinstall succeeds.
 4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools

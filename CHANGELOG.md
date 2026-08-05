@@ -3,6 +3,14 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+## v0.23.0 — Audit Workflow & Formal Audit Reports
+
+- **New `/audit` Command**: Added formal investigative audit command with independent, critical evaluation stance (non-validating).
+- **Dedicated Storage (`.omp/audits/`)**: Reports saved to `.omp/audits/<slug>/report.md` (and optional snapshots under `.omp/audits/<slug>/archive/vX.Y.Z.md`).
+- **Semantic Versioning Policy**: SemVer tracking (`patch` for minor edits/clarifications, `minor` for expanded scope/methodology, `major` for fundamental restructuring) with mandatory `## Revision History` updates.
+- **`AUDIT-FORMAT.md` Specification**: Standardized 7-section template (`Executive Summary`, `Scope & Subject`, `Critical Evaluation & Methodology`, `Detailed Findings`, `Risks & Limitations`, `Conclusion & Recommendations`, `Revision History`).
+- **Runtime `knowledge_read` & Policy**: `src/knowledge.ts` extended with `type: "audits"`; `src/policy.ts` updated for `.omp/audits/` protection and controlled lineage updates.
+
 
 ## v0.22.0 — Deep Research TUI telemetry cards & ergonomic shortcuts
 
