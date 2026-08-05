@@ -8,6 +8,15 @@ When performing an audit, you MUST adopt a strictly independent, critical evalua
 - **Root-cause analysis**: Interrogate design trade-offs, security implications, performance bounds, edge cases, and architectural invariants.
 - **Evidence-based**: Support every finding with concrete evidence (code references, line numbers, execution traces, or structural analysis).
 
+## Output & Silence Policy
+
+Like `/grill-me` and other workflow commands, the workflow instructions and `AUDIT-FORMAT.md` template are delivered as hidden system instructions (`display: false`).
+
+- Do NOT print, quote, summarize, or reproduce the workflow prompt instructions, rules, or `AUDIT-FORMAT.md` template text in your turn output.
+- Begin execution immediately:
+  - If invoked mid-work: spawn the background subagent silently and report back in 1–2 terse sentences (verdict / report path).
+  - If invoked as a dedicated audit turn: begin critical investigation or questioning immediately.
+
 ## Storage Location & Archive Policy
 
 Audit reports are saved in the project repository:

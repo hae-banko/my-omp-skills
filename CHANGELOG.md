@@ -3,7 +3,10 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
-## v0.23.0 — Audit Workflow & Formal Audit Reports
+## v0.23.1 — Audit prompt silence policy
+
+- **Audit workflow prompt silence policy**: `/audit` workflow instructions and `AUDIT-FORMAT.md` template now stay hidden in the transcript (like `/grill-me`). Explicit non-printing directive added to `commands/audit/command.md`: do not print, quote, summarize, or reproduce the workflow prompt or template text; mid-work invocations spawn the background subagent silently and reply in 1–2 terse sentences (verdict / report path); dedicated audit turns begin critical investigation or questioning immediately.
+
 
 - **New `/audit` Command**: Added formal investigative audit command with independent, critical evaluation stance (non-validating).
 - **Dedicated Storage (`.omp/audits/`)**: Reports saved to `.omp/audits/<slug>/report.md` (and optional snapshots under `.omp/audits/<slug>/archive/vX.Y.Z.md`).
