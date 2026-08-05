@@ -4,7 +4,7 @@
 // plain directories alike.
 
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export type KnowledgeType = "index" | "records" | "pitfalls" | "research" | "audits";
 
@@ -170,6 +170,13 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
   // audits
   if (type === "audits") {
     const auditsDir = join(root, ".omp", "audits");
+    interface SubtopicEntry {
+      slug: string;
+      relPath: string;
+      path: string;
+      body: string;
+      title: string;
+    }
     interface AuditEntry {
       slug: string;
       path: string;
@@ -177,6 +184,7 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
       version: string;
       title: string;
       status: string;
+      subtopics: SubtopicEntry[];
     }
     const auditsMap = new Map<string, AuditEntry>();
     if (existsSync(auditsDir)) {
@@ -190,26 +198,118 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
         if (ent.name.startsWith(".")) continue;
         let filePath: string | null = null;
         let slug = "";
+        const subtopics: SubtopicEntry[] = [];
+        const seenSubPaths = new Set<string>();
+
         if (ent.isDirectory()) {
-          const reportPath = join(auditsDir, ent.name, "report.md");
-          if (existsSync(reportPath)) {
+          slug = ent.name;
+          const auditDir = join(auditsDir, ent.name);
+          const overviewPath = join(auditDir, "overview.md");
+          const reportPath = join(auditDir, "report.md");
+          if (existsSync(overviewPath)) {
+            filePath = overviewPath;
+          } else if (existsSync(reportPath)) {
             filePath = reportPath;
-            slug = ent.name;
+          }
+
+          if (filePath !== null) {
+            // Scan subtopics directory if exists
+            const subtopicsDir = join(auditDir, "subtopics");
+            if (existsSync(subtopicsDir)) {
+              try {
+                const subEntries = readdirSync(subtopicsDir, { withFileTypes: true });
+                for (const subEnt of subEntries) {
+                  if (subEnt.isFile() && subEnt.name.endsWith(".md")) {
+                    const subPath = join(subtopicsDir, subEnt.name);
+                    const relPath = `./subtopics/${subEnt.name}`;
+                    const subBody = readFileSync(subPath, "utf8");
+                    const subTitleMatch = subBody.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+                    const subTitle =
+                      (subTitleMatch?.[1]?.trim() ?? firstLine(subBody)) || subEnt.name.replace(/\.md$/, "");
+                    subtopics.push({
+                      slug: subEnt.name.replace(/\.md$/, ""),
+                      relPath,
+                      path: subPath,
+                      body: subBody,
+                      title: subTitle,
+                    });
+                    seenSubPaths.add(subPath);
+                  }
+                }
+              } catch {}
+            }
+
+            // Scan direct subtopic files under audit directory (excluding overview.md and report.md)
+            try {
+              const directEntries = readdirSync(auditDir, { withFileTypes: true });
+              for (const dEnt of directEntries) {
+                if (
+                  dEnt.isFile() &&
+                  dEnt.name.endsWith(".md") &&
+                  dEnt.name !== "overview.md" &&
+                  dEnt.name !== "report.md"
+                ) {
+                  const subPath = join(auditDir, dEnt.name);
+                  if (!seenSubPaths.has(subPath)) {
+                    const relPath = `./${dEnt.name}`;
+                    const subBody = readFileSync(subPath, "utf8");
+                    const subTitleMatch = subBody.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+                    const subTitle =
+                      (subTitleMatch?.[1]?.trim() ?? firstLine(subBody)) || dEnt.name.replace(/\.md$/, "");
+                    subtopics.push({
+                      slug: dEnt.name.replace(/\.md$/, ""),
+                      relPath,
+                      path: subPath,
+                      body: subBody,
+                      title: subTitle,
+                    });
+                    seenSubPaths.add(subPath);
+                  }
+                }
+              }
+            } catch {}
           }
         } else if (ent.isFile() && ent.name.endsWith(".md")) {
           filePath = join(auditsDir, ent.name);
           slug = ent.name.replace(/\.md$/, "");
         }
+
         if (filePath !== null && !auditsMap.has(slug)) {
           const resolvedPath = filePath;
           const body = readFileSync(resolvedPath, "utf8");
+
+          // Parse markdown hyperlinks for subtopic references in root report body
+          if (ent.isDirectory()) {
+            const auditDir = join(auditsDir, ent.name);
+            const linkRegex = /\[([^\]]+)\]\(\.\/((?:subtopics\/)?[^)]+\.md)\)/g;
+            let match: RegExpExecArray | null;
+            while ((match = linkRegex.exec(body)) !== null) {
+              const linkTitle = match[1];
+              const linkRel = match[2];
+              const absPath = resolve(auditDir, linkRel);
+              if (existsSync(absPath) && !seenSubPaths.has(absPath)) {
+                try {
+                  const subBody = readFileSync(absPath, "utf8");
+                  subtopics.push({
+                    slug: linkRel.replace(/^(?:subtopics\/)?/, "").replace(/\.md$/, ""),
+                    relPath: `./${linkRel}`,
+                    path: absPath,
+                    body: subBody,
+                    title: linkTitle || firstLine(subBody),
+                  });
+                  seenSubPaths.add(absPath);
+                } catch {}
+              }
+            }
+          }
+
           const versionMatch = body.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
           const version = versionMatch?.[1]?.trim() ?? "v0.1.0";
           const titleMatch = body.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
           const title = titleMatch?.[1]?.trim() ?? firstLine(body);
           const statusMatch = body.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
           const status = statusMatch?.[1]?.trim() ?? "active";
-          auditsMap.set(slug, { slug, path: resolvedPath, body, version, title, status });
+          auditsMap.set(slug, { slug, path: resolvedPath, body, version, title, status, subtopics });
         }
       }
     }
@@ -218,20 +318,79 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
     if (typeof query.slug === "string" && query.slug.length > 0) {
       const qSlug = query.slug;
       const targetSlug = qSlug.toLowerCase();
-      const match = audits.find(
-        (a) => a.slug.toLowerCase().startsWith(targetSlug) || a.slug.toLowerCase().includes(targetSlug),
+
+      // Check for direct match on audit slug or if targetSlug starts with audit slug
+      const matchedAudit = audits.find(
+        (a) =>
+          a.slug.toLowerCase().startsWith(targetSlug) ||
+          a.slug.toLowerCase().includes(targetSlug) ||
+          targetSlug.startsWith(a.slug.toLowerCase()),
       );
-      if (!match) {
+
+      if (matchedAudit) {
+        // Check if query.slug is specifically requesting a subtopic within matchedAudit
+        const targetSubtopicName = targetSlug.includes("/") ? targetSlug.split("/").pop()! : targetSlug;
+        const specificSubtopic = matchedAudit.subtopics.find(
+          (s) =>
+            s.slug.toLowerCase() === targetSubtopicName ||
+            s.relPath.toLowerCase().includes(targetSubtopicName) ||
+            s.title.toLowerCase().includes(targetSubtopicName),
+        );
+
+        if (specificSubtopic && targetSlug !== matchedAudit.slug.toLowerCase()) {
+          return {
+            found: true,
+            text: specificSubtopic.body,
+            details: { found: true, type, count: 1, paths: [specificSubtopic.path] },
+          };
+        }
+
+        let text = matchedAudit.body;
+        const paths = [matchedAudit.path];
+
+        if (query.full) {
+          if (matchedAudit.subtopics.length > 0) {
+            text +=
+              "\n\n" +
+              matchedAudit.subtopics
+                .map((s) => `### Subtopic: ${s.title} (${s.relPath})\n${s.body}`)
+                .join("\n\n");
+            for (const s of matchedAudit.subtopics) {
+              paths.push(s.path);
+            }
+          }
+        }
+
         return {
           found: true,
-          text: `No audit matching "${qSlug}".`,
-          details: { found: true, type, count: 0, paths: [] },
+          text,
+          details: { found: true, type, count: paths.length, paths },
         };
       }
+
+      // If no audit matched directly by slug, check if query.slug matches a subtopic across any audit
+      for (const a of audits) {
+        const targetSubName = targetSlug.includes("/") ? targetSlug.split("/").pop()! : targetSlug;
+        const sub = a.subtopics.find(
+          (s) =>
+            s.slug.toLowerCase() === targetSubName ||
+            s.slug.toLowerCase().includes(targetSubName) ||
+            s.relPath.toLowerCase().includes(targetSubName) ||
+            s.title.toLowerCase().includes(targetSubName),
+        );
+        if (sub) {
+          return {
+            found: true,
+            text: sub.body,
+            details: { found: true, type, count: 1, paths: [sub.path] },
+          };
+        }
+      }
+
       return {
         found: true,
-        text: match.body,
-        details: { found: true, type, count: 1, paths: [match.path] },
+        text: `No audit matching "${qSlug}".`,
+        details: { found: true, type, count: 0, paths: [] },
       };
     }
 
@@ -244,17 +403,41 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
       };
     }
 
-    const lines = picked.map((a) =>
-      query.full ? `## ${a.slug} (${a.version})\n${a.body}` : `- ${a.slug} (${a.version}) — ${a.title}`,
-    );
+    const lines = picked.map((a) => {
+      if (query.full) {
+        let fullText = `## ${a.slug} (${a.version})\n${a.body}`;
+        if (a.subtopics.length > 0) {
+          fullText +=
+            "\n\n" +
+            a.subtopics.map((s) => `### ${a.slug}/${s.slug}\n${s.body}`).join("\n\n");
+        }
+        return fullText;
+      }
+      let summary = `- ${a.slug} (${a.version}) — ${a.title}`;
+      if (a.subtopics.length > 0) {
+        summary += ` (${a.subtopics.length} subtopic${a.subtopics.length > 1 ? "s" : ""}: ${a.subtopics.map((s) => s.title).join(", ")})`;
+      }
+      return summary;
+    });
+
+    const allPaths: string[] = [];
+    for (const a of picked) {
+      allPaths.push(a.path);
+      if (query.full) {
+        for (const s of a.subtopics) {
+          allPaths.push(s.path);
+        }
+      }
+    }
+
     return {
       found: true,
       text: lines.join("\n"),
       details: {
         found: true,
         type,
-        count: picked.length,
-        paths: picked.map((a) => a.path),
+        count: allPaths.length,
+        paths: allPaths,
       },
     };
   }

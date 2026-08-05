@@ -54,12 +54,12 @@ obra/superpowers, Weizhena/deep-research-skills), all MIT.
 
 ## Install
 
-Requires an SSH key with access to the private repo. Latest release: v0.23.0.
+Requires an SSH key with access to the private repo. Latest release: v0.24.0.
 
 1. Install pinned to the latest release:
 
    ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.23.0
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.24.0
    ```
 
 2. Prefer maximum immutability? Pin to a full commit SHA instead:
@@ -242,7 +242,7 @@ applying it.
 2. **List available releases** —
    `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
 3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.23.0`.
+   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.24.0`.
    Installs are immutable copies, so the old version keeps working until the
    reinstall succeeds.
 4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools

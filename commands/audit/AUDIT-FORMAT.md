@@ -1,6 +1,23 @@
 # Audit Report Format
 
-Every formal audit report produced by `/audit` lives in `.omp/audits/<slug>/report.md` (with optional archived historical snapshots in `.omp/audits/<slug>/archive/vX.Y.Z.md`) and adheres strictly to this format.
+Every formal audit report produced by `/audit` lives in `.omp/audits/<slug>/overview.md` (with `report.md` preserved as a fallback alias for backward compatibility, and optional archived historical snapshots in `.omp/audits/<slug>/archive/vX.Y.Z.md`). `overview.md` acts as the living index and executive summary for the audit directory.
+
+## Directory & Subtopic Layout
+
+Audits covering complex topics are organized into topic directories containing `overview.md` and detailed subtopic files:
+
+```
+.omp/audits/<slug>/
+├── overview.md                         # Primary root report, index & executive summary
+├── report.md                           # Fallback alias for legacy single-file reports
+├── subtopics/                          # Subtopic directory for modular breakdowns
+│   ├── <subtopic-name>.md              # Subtopic detailed audit report
+│   └── <another-subtopic>.md
+└── archive/                            # Optional historical snapshots
+    └── v0.1.0.md
+```
+
+Subtopic files MAY also be placed directly at `.omp/audits/<slug>/<subtopic-name>.md`.
 
 ## YAML Frontmatter
 
@@ -47,6 +64,17 @@ Every audit report MUST contain all seven required sections in order:
 
 6. `## Conclusion & Recommendations`
    Actionable next steps, prioritized remediation roadmap, architectural design changes, or follow-up work items.
+
+### Subtopics & Detailed Reports Section
+
+When auditing multi-component or complex topics, `overview.md` MUST include a `## Subtopics & Detailed Reports` section linking to every detailed subtopic markdown file using relative markdown links:
+
+```markdown
+## Subtopics & Detailed Reports
+
+- [Subtopic Title](./subtopics/<subtopic-name>.md): Brief overview of subtopic findings.
+- [Another Subtopic](./subtopics/<another-subtopic>.md): Brief overview of secondary component.
+```
 
 7. `## Revision History`
    A log of audit versions and changes across revisions.

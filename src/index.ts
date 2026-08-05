@@ -381,7 +381,10 @@ const COMMANDS: CommandSpec[] = [
           for (const ent of entries) {
             if (ent.name.startsWith(".")) continue;
             if (ent.isDirectory()) {
-              if (existsSync(join(auditsDir, ent.name, "report.md"))) {
+              if (
+                existsSync(join(auditsDir, ent.name, "overview.md")) ||
+                existsSync(join(auditsDir, ent.name, "report.md"))
+              ) {
                 slugs.push(ent.name);
               }
             } else if (ent.isFile() && ent.name.endsWith(".md")) {

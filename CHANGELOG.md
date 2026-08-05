@@ -3,6 +3,12 @@
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
+## v0.24.0 — Audit topic hierarchies & overview.md index
+
+- **`overview.md` as Audit Root**: `.omp/audits/<slug>/overview.md` is now the primary root document, index, and executive summary for topic audits (with `report.md` preserved as a fallback alias).
+- **Subtopic Hierarchies & Hyperlinks**: Audits covering complex multi-component topics support subfolders (`.omp/audits/<slug>/subtopics/<name>.md`). `overview.md` maintains living findings and relative markdown hyperlinks (`[<Subtopic Name>](./subtopics/<name>.md)`).
+- **Runtime `knowledge_read` & Policy**: `src/knowledge.ts` updated to discover `overview.md` first, resolve subtopic hyperlinks, and parse nested audit structures; `src/policy.ts` updated to protect `.omp/audits/<slug>/` while permitting controlled updates to `overview.md`, `report.md`, and subtopic `.md` files.
+
 ## v0.23.1 — Audit prompt silence policy
 
 - **Audit workflow prompt silence policy**: `/audit` workflow instructions and `AUDIT-FORMAT.md` template now stay hidden in the transcript (like `/grill-me`). Explicit non-printing directive added to `commands/audit/command.md`: do not print, quote, summarize, or reproduce the workflow prompt or template text; mid-work invocations spawn the background subagent silently and reply in 1–2 terse sentences (verdict / report path); dedicated audit turns begin critical investigation or questioning immediately.

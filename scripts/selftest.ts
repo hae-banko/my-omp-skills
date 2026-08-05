@@ -269,6 +269,7 @@ mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-01_demo"),
   recursive: true,
 });
 mkdirSync(join(fixtureRoot, ".omp", "audits", "demo-audit", "archive"), { recursive: true });
+mkdirSync(join(fixtureRoot, ".omp", "audits", "complex-audit", "subtopics"), { recursive: true });
 writeFileSync(
   join(fixtureRoot, ".omp", "knowledge", "records", "2026-08-03_dtcm.md"),
   "---\ntitle: DTCM\n---\nfound it",
@@ -284,6 +285,18 @@ writeFileSync(
 writeFileSync(
   join(fixtureRoot, ".omp", "audits", "demo-audit", "archive", "v0.1.0.md"),
   "---\nversion: v0.1.0\n---\nSnapshot",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "audits", "complex-audit", "overview.md"),
+  "---\ntitle: Complex Audit Overview\nslug: complex-audit\nversion: v0.1.0\nstatus: active\n---\n## Executive Summary\nOverview of complex audit.\n## Subtopics & Detailed Reports\n- [Frontend Subtopic](./subtopics/frontend.md)\n- [Backend Subtopic](./backend.md)\n## Revision History\n- **v0.1.0**: Initial report.",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "audits", "complex-audit", "subtopics", "frontend.md"),
+  "---\ntitle: Frontend Subtopic\n---\nDetailed frontend findings.",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "audits", "complex-audit", "backend.md"),
+  "---\ntitle: Backend Subtopic\n---\nDetailed backend findings.",
 );
 
 const toolCall = (toolName: string, input: Record<string, unknown>) =>
@@ -310,6 +323,9 @@ const cases: Array<[string, string, Record<string, unknown>, boolean]> = [
   ["audit: write existing archive file", "write", { path: ".omp/audits/demo-audit/archive/v0.1.0.md", content: "new snapshot" }, true],
   ["audit: edit existing report without version bump", "edit", { path: ".omp/audits/demo-audit/report.md", input: "PUT 1:\n+no version bump" }, true],
   ["audit: controlled edit update", "edit", { path: ".omp/audits/demo-audit/report.md", input: "PUT 1:\n+version: v0.1.1\n+## Revision History\n+- **v0.1.1**: patch update" }, false],
+  ["audit: write existing overview.md without version bump", "write", { path: ".omp/audits/complex-audit/overview.md", content: "---\nversion: v0.1.0\n---\n## Revision History" }, true],
+  ["audit: controlled write overview.md update", "write", { path: ".omp/audits/complex-audit/overview.md", content: "---\nversion: v0.2.0\n---\n## Revision History\n- **v0.2.0**: updated" }, false],
+  ["audit: controlled edit subtopic file", "edit", { path: ".omp/audits/complex-audit/subtopics/frontend.md", input: "PUT 1:\n+version: v0.1.1\n+## Revision History\n+- **v0.1.1**: patch" }, false],
   ["audit: bash rm audit dir", "bash", { command: "rm -rf .omp/audits/demo-audit" }, true],
 ];
 
@@ -382,6 +398,44 @@ if (!knowledgeTool) {
   const singleText = singleAuditRes.content.map((b) => b.text).join("");
   if (!singleText.includes("Demo Audit Report")) {
     fail("tool: audits slug read missing full content");
+  }
+  const complexRes = await knowledgeTool.execute(
+    "t6",
+    { type: "audits", slug: "complex-audit" },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const complexText = complexRes.content.map((b) => b.text).join("");
+  if (!complexText.includes("Overview of complex audit")) {
+    fail("tool: audits overview.md discovery failed");
+  }
+
+  const complexFullRes = await knowledgeTool.execute(
+    "t7",
+    { type: "audits", slug: "complex-audit", full: true },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const complexFullText = complexFullRes.content.map((b) => b.text).join("");
+  if (
+    !complexFullText.includes("Detailed frontend findings.") ||
+    !complexFullText.includes("Detailed backend findings.")
+  ) {
+    fail("tool: audits subtopic hyperlink/file parsing in full text failed");
+  }
+
+  const subtopicRes = await knowledgeTool.execute(
+    "t8",
+    { type: "audits", slug: "complex-audit/frontend" },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const subtopicText = subtopicRes.content.map((b) => b.text).join("");
+  if (!subtopicText.includes("Detailed frontend findings.")) {
+    fail("tool: audits subtopic direct retrieval failed");
   }
   const rendered = knowledgeTool.renderResult?.(
     { content: [{ type: "text", text: "a record\nsecond line" }], details: { found: true, type: "records", count: 2, paths: [] } },
@@ -1023,8 +1077,8 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     }
     // 1b. /audit
     const auditEmpty = registered["audit"].getArgumentCompletions?.("") ?? null;
-    if (!auditEmpty || !auditEmpty.some((c) => c.label === "demo-audit") || !auditEmpty.some((c) => c.label === "--recent")) {
-      fail("audit: expected demo-audit and --recent completions for empty prefix");
+    if (!auditEmpty || !auditEmpty.some((c) => c.label === "demo-audit") || !auditEmpty.some((c) => c.label === "complex-audit") || !auditEmpty.some((c) => c.label === "--recent")) {
+      fail("audit: expected demo-audit, complex-audit, and --recent completions for empty prefix");
     }
     const auditFlags = registered["audit"].getArgumentCompletions?.("--") ?? null;
     if (!auditFlags || auditFlags.length !== 2 || !auditFlags.some((c) => c.label === "--recent") || !auditFlags.some((c) => c.label === "--version")) {

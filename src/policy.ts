@@ -5,7 +5,7 @@
 // human-in-the-loop work products, not durable records.
 
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, normalize, resolve, sep } from "node:path";
+import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 import type { ExtensionApi, ToolCallEvent, ToolCallEventResult } from "./api.ts";
 
 const KB_REASON =
@@ -128,8 +128,27 @@ function isControlledAuditUpdate(
       return false;
     }
 
-    const oldVersionMatch = oldContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
-    const oldVersion = oldVersionMatch ? oldVersionMatch[1].trim() : "";
+    let oldVersionMatch = oldContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+    let oldVersion = oldVersionMatch ? oldVersionMatch[1].trim() : "";
+
+    // If target file doesn't have version frontmatter (e.g. subtopic file), look in root report overview.md or report.md
+    if (!oldVersion) {
+      const parts = normalized.split(sep);
+      const auditIdx = parts.lastIndexOf("audits");
+      if (auditIdx !== -1 && auditIdx + 1 < parts.length) {
+        const slugDir = parts.slice(0, auditIdx + 2).join(sep);
+        const overviewP = join(slugDir, "overview.md");
+        const reportP = join(slugDir, "report.md");
+        const rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
+        if (rootP) {
+          try {
+            const rootContent = readFileSync(rootP, "utf8");
+            const rootVM = rootContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+            if (rootVM) oldVersion = rootVM[1].trim();
+          } catch {}
+        }
+      }
+    }
 
     let newText = "";
     if (toolName === "write") {
@@ -138,8 +157,28 @@ function isControlledAuditUpdate(
       newText = typeof input.input === "string" ? input.input : "";
     }
 
-    const versionMatch = newText.match(/(?:^|\n|\+)\s*version:\s*["']?([^"'\r\n]+)["']?/m);
-    const newVersion = versionMatch ? versionMatch[1].trim() : "";
+    let versionMatch = newText.match(/(?:^|\n|\+)\s*version:\s*["']?([^"'\r\n]+)["']?/m);
+    let newVersion = versionMatch ? versionMatch[1].trim() : "";
+
+    // If newText doesn't have version frontmatter (e.g. subtopic edit), check root overview.md or report.md
+    if (!newVersion) {
+      const parts = normalized.split(sep);
+      const auditIdx = parts.lastIndexOf("audits");
+      if (auditIdx !== -1 && auditIdx + 1 < parts.length) {
+        const slugDir = parts.slice(0, auditIdx + 2).join(sep);
+        const overviewP = join(slugDir, "overview.md");
+        const reportP = join(slugDir, "report.md");
+        const rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
+        if (rootP && rootP !== abs) {
+          try {
+            const rootContent = readFileSync(rootP, "utf8");
+            const rootVM = rootContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+            if (rootVM) newVersion = rootVM[1].trim();
+          } catch {}
+        }
+      }
+    }
+
     const isSemVer = /^v?\d+\.\d+\.\d+/.test(newVersion);
     if (!newVersion || !isSemVer || newVersion === oldVersion) {
       return false;
@@ -149,7 +188,26 @@ function isControlledAuditUpdate(
       toolName === "write"
         ? /revision\s+history/i.test(newText)
         : /revision\s+history/i.test(newText) || /revision\s+history/i.test(oldContent);
+
+    let rootHasRevHistory = false;
     if (!hasRevHistory) {
+      const parts = normalized.split(sep);
+      const auditIdx = parts.lastIndexOf("audits");
+      if (auditIdx !== -1 && auditIdx + 1 < parts.length) {
+        const slugDir = parts.slice(0, auditIdx + 2).join(sep);
+        const overviewP = join(slugDir, "overview.md");
+        const reportP = join(slugDir, "report.md");
+        const rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
+        if (rootP && rootP !== abs) {
+          try {
+            const rootContent = readFileSync(rootP, "utf8");
+            rootHasRevHistory = /revision\s+history/i.test(rootContent);
+          } catch {}
+        }
+      }
+    }
+
+    if (!hasRevHistory && !rootHasRevHistory) {
       return false;
     }
   }
