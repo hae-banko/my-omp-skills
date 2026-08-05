@@ -4,196 +4,203 @@
   <img src="assets/banner.png" alt="my-omp-skills banner" width="100%" />
 </p>
 
-An extension package for the oh-my-pi (omp) agent harness that turns a plain
-repo into a workflow engine: 26 user-invoked slash commands and 12
-model-invoked skills covering planning, research, review, and learning. Ideas
-get grilled before they get built, specs become tracer-bullet tickets, and
-tickets get implemented test-first with a two-axis code review before commit.
-Everything the package learns about your repo — knowledge entries, reference
-clones, routine scripts — accumulates locally under `.omp/` so it persists
-across sessions. Adapted from open-source suites (mattpocock/skills,
-obra/superpowers, Weizhena/deep-research-skills), all MIT.
+An extension package for the **oh-my-pi** (omp) agent harness that turns a plain repository into a high-rigor workflow engine. Designed for developers building with `oh-my-pi` plugins and agentic engineering workflows, `my-omp-skills` provides 26 user-invoked slash commands, 12 model-invoked skills, custom TUI telemetry widgets, policy-enforced local storage, and background agent orchestration.
 
-## What's inside
+## Overview & Architecture
 
-- **Grill before building** — `/grill-me` and `/grill-with-docs` interview
-  your plan relentlessly, one question at a time, until every branch of the
-  decision tree is resolved.
-- **Specs, tickets, TDD, review** — `/to-spec` synthesizes the conversation
-  into a spec, `/to-tickets` breaks it into tracer-bullet tickets with
-  declared blocking edges, and `/implement` builds them test-first and closes
-  with code review before committing.
-- **Triage** — `/triage` moves issues and external PRs through a state
-  machine of roles — categorise, verify, grill if needed, and write
-  agent-ready briefs.
-- **Deep research** — the `/research` family runs a three-phase flow: outline
-  drafting with TUI Research Review Window (`ResearchReviewCard`), living outline
-  `research.md`, and subcommands (`review`, `add-items`, `add-fields`, `status`,
-  `run`, `off`); parallel background agent research in feedback-driven OODA waves
-  (Observe → Orient → Decide → Act) with presets (`small`, `medium`, `high`) and no
-  per-wave approval (`--approve-each` to restore); and a markdown report with
-  table of contents and `_attempts` provenance logging for unresolved fields.
-- **Knowledge base** — `/record` and `/pitfall` capture lessons and failures
-  into an append-only, timestamped, indexed store at `.omp/knowledge/`,
-  queryable by the model mid-session.
-- **Reference corpus** — `/reference` manages clones of external sources at
-  `.omp/references/` so the model consults them instead of reconstructing
-  behavior from memory.
-- **Routines** — `/routinize` turns repeated ad-hoc work into canonical,
-  parameterized scripts indexed in `scripts/routines/manifest.json`, validated via
-  `bash -n`, with subcommands (`scan`, `run <id>`, `list`) and the model-invoked
-  `run_routine` tool.
-- **Hindsight** — `/hindsight` adds a settle-time reflection pass: before a
-  turn settles, the model gets one hidden look back at its own reasoning and
-  tool results to catch design-level changes that would simplify the
-  approach.
-- **Math rendering** — the TUI typesets LaTeX natively, always on: an
-  always-apply rule makes the model write real formulas ($…$, $$…$$,
-  `\begin{aligned}`, matrices, radicals) instead of ASCII approximations;
-  `/math` explains and demos it.
+`my-omp-skills` extends the `oh-my-pi` (omp) agent harness to bring structured engineering discipline to AI pair programming. Rather than relying on unstructured chat or ad-hoc prompting, this package injects deterministic workflow bodies, domain rules, and interactive telemetry directly into session context.
 
-## Install
+```mermaid
+graph TD
+    User([Developer / TUI]) -->|Slash Command / Math| OMP[oh-my-pi Harness]
+    OMP -->|ExtensionAPI| Ext[my-omp-skills Extension Engine]
+    
+    subgraph Execution Layer
+        Ext -->|Hidden Context Messages| Prompt[Silent Workflow Prompts]
+        Ext -->|pi-tui Renderers| Telemetry[TUI Telemetry Widgets]
+        Ext -->|Dynamic Completions| TUICompletions[Interactive Autocompletions]
+    end
 
-Requires an SSH key with access to the private repo. Latest release: v0.25.0.
+    subgraph Runtime & Guardrails
+        Ext -->|installPolicy| Policy[Append-Only KB & Audit Guardrails]
+        Ext -->|hindsight Pass| Hindsight[Settle-Time Reflection Engine]
+        Ext -->|Custom Tools| Tools[knowledge_read / run_routine / herdr]
+    end
 
-1. Install pinned to the latest release:
+    subgraph Storage & Persistence .omp/
+        Policy --> KB[.omp/knowledge/]
+        Policy --> Audits[.omp/audits/ - SemVer]
+        Ext --> References[.omp/references/]
+        Tools --> Routines[scripts/routines/ - manifest.json]
+    end
+```
 
-   ```
-   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.0
+### Core Architectural Components
+
+- **Extension API Integration**: Integrates directly with omp's `ExtensionApi` by registering 26 slash commands, 12 model-invoked skills, policy guardrails (`installPolicy`), custom tools (`knowledge_read`, `run_routine`, `herdr` workspace controls), session start bootstrapping, and settle-time reflection passes (`hindsight`).
+- **Silent Workflow Prompt Execution**: Slash commands dispatch heavy workflow markdown instructions, argument substitutions, and companion reference assets as hidden context messages (`display: false`, `attribution: "user"`). The user's TUI prompt stays clean (`/command args`) while the model receives full workflow context.
+- **TUI Telemetry & Renderers**: Custom message renderers built on `@oh-my-pi/pi-tui` emit real-time visual cards (`AuditCard`, `TicketBreakdownCard`, `TriageStatusCard`, `ResearchReviewCard`, `ResearchWaveProgressCard`, `ResearchReportPreviewCard`, `ResearchDashboardCard`) into the terminal transcript.
+- **Local Persistent Storage**: All domain artifacts—knowledge entries, audit reports, reference clones, and parameterized routine scripts—are stored locally under `.omp/` and `scripts/routines/`, persisting across sessions without remote server dependencies.
+- **Always-On LaTeX Math Rendering**: An always-apply rule ensures mathematical formulas, derivations, matrices, and radicals are written as valid LaTeX (`$…$`, `$$…$$`, `\begin{aligned}`), rendered natively by the oh-my-pi TUI.
+
+## Quick Install
+
+Requires an SSH key with access to the private repository. Latest release: **v0.25.1**.
+
+1. **Install pinned release v0.25.1**:
+
+   ```bash
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.1
    ```
 
-2. Prefer maximum immutability? Pin to a full commit SHA instead:
+2. **Maximum Immutability (Commit SHA)**:
 
-   ```
+   ```bash
    omp plugin install git@github.com:hae-banko/my-omp-skills.git#<full-sha>
    ```
 
-3. Exit and re-enter omp. Commands, skills, rules, and tools are discovered
-   at session start, so the new session is what picks them up.
-4. On your first session in a repo, run `/omp-setup` to configure the issue
-   tracker (local `.scratch/` by default; GitHub/GitLab available), triage
-   label vocabulary, and domain doc layout. Run it once per repo — it does
-   not need re-running after plugin updates, and re-running is safe.
+3. **Activate Plugin**:
+   Exit and re-enter `omp`. Commands, skills, rules, and tools are discovered at session start.
 
-For development only, you may install unpinned
-(`git@github.com:hae-banko/my-omp-skills.git`), which tracks `main`.
+4. **Initialize Repository Setup**:
+   On your first session in a repository, run `/omp-setup` to configure the issue tracker (local `.scratch/` by default; GitHub/GitLab supported), triage label vocabulary, and domain document layout:
 
-## Commands
+   ```bash
+   /omp-setup
+   ```
+   Run `/omp-setup` once per repository—it is safe, idempotent, and does not need re-running after plugin updates.
 
-All commands are user-invoked. The model knows them at session start and will
-suggest the right one when your situation fits.
+> **Development Mode**: Track `main` with unpinned install (`omp plugin install git@github.com:hae-banko/my-omp-skills.git`) or link a local working copy (`omp plugin link /path/to/my-omp-skills`).
 
-| Command | What it does | When to use |
+## Feature Highlights
+
+### Telemetry Widgets
+Visual feedback cards built on `@oh-my-pi/pi-tui` render real-time progress and structured state directly in the terminal transcript:
+- **`AuditCard`**: Renders audit slug, Semantic Versioning state, overview report path, subtopic counts, and revision status (`customType: "audit-card"`).
+- **`TicketBreakdownCard`**: Visualizes spec tracer-bullet ticket breakdowns, execution status, dependency graphs, and blocking edges (`customType: "ticket-breakdown"`).
+- **`TriageStatusCard`**: Displays issue and PR triage state machines, category distribution, and verification status (`customType: "triage-status"`).
+- **`ResearchReviewCard`**: Renders the TUI Research Review Window displaying field frameworks, item counts, execution scale, and strategy modules (`customType: "research-review"`).
+- **`ResearchWaveProgressCard`**: Displays parallel agent OODA wave execution progress, active background workers, and item settlement (`customType: "research-wave-progress"`).
+
+### Deep Research OODA Waves
+The `/research` family runs multi-agent investigation using feedback-driven Observe → Orient → Decide → Act (OODA) waves:
+- **Phase 1 (Outline & Review)**: Synthesizes `outline.yaml`, `fields.yaml`, and living `research.md`, emitting `ResearchReviewCard`.
+- **Phase 2 (Parallel OODA Execution)**: Spawns background agents across strategy search modules (`academic-papers`, `github-debug`, `stackoverflow`, `general-web`, `chinese-tech`). Adjust concurrency via presets (`small`: 1–2 agents, `medium`: 3–5 agents, `high`: max agents). Runs automatically without per-wave prompts (`--approve-each` opt-in). Uses `validate_json.py` to enforce strict schema validation and track `_attempts` provenance across waves.
+- **Phase 3 (Report Compilation)**: Converts item JSON files into a structured markdown report with Table of Contents and `_attempts` audit trails for unresolved fields.
+
+### SemVer Audits
+Independent critical evaluation of codebase areas, architectures, or proposals written to `.omp/audits/<slug>/`:
+- Structured 7-section reports (`overview.md`, legacy fallback `report.md`, and optional `subtopics/*.md` breakdowns).
+- Enforces strict Semantic Versioning (`vX.Y.Z`) lineage for revisions (Patch for clarifications, Minor for expanded scope, Major for fundamental conclusions rewrite).
+- Protected by policy guardrails (`installPolicy`): past reports and historical archives (`archive/vX.Y.Z.md`) cannot be arbitrarily overwritten or deleted without controlled SemVer frontmatter bumps and revision log entries.
+
+### Knowledge Base
+An append-only, timestamped, indexed store located at `.omp/knowledge/`:
+- `/record` captures lessons, architectural findings, and audit notes.
+- `/pitfall` instantly captures unexpected failures mid-task before context fades.
+- Policy enforcement (`installPolicy`) blocks in-place modification of `records/`, `pitfalls/`, and `INDEX.md`, preserving historical integrity.
+- The model queries past findings on demand via the model-invoked `knowledge_read` tool.
+
+### Routines Automation
+`/routinize` converts repeated ad-hoc workflows into canonical, parameterized scripts under `scripts/routines/`:
+- Registered in `scripts/routines/manifest.json` with strict parameter schemas.
+- Pre-flight syntax validation with `bash -n` before saving.
+- Model executes registered routines via the `run_routine` tool with visual execution cards.
+- Subcommands include `/routinize scan`, `/routinize run <id>`, and `/routinize list`.
+
+### Hindsight Reflection
+Toggleable settle-time reflection pass (`/hindsight`):
+- Runs a hidden pass after turns that execute real work, allowing the model to reconsider design-level choices before settling.
+- Configurable via `~/.omp/hindsight.json` to customize reflection prompts (`nudge`), lead-in text, and receipt notifications.
+
+## Complete Command Directory
+
+All 26 commands are user-invoked slash commands. The model knows them at session start and will suggest the right command when appropriate.
+
+| Command | Description | Workflow Phase |
 | --- | --- | --- |
-| **Plan & decide** | | |
-| `/ask-me` | Router over this package; suggests the command or flow that fits | Unsure which command to use |
-| `/grill-me` | Relentless one-question interview that sharpens a plan or design | Stress-test an idea before building |
-| `/grill-with-docs` | Grilling session that also records domain docs (glossary, ADRs) as it goes | Sharpen a plan and capture decisions |
-| `/wayfinder` | Maps a multi-session project into decision tickets, resolved one at a time | Plan work bigger than one session |
-| `/improve-codebase-architecture` | Scans for deepening opportunities, shows an HTML report, then grills the chosen one | Find and evaluate architecture improvements |
-| **Ship** | | |
-| `/to-spec` | Synthesizes the conversation into a spec, published to the issue tracker | Formalize what you already discussed |
-| `/to-tickets` | Breaks a spec or plan into tracer-bullet tickets with blocking edges | Split work into actionable tickets |
-| `/implement` | Builds from spec or tickets with TDD and a final code review | Deliver work described by tickets |
-| `/triage` | Moves issues and PRs through triage roles into agent-ready briefs | Process an incoming issue backlog |
-| **Research** | | |
-| `/research` | Phase 1: drafts outline (items + fields + living `research.md`), TUI Research Review Window (`ResearchReviewCard`) & subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `off`) | Start a deep research project |
-| `/research-add-items` | Adds research items to an existing outline.yaml and updates living `research.md` | Expand your research outline |
-| `/research-add-fields` | Adds field definitions to an existing fields.yaml and updates living `research.md` | Extend the field framework |
-| `/research-deep` | Phase 2: researches items with parallel agents in feedback-driven OODA waves into validated JSON — presets `small`/`medium`/`high`, no per-wave approval (`--approve-each` to restore) | Gather evidence per outline item |
-| `/research-report` | Phase 3: turns research JSON into a markdown report with table of contents & `_attempts` provenance notes for unresolved fields | Compile findings into a report |
-| **Knowledge & memory** | | |
-| `/record` | Saves a durable lesson, audit, or note to the local knowledge base | Persist a finding worth keeping |
-| `/pitfall` | Captures a fresh mistake into the knowledge base before context fades | Something just went wrong |
-| `/routinize` | Turns repeated ad-hoc work into parameterized scripts (`scripts/routines/manifest.json`) & `run_routine` tool; `bash -n` check & subcommands (`scan`, `run <id>`, `list`) | You keep doing the same thing |
-| `/reference` | Manages cloned reference material in `.omp/references/` (`add`, `update`, `remove`, `list`) | Acquire external docs for the repo |
-| `/audit` | Performs an independent, critical audit of a codebase area or architecture, written to `.omp/audits/<slug>/report.md` with SemVer lineage and a 7-section report format | Evaluate or stress-test an existing design or implementation |
-| **Session & support** | | |
-| `/omp-setup` | Configures the repo: issue tracker, triage labels, domain doc layout | First run in a new repo |
-| `/hindsight` | Toggle the settle-time reflection pass: after turns that did real work, one hidden pass reconsiders design-level changes before the turn settles | You want answers reconsidered before they settle |
-| `/math` | Explains and demos native LaTeX math rendering ($…$, $$…$$, `\begin{aligned}`) — always on, no toggle | You want to see what math rendering supports |
-| `/omp-handoff` | Compacts the conversation into a handoff document for another agent | Pass work to a fresh session |
-| `/plugin-issue` | Files a bug or feature request on this plugin's GitHub repo | The plugin misbehaves or lacks something |
-| `/teach` | Teaches a skill or concept over multiple sessions in a stateful workspace | Learn something over time |
-| `/writing-great-skills` | Reference for the vocabulary and principles of well-written skills | Write or edit a skill |
+| **Plan & Decide** | | |
+| `/ask-me` | Router over this package; suggests the command or flow that fits your situation | Plan & Decide |
+| `/grill-me` | Relentless one-question-at-a-time interview to sharpen a plan or design before building | Plan & Decide |
+| `/grill-with-docs` | Interactive grilling session that also records domain docs (glossary, ADRs) as decisions resolve | Plan & Decide |
+| `/wayfinder` | Maps multi-session projects into decision tickets on the tracker, resolved one at a time | Plan & Decide |
+| `/improve-codebase-architecture` | Scans codebase for deepening opportunities, presents an HTML report, then grills the chosen target | Plan & Decide |
+| **Ship & Build** | | |
+| `/to-spec` | Synthesizes current conversation context into a formal spec published to the configured tracker | Ship & Build |
+| `/to-tickets` | Breaks a spec or plan into tracer-bullet tickets with explicit blocking edges on the tracker | Ship & Build |
+| `/implement` | Builds work described by tickets/specs, driving TDD at pre-agreed seams and closing with code-review | Ship & Build |
+| `/triage` | Moves issues and PRs through triage roles into agent-ready briefs (`--unlabeled`, `--needs-triage`) | Ship & Build |
+| **Audit & Inspect** | | |
+| `/audit` | Independent audit of a codebase area/architecture written to `.omp/audits/<slug>/` with SemVer lineage | Audit & Inspect |
+| **Deep Research** | | |
+| `/research` | Phase 1: Drafts research outline, field framework, `research.md`, and emits `ResearchReviewCard` | Deep Research |
+| `/research-add-items` | Adds research items to existing `outline.yaml` and updates living `research.md` | Deep Research |
+| `/research-add-fields` | Adds field framework definitions to existing `fields.yaml` and updates living `research.md` | Deep Research |
+| `/research-deep` | Phase 2: Researches outline items with parallel agents in OODA waves into validated JSON (`small`/`medium`/`high`) | Deep Research |
+| `/research-report` | Phase 3: Converts research JSON results into a markdown report with TOC & `_attempts` provenance | Deep Research |
+| **Knowledge Base & Upkeep** | | |
+| `/record` | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`) | Knowledge & Upkeep |
+| `/pitfall` | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades | Knowledge & Upkeep |
+| `/routinize` | Converts repeated ad-hoc work into parameterized scripts (`scripts/routines/manifest.json`) & `run_routine` tool | Knowledge & Upkeep |
+| `/reference` | Manages cloned reference material in `.omp/references/` (`add`, `update`, `remove`, `list`) | Knowledge & Upkeep |
+| `/omp-setup` | Configures repo setup: issue tracker (local `.scratch/`, GitHub, GitLab), triage labels, domain layout | Knowledge & Upkeep |
+| `/hindsight` | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) | Knowledge & Upkeep |
+| `/math` | Explains and demos native LaTeX math rendering ($…$, $$…$$, `\begin{aligned}`) | Knowledge & Upkeep |
+| `/omp-handoff` | Compacts current conversation into a handoff document for another agent session | Knowledge & Upkeep |
+| `/plugin-issue` | Reports a bug or feature request on this plugin's GitHub repository | Knowledge & Upkeep |
+| `/teach` | Teaches a skill or concept over multiple sessions using current directory as a stateful workspace | Knowledge & Upkeep |
+| `/writing-great-skills` | Reference for skill writing vocabulary, constraints, and principles | Knowledge & Upkeep |
 
-## Dynamic completions
+## Interactive Autocompletions
 
 Commands provide intelligent, context-aware argument completion in the TUI:
 
-| Command | Completion Behavior |
+| Command | Dynamic Completion Behavior |
 | --- | --- |
 | `/research` | Offers subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `off`) and live research project directory slugs from `.omp/knowledge/research/` |
 | `/research-deep` | Offers execution presets (`small`, `medium`, `high`) and dated research project slugs (e.g., `small 2026-08-02_demo`) |
 | `/research-report` | Offers research project directory slugs from `.omp/knowledge/research/` |
 | `/routinize` | Offers subcommands (`scan`, `run <id>`, `list`) and live routine IDs from `manifest.json` and `scripts/routines/` |
 | `/reference` | Offers subcommands (`add`, `update`, `remove`, `list`) when empty, and cloned reference names for `update <name>` and `remove <name>` |
-| `/triage` | Offers `--unlabeled` and `--needs-triage` |
+| `/triage` | Offers `--unlabeled` and `--needs-triage` flags |
 | `/to-tickets` | Offers spec markdown files from `.scratch/specs/` and `docs/specs/` |
-| `/record` | Offers `--recent` |
-| `/pitfall` | Offers `--recent` |
+| `/record` | Offers `--recent` flag |
+| `/pitfall` | Offers `--recent` flag |
 | `/hindsight` | Offers subcommands (`on`, `off`, `status`) with live state indicators in descriptions |
 
-## Skills
+## Model-Invoked Skills
 
-The 12 skills are model-invoked: omp loads one automatically when the
-situation fits, so you don't type anything. Exception: `using-git-worktrees`
-runs only when you ask.
+The 12 skills are model-invoked: omp loads a skill automatically when the context matches. Exception: `using-git-worktrees` is user-invoked only.
 
-| Skill | What it does | When the model reaches for it |
-|---|---|---|
-| `grilling` | Relentless one-question-at-a-time interview until every decision branch resolves. | You have a plan or design worth stress-testing before building. |
-| `tdd` | Red-green-refactor test-first loop at pre-agreed seams. | Building a feature or fixing a bug where tests guard the contract. |
-| `code-review` | Two-axis review (Standards + Spec) of a diff via parallel subagents. | You ask for a review of a branch, PR, or work-in-progress. |
-| `diagnosing-bugs` | Disciplined loop: reproduce, minimise, hypothesise, instrument, fix, regression-test. | Something is broken, throwing, failing, or slow. |
-| `research` | Background agent investigates high-trust primary sources; findings as cited markdown. | A question needs facts from docs or papers, not guesses. |
-| `prototype` | Throwaway code that answers one design question (logic or UI). | Sanity-checking whether a state model or interface feels right. |
-| `domain-modeling` | Builds and sharpens the project domain model; maintains CONTEXT.md and ADRs. | Terminology is fuzzy or an architectural decision needs recording. |
-| `codebase-design` | Vocabulary for deep modules: lots of behaviour behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
-| `resolving-merge-conflicts` | Resolves in-progress merges/rebase by intent, hunk by hunk — never `--abort`. | A merge or rebase is in progress with conflicts. |
-| `using-references` | Consults the cloned reference corpus before reconstructing external behavior from scratch. | Reimplementing something with a reference available (ODE solvers, dense ML). |
-| `using-herdr` | Operates herdr (the terminal workspace manager this session runs inside) via the `herdr_layout`/`herdr_pane`/`herdr_agent` tools or the CLI. | The user mentions herdr, or asks to control workspaces, panes, or sibling agents. |
-| `using-git-worktrees` | Isolates feature work in a git worktree (`.worktrees/` convention). User-invoked only. | You ask for it — never auto-triggers. |
-
-## Runtime behaviors
-
-A few behaviors kick in without you invoking anything:
-
-| Behavior | What it does |
-|---|---|
-| Hidden Workflow Prompt Execution | Slash commands dispatch heavy workflow markdown bodies, argument substitutions, and companion file pointers as hidden context messages (`display: false`, `attribution: "user"`). The visible TUI prompt stays clean (`/command args`) while the model receives full workflow context. |
-| Bootstrap | At session start the model gets a one-time message listing every command, so it knows the package exists without `/help`. |
-| Knowledge-base policy | An append-only guard on `.omp/knowledge/`: records, pitfalls, and `INDEX.md` are never rewritten in place. New timestamped entries and index appends pass; research working files stay editable. |
-| Rules | A TTSR rule (a mid-conversation interrupt that stops the model just before it acts) blocks edits to knowledge-base entries; always-apply rules keep the right command discoverable during a conversation. |
-| `knowledge_read` tool | The model can look up past findings on demand — the index, records, pitfalls, and research projects. |
-| `run_routine` tool | Model-invoked tool to execute parameterized routine scripts specified in `scripts/routines/manifest.json`. |
-| Herdr tools | `herdr_layout`/`herdr_pane`/`herdr_agent` wrap the herdr CLI for structured workspace/pane/agent control when the session runs inside a herdr pane (opt-in; gate message outside). |
-| Transcript renderers | Custom TUI message renderers: `/record` and `/pitfall` compact receipt cards, `knowledge_read` cards, `ResearchReviewCard` TUI research review window, and `run_routine` execution cards. |
-
-The append-only guard exists because the knowledge base is a durable,
-append-only memory: entries are timestamped records of what happened, and
-later edits would silently rewrite history. If a finding is wrong, add a
-correcting entry rather than editing the old one.
-
-## Configuration
-
-`/hindsight` is configurable via `~/.omp/hindsight.json`. The file is a single
-JSON object whose every field is optional — missing or invalid fields fall
-back to the defaults, and any invocation of `/hindsight` re-reads the file so
-edits take effect without restarting omp. The toggle itself is silent: a
-receipt card and notification appear, the model does not reply.
-
-Supported fields:
-
-| Field | Type | Purpose |
+| Skill | Description | Trigger Condition |
 | --- | --- | --- |
-| `name` | string | Human-readable label for this configuration. Shown in the receipt card and logs so you can tell which preset is active (e.g. `"strict"`, `"exploratory"`). |
-| `nudge` | string | The reflection prompt passed to the hidden settle-time pass. Replace this to redirect what the model reconsiders — design-level changes, tone, scope, alternative approaches. |
-| `leadIn` | string | The phrase prepended to the model's hidden reasoning so it knows it is in the hindsight pass (e.g. `"Reconsider your last turn…"`). Change this only if you are also rewriting the upstream expectations that look for the prefix. |
-| `onMessage` | string | The receipt text shown when hindsight is enabled. Set to `""` to suppress the receipt entirely. |
-| `offMessage` | string | The receipt text shown when hindsight is disabled. Set to `""` to suppress the receipt entirely. |
+| `grilling` | Relentless one-question-at-a-time interview until every decision branch resolves. | You have a plan or design worth stress-testing before building. |
+| `tdd` | Red-green-refactor test-first loop at pre-agreed seams. | Building a feature or fixing a bug where tests guard the observable contract. |
+| `code-review` | Two-axis review (Standards + Spec) of diffs via parallel subagents. | You ask to review a branch, PR, or work-in-progress changes. |
+| `diagnosing-bugs` | Disciplined loop: reproduce, minimize, hypothesize, instrument, fix, regression-test. | Something is broken, throwing, failing, or suffering performance regressions. |
+| `research` | Background agent investigates high-trust primary sources; findings as cited markdown. | A question needs facts from primary documentation or papers. |
+| `prototype` | Throwaway code that answers one design question (logic or UI). | Sanity-checking whether a state model or user interface feels right. |
+| `domain-modeling` | Builds and sharpens project domain model; maintains `CONTEXT.md` and ADRs. | Terminology is fuzzy or an architectural decision needs recording. |
+| `codebase-design` | Vocabulary for deep modules: hiding complex behavior behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
+| `resolving-merge-conflicts` | Resolves in-progress merges/rebases by intent, hunk by hunk—never `--abort`. | A merge or rebase is in progress with conflicts. |
+| `using-references` | Consults cloned reference corpus before reconstructing external behavior from memory. | Reimplementing algorithms (ODE solvers, dense ML) with an available reference. |
+| `using-herdr` | Operates herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent` tools or CLI). | The user mentions herdr or asks to control workspaces, panes, or sibling agents. |
+| `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/` convention). | **User-invoked only**: explicitly requested by user. |
 
-Example:
+## Developer Contract & Guardrails
+
+To ensure agentic operations remain reliable and non-destructive, `my-omp-skills` enforces three core developer contracts:
+
+1. **Append-Only Knowledge Store**:
+   Policy guardrails (`installPolicy`) protect `.omp/knowledge/` records, pitfalls, and `INDEX.md`. Files in these directories can never be rewritten or deleted in place by file tools (`write`, `edit`) or shell commands (`sed`, `mv`, `rm`). Outdated entries are corrected by adding a new timestamped entry rather than mutating past history.
+2. **Non-Validating Audit Stance**:
+   Audits (`/audit`) mandate an independent, critical stance. The model is forbidden from rubber-stamping code, confirming unverified assumptions, or self-validating flawed designs. Every finding must be backed by concrete codebase evidence, and updates require explicit Semantic Versioning (`vX.Y.Z`) bumps in frontmatter.
+3. **Silent Workflow Prompt Execution**:
+   Commands dispatch extensive instructions, context schemas, and companion reference assets via hidden context messages (`display: false`, `attribution: "user"`). This eliminates transcript pollution while providing the model with strict, unambiguous execution contracts.
+
+## Hindsight Configuration
+
+Configure `/hindsight` via `~/.omp/hindsight.json`. All fields are optional:
 
 ```json
 {
@@ -205,88 +212,33 @@ Example:
 }
 ```
 
-## Deep Research internals
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `name` | string | Human-readable label for this configuration (e.g., `"strict"`, `"exploratory"`). |
+| `nudge` | string | The reflection prompt passed to the hidden settle-time pass. |
+| `leadIn` | string | Phrase prepended to the model's hidden reasoning during the hindsight pass. |
+| `onMessage` | string | Receipt text shown when hindsight is enabled (set to `""` to suppress). |
+| `offMessage` | string | Receipt text shown when hindsight is disabled (set to `""` to suppress). |
 
-The `/research` workflow operates in three feedback-driven phases:
+## Updating & Troubleshooting
 
-1. **Outline & Review Window (`/research`)**: Creates `outline.yaml`, `fields.yaml`, and a human-readable living outline `research.md`. Emits the TUI Research Review Window (`ResearchReviewCard`) displaying header status, field framework definitions, strategy modules, and execution scale settings. Subcommands (`review`, `add-items`, `add-fields`, `status`, `run`, `off`) allow interactive project management.
-2. **OODA Feedback Waves (`/research-deep`)**: Executes repeated Observe → Orient → Decide → Act waves with parallel background agents. Results per item are written to validated JSON and track internal `_attempts` (`{wave, angles, modules, outcome}`) and `_wave`. Unresolved fields are re-evaluated across waves. Execution presets adjust concurrency:
-   - `small`: 1–2 parallel agents, 1 item per agent.
-   - `medium`: 3–5 parallel agents, 2 items per agent (default).
-   - `high`: Max parallel agents, 1 item per agent.
-   By default, waves proceed without per-wave prompts (use `--approve-each` to restore approval gates).
-3. **Report Compilation & Provenance (`/research-report`)**: Compiles item JSON into a markdown report with a table of contents. For any unresolved fields, it appends `_attempts` provenance notes detailing what was tried across waves.
+All plugin management goes through `omp plugin`:
 
-Searches are dispatched through strategy modules under `commands/research/modules/` (`academic-papers.md`, `github-debug.md`, `stackoverflow.md`, `general-web.md`, `chinese-tech.md`). Each module is a short brief telling the background agent which sources to favour and how to phrase queries. Add or edit modules there to extend coverage without touching workflow code.
-
-## Routines internals
-
-`/routinize` manages repeated ad-hoc tasks by converting them into canonical scripts:
-
-- **Manifest Index (`scripts/routines/manifest.json`)**: Tracks routine metadata (`id`, `name`, `file`, `description`, `parameters`, `tags`).
-- **Subcommands**:
-  - `/routinize scan`: Scans conversation history for repeated patterns and proposes routine scripts.
-  - `/routinize run <id>`: Executes an indexed routine by ID or file.
-  - `/routinize list`: Displays all registered routine scripts.
-- **Safety & Validation**: Pre-flight validation runs `bash -n` syntax checks on proposed routine scripts before writing.
-- **`run_routine` Tool**: Allows the model to execute parameterized scripts using `manifest.json` parameter schemas, rendering execution output cards in the TUI.
-
-## Updating & troubleshooting
-
-Installed plugins live in `~/.omp/plugins/` and are pinned to a version. All
-management goes through `omp plugin <action>` (`install | uninstall | list |
-link | doctor | upgrade | …`); add `--dry-run` to preview any action without
-applying it.
-
-1. **See what's installed** — `omp plugin list` shows `my-omp-skills@<version>`.
-2. **List available releases** —
-   `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
-3. **Update to a new release** — reinstall pinned to the new tag, e.g.
-   `omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.0`.
-   Installs are immutable copies, so the old version keeps working until the
-   reinstall succeeds.
-4. **Activate** — exit and re-enter omp. Commands, skills, rules, and tools
-   are discovered at session start, so a running session won't see the new
-   version.
-5. **Pin a different version (downgrade / specific SHA)** — same command with
-   an older tag, or the most immutable form, a full commit SHA.
-6. **Stale bun git mirror** — if install fails with
-   `no commit matching "<tag>" found`, bun's cached git mirror predates the
-   tag. Refresh it, then retry:
-
+1. **View Installed Plugins**: `omp plugin list` shows `my-omp-skills@v0.25.1`.
+2. **Check Tagged Releases**: `git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags`.
+3. **Upgrade Version**: Reinstall pinned to the target release tag:
+   ```bash
+   omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.25.1
    ```
+4. **Fix Cached Mirror Mismatches**: If Bun's cache predates a new tag:
+   ```bash
    git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
    ```
-
-7. **Uninstall** — `omp plugin uninstall my-omp-skills`.
-8. **Local development** — `omp plugin link /path/to/my-omp-skills` replaces
-   the installed copy with a live directory: edit, re-link, and re-enter omp
-   to pick up changes. No tagging needed.
-9. **`omp plugin upgrade`** — for unpinned (tracks-`main`) installs only.
-   This package's installs are pinned by design, so updating means step 3.
-
-**Do I need to re-run `/omp-setup` after updating?** No. `/omp-setup` writes
-per-repo configuration (which issue tracker, triage labels, domain-doc
-layout), not a snapshot of the package version, and its output does not
-change between releases. New runtime behaviors (bootstrap, knowledge-base
-policy, rules, `knowledge_read` tool) activate on their own once you re-enter
-omp; the knowledge base is created on demand by the first `/record` or
-`/pitfall`. Re-running `/omp-setup` is always safe and idempotent — do it only
-to switch issue trackers or start from scratch.
+5. **Uninstall Plugin**: `omp plugin uninstall my-omp-skills`.
 
 ## Attribution
 
-The commands and skills here are adapted from three MIT-licensed open-source
-suites:
-
-- [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — base for
-  the command and skill structure.
-- [obra/superpowers](https://github.com/obra/superpowers) (MIT) — source of
-  the `using-git-worktrees` skill.
-- [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills)
-  (MIT) — source of the research command family (`/research`,
-  `/research-add-items`, `/research-add-fields`, `/research-deep`,
-  `/research-report`).
-
-`/research-deep` validates its JSON output, which requires Python with
-`pyyaml` installed.
+Adapted from three open-source suites (all MIT licensed):
+- [mattpocock/skills](https://github.com/mattpocock/skills) — Base command and skill structure.
+- [obra/superpowers](https://github.com/obra/superpowers) — Source of `using-git-worktrees` skill.
+- [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) — Source of the `/research` command family.

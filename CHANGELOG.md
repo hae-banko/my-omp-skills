@@ -4,6 +4,12 @@ All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 installs pin to a tag (see README). Version history before v0.5.0 predates
 this changelog.
 ## v0.25.0 — TUI Telemetry Cards & Autocomplete Overhaul
+## v0.25.1 — Developer-focused README overhaul
+
+- **Developer-Focused Documentation Overhaul**: Complete rewrite of `README.md` targeted at developers building with `oh-my-pi` plugins and agentic workflows.
+- **Architecture & System Diagrams**: Added Mermaid sequence/architecture diagrams covering extension API hooks, silent workflow prompt execution, TUI telemetry widgets, policy guardrails, and persistent storage (`.omp/`).
+- **Comprehensive Technical Breakdown**: Documented all 26 user-invoked slash commands, 12 model-invoked skills, 7 TUI telemetry renderers, SemVer auditing (`.omp/audits/`), routine scripts (`scripts/routines/`), append-only knowledge base (`.omp/knowledge/`), and LaTeX math typesetting.
+
 
 - **New TUI Telemetry Cards (`src/telemetry-renderer.ts`)**:
   - `AuditCard` (`audit-card`): Displays audit title, slug, version (`v0.1.0`), status (`active`), root report path (`overview.md`), subtopics count, and latest revision.
