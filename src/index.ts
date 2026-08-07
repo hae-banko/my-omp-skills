@@ -601,6 +601,7 @@ const COMMANDS: CommandSpec[] = [
     description:
       "Phase 3 of deep research ([slug]): convert the deep-research JSON results into a markdown report with table of contents.",
     bodyPath: "commands/research-report/command.md",
+    companions: ["commands/research-report/generate_report.py"],
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
 

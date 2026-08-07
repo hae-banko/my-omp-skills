@@ -21,22 +21,37 @@ Use the `ask` tool:
 - Which fields to display in the TOC besides item name?
 - Provide a dynamic options list based on the actual fields present in the JSON
 
-### Step 3: Generate Python Conversion Script
+### Step 3: Generate Report
 
-Generate `generate_report.py` in `{project_dir}`. Requirements:
+Copy the canonical conversion script **`commands/research-report/generate_report.py`** (companion file) into `{project_dir}/generate_report.py` and run it. Do **not** rewrite the script from scratch: it is generic (reads `fields.yaml` for structure, `results/` for items) and implements the report structure and technical requirements below. Adapt it only when a project genuinely needs a change, and keep the requirements intact.
+
+The script must satisfy:
 
 - Read all JSON from `output_dir`
 - Read `fields.yaml` for the field structure
 - Cover all field values from each JSON
 - Skip fields whose values contain `[uncertain]`
 - Skip fields listed in the `uncertain` array
-- Generate markdown report format: table of contents (with anchor links + user-selected summary fields) + detailed content (by field category)
 - Save to `{project_dir}/report.md`
+
+**Report structure (summary-first, detail-preserving):**
+
+1. **Header stats** — items, field coverage, unresolved fields, distinct sources cited.
+2. **Executive Summary** — one coverage paragraph (waves, strategy modules, coverage, unresolved, sources); priority / severity / effort mix lines ordered by rank (P0 before P1, blocker before cosmetic); **Top findings** = every P0 + P1 item with anchor link and a one-line summary; **Most-affected surfaces** histogram (top 5, bucketed by the component string before `(`).
+3. **Action Plan** — a table of every item (`# | Finding | Severity | Priority | Effort | Affected component`) sorted by priority then severity then item number, so the report opens with "what to fix first". Long affected-component values are truncated in the table; full value lives in the item meta line.
+4. **Table of Contents** — every item: number, name (anchor link), plus short badges (priority, effort) when present. Never truncate names; the Action Plan carries the summary fields.
+5. **Findings** — one section per item:
+   - Meta line first (severity, priority, effort, affected component) — these fields are **not** repeated in the body.
+   - One-line summary blockquote (`ux_issue` by convention; fall back to the first short field) — the item's essence at a glance.
+   - Body fields grouped by category. Fields ≤160 chars render inline; longer fields collapse into `<details><summary>Category — Field names</summary>…</details>` so the page stays scannable without losing detail. Skip in the body any field already in the meta line or the one-line summary.
+   - `**Sources:**` line listing the item's evidence URLs (deduped, `https://`-normalized link destinations).
+6. **Sources** — deduped appendix: every distinct URL with the item numbers it grounds. Bare domains (`w3.org/TR/WCAG22`) are matched as sources; file paths (`src/foo.ts`, `README.md`) and mid-word truncations (`CustomMessagePayload.co` inside `.content`) are not.
+7. **Unresolved Fields & Attempts** — per-item provenance for uncertain/empty fields, from `_attempts` (see requirement 7 below).
 
 **TOC format requirements:**
 - Must include every item
-- Each item shows: number, name (anchor link), user-selected summary fields
-- Example: `1. [GitHub Copilot](#github-copilot) - Stars: 10k | Score: 85%`
+- Each item shows: number, name (anchor link), optional short badges
+- Example: `1. [GitHub Copilot](#github-copilot) — P1 · M`
 
 #### Script technical requirements (must follow)
 

@@ -2,6 +2,17 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.30.0 — Research report v2: summary-first, detail-preserving
+
+`/research-report` now produces a report that opens with what to fix first instead of a 300KB wall of blockquotes. The generator moved from "model writes a script per the spec" to a canonical, generic companion script (`commands/research-report/generate_report.py`) copied into the project and run.
+
+- **Executive Summary** — coverage paragraph (waves, strategy modules, unresolved, sources), priority/severity/effort mix lines ordered by rank, every P0+P1 finding as a one-line anchored entry, and a most-affected-surfaces histogram.
+- **Action Plan** — table of all items sorted by priority then severity (`# | Finding | Severity | Priority | Effort | Affected component`) so the report opens with the fix order.
+- **Findings** — per item: meta line (severity/priority/effort/affected) + one-line summary stay visible; short body fields render inline; long fields collapse into `<details>` blocks (63 of them in the v0.28.0 report) so the page is scannable without losing a word of the research.
+- **Sources** — per-item evidence links plus a deduped appendix with item annotations; bare domains (`w3.org/TR/WCAG22`) are now extracted and `https://`-normalized, while file paths (`src/foo.ts`, `README.md`) and mid-word truncations (`CustomMessagePayload.co` inside `.content`) are excluded. The dashboard-ux report went from 25 to 91 cited sources.
+- **TOC** — full item names with short priority/effort badges; no more 44-char truncation.
+- **Spec**: `commands/research-report/command.md` Step 3 rewritten to point at the canonical script and document the v2 structure; the script is registered as a companion so it is disclosed with the command body.
+
 ## v0.29.0 — Deeper modules: research project store, card seam, locators, contract seam
 
 Internal restructuring from the 2026-08-07 architecture review (candidates 1–5). No behavior change: payloads, cards, completions, and the policy surface behave exactly as before — the seams underneath them are now real modules instead of duplicated code.

@@ -108,7 +108,7 @@ const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   "research-add-items": { companions: 1 },
   "research-add-fields": { companions: 1 },
   "research-deep": { companions: 7 },
-  "research-report": {},
+  "research-report": { companions: 1 },
   teach: { companions: 4 },
   "writing-great-skills": { companions: 1 },
 };
