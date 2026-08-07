@@ -25,11 +25,16 @@ import {
   renderResearchWaveProgressCard,
   renderResearchReportPreviewCard,
   renderResearchDashboardCard,
+  renderResearchHelpCard,
+  renderResearchErrorCard,
   type ResearchReviewPayload,
   type ResearchWaveProgressPayload,
   type ResearchReportPreviewPayload,
   type ResearchDashboardPayload,
+  type ResearchHelpPayload,
+  type ResearchErrorPayload,
 } from "../src/research-renderer.ts";
+import { displayWidth } from "../src/research-format.ts";
 import {
   renderAuditCard,
   renderTicketBreakdownCard,
@@ -527,7 +532,7 @@ if (!renderers["research-review"]) {
   if (!directTexts.includes("Section 2: Execution Settings")) {
     fail("research-review: output missing Section 2 title");
   }
-  if (!directTexts.includes("Section 3: Interactive Action Options")) {
+  if (!directTexts.includes("Section 3: Next Commands")) {
     fail("research-review: output missing Section 3 title");
   }
 
@@ -664,11 +669,15 @@ if (!renderers["research-dashboard"]) {
   if (!directTexts.includes("RESEARCH DASHBOARD")) {
     fail("research-dashboard: output missing header");
   }
-  if (!directTexts.includes("Pipeline Status:")) {
-    fail("research-dashboard: output missing pipeline status");
+  if (!directTexts.includes("Pipeline:")) {
+    fail("research-dashboard: output missing pipeline stepper");
   }
-  if (!directTexts.includes("Phase 1") || !directTexts.includes("Phase 2") || !directTexts.includes("Phase 3")) {
-    fail("research-dashboard: output missing phase indicators");
+  if (
+    !directTexts.includes("1. Outline ✓") ||
+    !directTexts.includes("[2. OODA]") ||
+    !directTexts.includes("3. Report")
+  ) {
+    fail("research-dashboard: output missing phase stepper marks");
   }
   if (!directTexts.includes("Global Completion Metrics:")) {
     fail("research-dashboard: output missing global completion metrics");
@@ -676,8 +685,8 @@ if (!renderers["research-dashboard"]) {
   if (!directTexts.includes("Project Artifacts Status:")) {
     fail("research-dashboard: output missing project artifacts status");
   }
-  if (!directTexts.includes("Recommended Next Step:")) {
-    fail("research-dashboard: output missing recommended next step");
+  if (!directTexts.includes("Next:")) {
+    fail("research-dashboard: output missing next step section");
   }
 
   const msgCard = renderers["research-dashboard"](
@@ -687,6 +696,229 @@ if (!renderers["research-dashboard"]) {
   ) as TuiContainer;
   if (!(msgCard instanceof TuiContainer)) {
     fail("renderer: registered research-dashboard renderer did not return a Container");
+  }
+}
+
+if (!renderers["my-omp-research-help"]) {
+  fail("renderers: my-omp-research-help not registered");
+} else {
+  const card = renderers["my-omp-research-help"](
+    { customType: "my-omp-research-help", details: { slug: "research", commands: [] } },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(card instanceof TuiContainer)) fail("renderer: my-omp-research-help did not produce a component");
+}
+if (!renderers["my-omp-research-error"]) {
+  fail("renderers: my-omp-research-error not registered");
+} else {
+  const card = renderers["my-omp-research-error"](
+    {
+      customType: "my-omp-research-error",
+      details: { slug: "s", code: "E1", message: "boom", hint: "try again" },
+    },
+    {},
+    null,
+  ) as TuiContainer;
+  if (!(card instanceof TuiContainer)) fail("renderer: my-omp-research-error did not produce a component");
+}
+
+// --- Renderer unit checks: 76-cell width budget + content contracts ---------
+
+// Every line of every research card must fit the fixed 76-cell box. The
+// renderers measure in display cells (CJK/emoji = 2), so this must hold even
+// for the CJK-slug dashboard below.
+const collectLines = (container: TuiContainer): string[] =>
+  ((container as unknown as { children: unknown[] }).children ?? []).map(
+    (c) => (c as { text?: string }).text ?? "",
+  );
+
+const cardsUnderTest: Array<{ label: string; render: () => TuiContainer }> = [];
+
+cardsUnderTest.push({
+  label: "research-dashboard (RUNNING/stale/CJK)",
+  render: () =>
+    renderResearchDashboardCard({
+      slug: "2026-08-07_研究",
+      status: "RUNNING",
+      topic: "UX improvements",
+      as_of: "2026-08-07T12:00:00Z",
+      freshness: "stale",
+      global_metrics: {
+        total_items: 21,
+        completed_items: 12,
+        total_fields: 18,
+        completed_fields: 18,
+        coverage: 12 / 21,
+      },
+      next_step_command: "/research-deep 2026-08-07_研究",
+    }),
+});
+
+cardsUnderTest.push({
+  label: "research-wave-progress (indeterminate)",
+  render: () =>
+    renderResearchWaveProgressCard({
+      wave: 1,
+      max_waves: 3,
+      status: "RUNNING",
+      indeterminate: true,
+    }),
+});
+
+cardsUnderTest.push({
+  label: "research-wave-progress (elapsed/eta/statuses)",
+  render: () =>
+    renderResearchWaveProgressCard({
+      elapsed_seconds: 192,
+      eta_seconds: 240,
+      per_item_status: [
+        { name: "a", status: "landed" },
+        { name: "b", status: "failed" },
+      ],
+    }),
+});
+
+cardsUnderTest.push({
+  label: "research-report-preview (toc/counts)",
+  render: () =>
+    renderResearchReportPreviewCard({
+      toc: [{ name: "Alpha", summary: "P1" }],
+      total_items: 21,
+      resolved_items: 21,
+      unresolved_fields_count: 0,
+      coverage: 1,
+    }),
+});
+
+cardsUnderTest.push({
+  label: "research-review (full/detailed field)",
+  render: () =>
+    renderResearchReviewCard({
+      slug: "s",
+      detail: "full",
+      items: Array.from({ length: 12 }, (_, i) => ({ name: `item-${i + 1}` })),
+      fields: [{ name: "f", detail_level: "detailed" }],
+    }),
+});
+
+cardsUnderTest.push({
+  label: "research-help",
+  render: () =>
+    renderResearchHelpCard({
+      slug: "research",
+      status: "RUNNING",
+      commands: [{ command: "/research dashboard", description: "Open the dashboard" }],
+      shortcuts: [{ key: "F1", description: "Open help" }],
+      env: { TERM: "xterm-256color", CI: "" },
+    }),
+});
+
+cardsUnderTest.push({
+  label: "research-error",
+  render: () =>
+    renderResearchErrorCard({
+      slug: "s",
+      code: "PROJECT_NOT_FOUND",
+      message: 'Project "s" not found under .omp/knowledge/research/',
+      hint: "Run '/research status' to list projects.",
+    }),
+});
+
+for (const { label, render } of cardsUnderTest) {
+  let card: TuiContainer;
+  try {
+    card = render();
+  } catch (err) {
+    fail(`unit: ${label} threw: ${err}`);
+    continue;
+  }
+  if (!(card instanceof TuiContainer)) {
+    fail(`unit: ${label} did not return a Container`);
+    continue;
+  }
+  for (const line of collectLines(card)) {
+    if (displayWidth(line) > 76) {
+      fail(`unit: ${label} line exceeds 76 cells (${displayWidth(line)}): ${JSON.stringify(line)}`);
+    }
+  }
+}
+
+// Content contracts per card.
+{
+  const dashText = collectLines(
+    renderResearchDashboardCard({
+      slug: "2026-08-07_研究",
+      status: "RUNNING",
+      topic: "UX improvements",
+      as_of: "2026-08-07T12:00:00Z",
+      freshness: "stale",
+      global_metrics: {
+        total_items: 21,
+        completed_items: 12,
+        total_fields: 18,
+        completed_fields: 18,
+        coverage: 12 / 21,
+      },
+      next_step_command: "/research-deep 2026-08-07_研究",
+    }),
+  ).join("\n");
+  for (const needle of ["[RUNNING]", "STALE", "Next:", "Topic:"]) {
+    if (!dashText.includes(needle)) fail(`unit: dashboard missing "${needle}"`);
+  }
+}
+
+{
+  const text = collectLines(
+    renderResearchWaveProgressCard({ wave: 1, max_waves: 3, status: "RUNNING", indeterminate: true }),
+  ).join("\n");
+  if (!text.includes("indeterminate")) fail("unit: wave(indeterminate) missing 'indeterminate'");
+  if (text.includes("-0.15")) fail("unit: wave(indeterminate) fabricated a ΔU default (-0.15)");
+}
+
+{
+  const text = collectLines(
+    renderResearchWaveProgressCard({
+      elapsed_seconds: 192,
+      eta_seconds: 240,
+      per_item_status: [
+        { name: "a", status: "landed" },
+        { name: "b", status: "failed" },
+      ],
+    }),
+  ).join("\n");
+  if (!text.includes("3m12s")) fail("unit: wave elapsed 192s did not render 3m12s");
+  if (!text.includes("ETA ≈ 4m")) fail("unit: wave eta 240s did not render 'ETA ≈ 4m'");
+  if (!text.includes("landed")) fail("unit: wave per-item status 'landed' missing");
+}
+
+{
+  const text = collectLines(
+    renderResearchReportPreviewCard({
+      toc: [{ name: "Alpha", summary: "P1" }],
+      total_items: 21,
+      resolved_items: 21,
+      unresolved_fields_count: 0,
+      coverage: 1,
+    }),
+  ).join("\n");
+  if (!text.includes("Table of Contents")) fail("unit: report preview missing 'Table of Contents'");
+  if (!text.includes("items 21")) fail("unit: report preview missing 'items 21'");
+}
+
+{
+  const text = collectLines(
+    renderResearchReviewCard({
+      slug: "s",
+      detail: "full",
+      items: Array.from({ length: 12 }, (_, i) => ({ name: `item-${i + 1}` })),
+      fields: [{ name: "f", detail_level: "detailed" }],
+    }),
+  ).join("\n");
+  if (!text.includes("★★★")) fail("unit: review detailed field missing ★★★");
+  if (!text.includes("Next Commands")) fail("unit: review missing 'Next Commands' section");
+  if (text.includes("[1] Launch Deep Waves")) {
+    fail("unit: review still shows fake '[1] Launch Deep Waves' affordance");
   }
 }
 
@@ -925,6 +1157,38 @@ if (!notifyCalls.includes("Research Review Window loaded")) {
 const reviewCard = customMessages.find((m) => m.customType === "research-review");
 if (!reviewCard || reviewCard.display !== true) {
   fail("research review: custom card research-review missing or display false");
+}
+
+sent.length = 0;
+customMessages.length = 0;
+notifyCalls = [];
+await registered["research"].handler("help", {
+  ui: { notify: (msg: string) => notifyCalls.push(msg) },
+});
+if (sent.length !== 0) fail("research help: queued a user message to agent");
+if (!notifyCalls.includes("Research Help loaded")) {
+  fail(`research help: toast "Research Help loaded" missing, got: ${JSON.stringify(notifyCalls)}`);
+}
+const helpCard = customMessages.find((m) => m.customType === "my-omp-research-help");
+if (!helpCard || helpCard.display !== true) {
+  fail("research help: custom card my-omp-research-help missing or display false");
+}
+
+sent.length = 0;
+customMessages.length = 0;
+notifyCalls = [];
+await registered["research"].handler("envcheck", {
+  ui: { notify: (msg: string) => notifyCalls.push(msg) },
+});
+if (sent.length !== 0) fail("research envcheck: queued a user message to agent");
+if (!notifyCalls.includes("Research environment diagnostics loaded")) {
+  fail(
+    `research envcheck: toast "Research environment diagnostics loaded" missing, got: ${JSON.stringify(notifyCalls)}`,
+  );
+}
+const envCard = customMessages.find((m) => m.customType === "my-omp-research-help");
+if (!envCard || envCard.display !== true) {
+  fail("research envcheck: custom card my-omp-research-help missing or display false");
 }
 
 sent.length = 0;

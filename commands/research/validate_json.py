@@ -26,19 +26,52 @@ _NESTED_KEYS = {k for keys in CATEGORY_MAPPING.values() for k in keys}
 def load_fields_yaml(fields_path):
     with fields_path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"fields.yaml at {fields_path} is not a mapping")
     all_fields = set()
     required_fields = set()
     field_categories = {}
-    for category in data.get("field_categories", []):
-        cat_name = category.get("category", "Unknown")
-        for field in category.get("fields", []):
-            fname = field.get("name")
-            if not fname:
+    if "field_categories" in data:
+        # Legacy schema: a list of {category, fields: [{name, required}]}.
+        for category in data.get("field_categories", []):
+            cat_name = category.get("category", "Unknown")
+            for field in category.get("fields", []):
+                fname = field.get("name")
+                if not fname:
+                    continue
+                all_fields.add(fname)
+                if field.get("required", False):
+                    required_fields.add(fname)
+                field_categories[fname] = cat_name
+    elif "categories" in data:
+        # Current schema: a mapping category -> list of {name, description, detail_level}.
+        categories = data["categories"]
+        if not isinstance(categories, dict):
+            raise ValueError(
+                f"'categories' in {fields_path} must be a mapping of category -> list of "
+                f"field definitions, got {type(categories).__name__}"
+            )
+        for cat_name, fields in categories.items():
+            if not isinstance(fields, list):
                 continue
-            all_fields.add(fname)
-            if field.get("required", False):
+            for field in fields:
+                if not isinstance(field, dict):
+                    continue
+                fname = field.get("name")
+                if not fname:
+                    continue
+                all_fields.add(fname)
+                # Current schema has no required/optional split: every defined field
+                # gates the exit code, so treat all as required.
                 required_fields.add(fname)
-            field_categories[fname] = cat_name
+                field_categories[fname] = cat_name
+    else:
+        raise ValueError(
+            f"fields.yaml at {fields_path} must define either 'field_categories' "
+            "(legacy list of {category, fields}) or 'categories' "
+            "(mapping of category -> list of {name, description, detail_level}); "
+            f"found keys: {sorted(data)}"
+        )
     return all_fields, required_fields, field_categories
 
 
@@ -64,12 +97,42 @@ def extract_json_fields(data, category_mapping=None):
     return fields
 
 
+def collect_unresolved(data, all_fields):
+    """Defined fields that are present-but-unresolved in a JSON item.
+
+    A field counts as unresolved when its value is exactly "[uncertain]"
+    (after stripping) at any depth, or when its name appears in the JSON's
+    top-level "uncertain" array. Such fields are present, not missing.
+    """
+    unresolved = set()
+    uncertain_names = data.get("uncertain") if isinstance(data, dict) else None
+    if isinstance(uncertain_names, list):
+        for name in uncertain_names:
+            if isinstance(name, str) and name in all_fields:
+                unresolved.add(name)
+    stack = [data]
+    while stack:
+        obj = stack.pop()
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k in _SKIP_KEYS:
+                    continue
+                if isinstance(v, str) and v.strip() == "[uncertain]" and k in all_fields:
+                    unresolved.add(k)
+                elif isinstance(v, (dict, list)):
+                    stack.append(v)
+        elif isinstance(obj, list):
+            stack.extend(item for item in obj if isinstance(item, (dict, list)))
+    return unresolved
+
+
 def validate_json(json_path, all_fields, required_fields, field_categories):
     with json_path.open(encoding="utf-8") as f:
         data = json.load(f)
     json_fields = extract_json_fields(data)
-    missing = all_fields - json_fields
-    covered_count = len(all_fields) - len(missing)
+    unresolved = collect_unresolved(data, all_fields)
+    missing = (all_fields - json_fields) - unresolved
+    present = (json_fields & all_fields) - unresolved
     extra = json_fields - all_fields
     missing_required = missing & required_fields
     missing_optional = missing - required_fields
@@ -79,10 +142,13 @@ def validate_json(json_path, all_fields, required_fields, field_categories):
     return {
         "file": json_path.name,
         "total_defined": len(all_fields),
-        "covered": covered_count,
+        "present": len(present),
+        "unresolved": sorted(unresolved),
+        "unresolved_count": len(unresolved),
         "missing": len(missing),
+        "missing_list": sorted(missing),
         "extra": len(extra),
-        "coverage_rate": covered_count / len(all_fields) * 100 if all_fields else 100.0,
+        "coverage_rate": len(present) / len(all_fields) * 100 if all_fields else 100.0,
         "missing_required": sorted(missing_required),
         "missing_optional": sorted(missing_optional),
         "missing_by_category": {k: sorted(v) for k, v in missing_by_category.items()},
@@ -97,7 +163,14 @@ def print_result(result, verbose=True):
     print(f"\n{line}")
     print(f"[{status}] {result['file']}")
     print(line)
-    print(f"Coverage: {result['coverage_rate']:.1f}% ({result['covered']}/{result['total_defined']})")
+    print(
+        f"Defined: {result['total_defined']} · Present: {result['present']} · "
+        f"Unresolved: {result['unresolved_count']} · Missing: {result['missing']}"
+    )
+    print(f"Coverage: {result['coverage_rate']:.1f}% ({result['present']}/{result['total_defined']})")
+    if verbose and result["unresolved_count"]:
+        print(f"\n[INFO] Present-but-unresolved fields ({result['unresolved_count']}):")
+        print(f"  {', '.join(result['unresolved'])}")
     if result["missing_required"]:
         print(f"\n[ERROR] Missing required fields ({len(result['missing_required'])}):")
         print("\n".join(f"  - {f}" for f in result["missing_required"]))
@@ -134,7 +207,11 @@ def main():
         print(f"[ERROR] fields.yaml not found: {fields_path}")
         sys.exit(1)
     print(f"Field definition file: {fields_path}")
-    all_fields, required_fields, field_categories = load_fields_yaml(fields_path)
+    try:
+        all_fields, required_fields, field_categories = load_fields_yaml(fields_path)
+    except ValueError as exc:
+        print(f"[ERROR] {exc}")
+        sys.exit(1)
     print(f"Total fields: {len(all_fields)} (required: {len(required_fields)}, optional: {len(all_fields) - len(required_fields)})")
     json_files = (
         [Path(p) for p in args.json]

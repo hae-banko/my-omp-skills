@@ -30,6 +30,7 @@ Anchor to the repo root (`git rev-parse --show-toplevel`). Locate the project un
 
 - Check completed JSON files in `{project_dir}/results` (or the configured `output_dir`)
 - Skip completed items
+- If the front-matter `status` is `PAUSED` (or the directory already holds completed item JSONs from a prior run), announce **`skips N completed item(s)`** — N = the number of items with finished JSON — before starting the next wave, so the user knows exactly what the resume will reuse.
 
 ### Step 3: OODA Waves
 
@@ -49,22 +50,49 @@ Phase 2 runs repeated waves until convergence (replaces single-pass batch execut
   pi.sendMessage({
     customType: "research-wave-progress",
     display: true,
+    content: `Research wave ${wave}/${max_waves} — ${slug}: ${completed_items}/${total_items} items · ${completed_fields}/${total_fields} fields`,
     details: wavePayload
   })
   ```
   `wavePayload` is a `ResearchWaveProgressPayload` (see `src/research-renderer.ts`) populated from the wave's Observe step:
-  - `slug`, `topic`
+  - `slug`, `topic` — project identity
+  - `status` (canonical word — `RUNNING` on per-wave cards; `PAUSED`/`CANCELLED`/`ERROR` on the terminal stop card)
   - `wave` (current wave number, 1-indexed), `max_waves` (the convergence cap)
   - `field_completion`, `completed_fields`, `total_fields` (resolved/total field coverage)
   - `active_subagents` (count or list of dispatched names/ids for this wave), `active_modules` (modules used this wave)
-  - `uncertainty_delta` / `delta_u` (reduction in unresolved field count vs. the previous wave; `0` when none)
-  - Plus operational metrics the renderer reads: `total_items`, `completed_items`, `pending_items`, `wave_items`, `unresolved_fields_count`, `preset`
-  Emit on **every** wave (including wave 1) — do not skip the first emission; the TUI uses it to render the initial progress frame.
+  - `uncertainty_delta` / `delta_u` (reduction in unresolved field count vs. the previous wave) — send **only when a real reduction was observed**; omit the field entirely when the value is unknown or unchanged. Never fabricate a value (the renderer no longer renders a default `-0.15`).
+  - Operational metrics: `total_items`, `completed_items`, `pending_items`, `wave_items`, `unresolved_fields_count`, `preset`, `failed_items`, `failed_count`, `per_item_status` (`[{name, status}]` — per-item state for the wave)
+  - Time semantics: `elapsed_seconds`, `eta_seconds` (rendered as `Time: elapsed 3m12s · ETA ≈ 4m` when present), `indeterminate` (`true` when the wave is running with no results yet — the TUI shows "RUNNING… (indeterminate — no results yet)" instead of a 0% bar), `as_of` (ISO-8601 UTC)
+  Emit on **every** wave (including wave 1) — do not skip the first emission; the TUI uses it to render the initial progress frame. Every wave card carries `content` (a plain-text one-liner) so non-TTY/CI/print mode degrades to readable prose.
+- **Front-matter upkeep** — after each wave's Observe updates (and the wave-progress emission), keep `research.md`'s front-matter truthful:
+  - `counts.filled` / `counts.partial` / `counts.pending` recomputed from the item JSONs: `filled` = items fully resolved, `partial` = items with `[uncertain]`/empty fields remaining, `pending` = items with no JSON yet
+  - `waves_run` incremented per completed wave
+  - `status: RUNNING` (canonical word) while the loop continues
+  - `updated` (ISO-8601 UTC)
+  At convergence, set `status: CONVERGED` (keeping `waves_run` and `counts` truthful).
+- **Lifecycle Dashboard Emission** — keep the TUI's lifecycle dashboard current at phase boundaries, at **most one dashboard card per wave**:
+  - At the **start of each wave** (before dispatching the batch), emit a `research-dashboard` card with `status: RUNNING`, details from the project directory.
+  - After **convergence**, emit a `research-dashboard` card with `status: CONVERGED`.
+  - Dedupe: if the payload would be **byte-identical to the previous dashboard card's payload**, skip the emission.
+  ```ts
+  pi.sendMessage({
+    customType: "research-dashboard",
+    display: true,
+    content: `Research — ${slug}: ${status} · wave ${wave}/${max_waves} · ${completed_items}/${total_items} items`,
+    details: dashboardPayload // ResearchDashboardPayload (see src/research-renderer.ts)
+  })
+  ```
 - **Convergence Check** — stop the wave loop when ANY holds:
 - (a) the last wave produced zero new `[uncertain]`/empty items
 - (b) two consecutive waves produced no improvement (no reduction in the total `[uncertain]`/empty field count across items)
 - (c) `max_waves` reached (default 3; `--max-waves N` overrides)
-- (d) the user stops it
+- (d) the user stops it (interrupt) — run the **Stop / Pause / Resume** path below
+
+**Stop / Pause / Resume** — when the user stops a run mid-loop:
+1. **Cancel outstanding jobs**: cancel the dispatched wave subagent jobs (`hub cancel` on the wave's task jobs, or abort the parent tool call) so no orphaned agents keep writing results.
+2. **Write the stop state to `research.md` front-matter**: `status: PAUSED` when completed items exist and the run is resumable, `status: CANCELLED` for a hard abort; update `updated` (ISO-8601 UTC) and keep `counts` / `waves_run` truthful.
+3. **Emit exactly ONE terminal card** (wave-progress or dashboard) carrying the `PAUSED` or `CANCELLED` status so the TUI leaves a definitive end state — no further emissions after it.
+4. **On resume** (re-running `/research-deep`), Step 2 Resume Check announces `skips N completed item(s)` before starting the next wave.
 
 **Parameters:**
 - `{project_dir}`: absolute path of the located project directory (`.omp/knowledge/research/<date>_<topic_slug>/`)

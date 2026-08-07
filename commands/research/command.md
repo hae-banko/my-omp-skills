@@ -7,12 +7,15 @@ Preliminary research on a topic, producing a research **outline** — items (res
 - `/research 1 [topic]` — Phase 1: Outline Generation. Produce the research outline (items + field framework) for `{topic}`. The handler emits a draft Research Review Window immediately; the workflow body replaces it with the real outline payload.
 - `/research 2 [slug]` — Phase 2: Deep Research OODA Waves. Run deep research phase for a project (equivalent to `/research-deep [slug]`).
 - `/research 3 [slug]` — Phase 3: Summary Report Generation. Convert deep-research JSON results into a markdown report (equivalent to `/research-report [slug]`).
-- `/research dashboard [slug]` — Research Lifecycle Dashboard. Emit the lifecycle dashboard (`pi.sendMessage({ customType: "research-dashboard", display: true, details: payload })`) for a research project (or the most recent dated project if `slug` is omitted).
-- `/research review [slug]` — Open/emit the Research Review Window (`pi.sendMessage({ customType: "research-review", display: true, details: payload })`) for an existing research project slug (or the most recent if omitted).
+- `/research dashboard [slug] [--compact]` — Research Lifecycle Dashboard. Emit the lifecycle dashboard (`pi.sendMessage({ customType: "research-dashboard", display: true, details: payload })`) for a research project (or the most recent dated project if `slug` is omitted). `--compact` sets `detail: "compact"` on the payload.
+- `/research review [slug] [--full | --compact]` — Open/emit the Research Review Window (`pi.sendMessage({ customType: "research-review", display: true, details: payload })`) for an existing research project slug (or the most recent if omitted). `--full` sets `detail: "full"` (lists more items/fields, shows detailed field levels); `--compact` (default) caps previews.
 - `/research add-items [slug]` — Add items to an existing research outline, update `research.md`, and re-emit `research-review`.
 - `/research add-fields [slug]` — Add field definitions to an existing research fields framework, update `research.md`, and re-emit `research-review`.
 - `/research status [slug]` — Display current progress and status summary for a research project (emits `research-dashboard`).
 - `/research run [slug]` — Start deep research phase for a project (equivalent to `/research 2 [slug]` / `/research-deep [slug]`).
+- `/research help [slug]` — Open the research help card: the full subcommand surface, shortcuts, and the recommended next step for the project. Emits `customType: "my-omp-research-help"` (namespaced `ResearchHelpPayload`).
+- `/research envcheck [slug]` — Terminal environment diagnostics for the research cards. Same help card plus `env` (`TERM`, `COLORTERM`, `NO_COLOR`, `CI`). Emits `customType: "my-omp-research-help"` with the `env` field populated.
+- `/research off` — Close/disable the Research Review Window.
 
 ## Subcommand Execution Details
 
@@ -33,10 +36,14 @@ When `/research` is invoked with a subcommand:
      })
      ```
      `payload` is a `ResearchDashboardPayload` (see `src/research-renderer.ts`) populated from the project directory:
-     - `slug`, `topic`, `current_phase` (1|2|3), `pipeline_status` (e.g. `OUTLINE`, `RUNNING`, `CONVERGED`, `REPORT_READY`)
-     - `global_metrics`: `total_items`, `completed_items`, `total_fields`, `completed_fields`, `coverage`
+     - `slug`, `topic`, `status` (canonical pipeline word — `OUTLINE` | `RUNNING` | `CONVERGED` | `REPORT_READY` | `PAUSED` | `CANCELLED` | `ERROR` | `STALE`), `current_phase` (1|2|3)
+     - `pipeline_status` (legacy phase-arrow display string — kept for compatibility, superseded by `status`)
+     - `global_metrics`: `total_items`, `completed_items`, `total_fields`, `completed_fields` (capped at `total_fields`), `coverage`
      - `artifacts`: `outline_yaml`, `fields_yaml`, `results_json`, `report_md` (presence/size)
-     - `recommended_next_step` (the next subcommand the user should run)
+     - `recommended_next_step` (the next subcommand the user should run), `next_step_command` (the concrete command with the slug filled in, e.g. `/research-deep 2026-08-07_<topic_slug>`)
+     - `as_of` (ISO-8601 UTC), `freshness` (`"fresh"` | `"warn"` | `"stale"` — only meaningful while `RUNNING`), `expected_interval_seconds`
+     - `waves_run`, `max_waves`, `pending_items`, `unresolved_fields_count`, `detail` (`"compact"` | `"full"`), `errors` (string[]), `project_path`
+     `--compact` sets `detail: "compact"` on the payload.
   4. Summarize progress and lifecycle status to the user in prose.
 - **`review [slug]`**:
   1. Locate the project directory under `<repo-root>/.omp/knowledge/research/` matching `slug` (or the most recent dated directory if `slug` is omitted).
@@ -52,6 +59,36 @@ When `/research` is invoked with a subcommand:
 - **`add-items [slug]`**: Delegate to the item addition workflow (same as `/research-add-items [slug]`), then update `research.md` (counts, items list, `updated` timestamp) and re-emit `research-review`.
 - **`add-fields [slug]`**: Delegate to the field addition workflow (same as `/research-add-fields [slug]`), then update `research.md` (counts, required fields list, `updated` timestamp) and re-emit `research-review`.
 - **`run [slug]`**: Delegate to the deep research workflow (equivalent to `/research-deep [slug]`).
+- **`help [slug]`** / **`envcheck [slug]`**:
+  1. Resolve the project directory under `<repo-root>/.omp/knowledge/research/` matching `slug` (or the most recent dated directory if `slug` is omitted); if none resolves, the payload falls back to `slug: "research"` with no phase/status.
+  2. Emit the research help card via the **namespaced** customType `my-omp-research-help`:
+     ```ts
+     pi.sendMessage({
+       customType: "my-omp-research-help",
+       display: true,
+       attribution: "user",
+       content: `${head === "envcheck" ? "Research environment diagnostics" : "Research help"} — ${slug}`,
+       details: payload
+     })
+     ```
+     `payload` is a `ResearchHelpPayload` (`src/research-renderer.ts`): `slug`, `phase` (1|2|3), `status` (canonical word), `commands` (`[{command, description}]` — the full `/research` subcommand surface), `shortcuts` (`[{key, description}]`), `next_step` (the dashboard's `next_step_command`). `envcheck` additionally sets `env` (`TERM`, `COLORTERM`, `NO_COLOR`, `CI`) for terminal diagnostics.
+  3. Toast `Research Help loaded` (help) or `Research environment diagnostics loaded` (envcheck). No user message is queued.
+- **Project-not-found errors**: `dashboard`, `status`, and `review` emit a **namespaced** error card instead of a toast-only path:
+  ```ts
+  pi.sendMessage({
+    customType: "my-omp-research-error",
+    display: true,
+    attribution: "user",
+    content: `Research error — project "${slug}" not found`,
+    details: {
+      slug,
+      code: "PROJECT_NOT_FOUND",
+      message: `Project "${slug}" not found under .omp/knowledge/research/`,
+      hint: "Run '/research status' to list projects, or '/research <topic>' to create one.",
+    }
+  })
+  ```
+  `my-omp-research-error` carries a `ResearchErrorPayload` (`{slug, code, message, hint}`). Both `my-omp-research-help` and `my-omp-research-error` are namespaced customTypes registered with the renderer (see `src/research-renderer.ts`).
 If invoked with `/research <topic>` (or a new research topic): execute Phase 1 workflow below.
 
 ## Workflow (Phase 1 Outline Generation)
@@ -150,7 +187,7 @@ Create `research.md` living outline in the project directory alongside `outline.
   ---
   project: YYYY-MM-DD_<topic_slug>
   topic: "<topic>"
-  status: outline
+  status: OUTLINE
   phase: 1
   created: YYYY-MM-DD
   updated: YYYY-MM-DDTHH:MM:SSZ
@@ -223,4 +260,5 @@ Show summary to the user for confirmation.
 - `/research add-fields [slug]` (or `/research-add-fields`) — supplement fields
 - `/research review [slug]` — open/emit TUI Research Review Window
 - `/research status [slug]` — show project status
+- `/research help [slug]` — open the research help card (commands, shortcuts, next step)
 - `/research run [slug]` (or `/research-deep`) — start deep research: it runs in feedback-driven OODA waves (no per-wave approval by default; `--approve-each` restores it)

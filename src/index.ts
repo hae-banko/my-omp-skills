@@ -29,14 +29,20 @@ import { installPolicy } from "./policy.ts";
 import { installRoutinesTool } from "./routines.ts";
 import {
   installResearchDashboardRenderer,
+  installResearchErrorRenderer,
+  installResearchHelpRenderer,
   installResearchReportPreviewRenderer,
   installResearchReviewCardRenderer,
   installResearchWaveProgressRenderer,
   type ResearchDashboardPayload,
+  type ResearchErrorPayload,
   type ResearchFieldSpec,
+  type ResearchHelpPayload,
   type ResearchItemSpec,
   type ResearchReviewPayload,
 } from "./research-renderer.ts";
+import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research-freshness.ts";
+import { derivePipelineStatus, phaseOf } from "./research-status.ts";
 import {
   installAuditCardRenderer,
   installTicketBreakdownRenderer,
@@ -50,6 +56,22 @@ const ROOT = join(import.meta.dirname, "..");
 const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
 const ARGUMENTS_RE = /\$ARGUMENTS/g;
+
+/** Single source of truth for /research subcommands (completions + help card). */
+const RESEARCH_SUBCOMMANDS: Array<{ value: string; label: string; description: string }> = [
+  { value: "1", label: "1", description: "Phase 1: generate an outline for a new topic" },
+  { value: "2", label: "2", description: "Phase 2: run deep research (alias for /research-deep)" },
+  { value: "3", label: "3", description: "Phase 3: generate the final report (alias for /research-report)" },
+  { value: "dashboard", label: "dashboard", description: "Open the research dashboard" },
+  { value: "review", label: "review", description: "Open/emit Research Review Window for a project" },
+  { value: "add-items", label: "add-items", description: "Add research items to an existing outline" },
+  { value: "add-fields", label: "add-fields", description: "Add field definitions to an existing outline" },
+  { value: "status", label: "status", description: "Show status of a research project" },
+  { value: "run", label: "run", description: "Run deep research phase for a project" },
+  { value: "help", label: "help", description: "Open the research help card (commands, shortcuts, next step)" },
+  { value: "envcheck", label: "envcheck", description: "Show terminal environment diagnostics for research cards" },
+  { value: "off", label: "off", description: "Close/disable Research Review Window" },
+];
 
 const repoRootCache = new Map<string, string>();
 function findRepoRoot(startDir: string = process.cwd()): string {
@@ -176,29 +198,108 @@ function getResearchDashboardMetrics(projectDir: string, slug: string): Research
         }
       } catch {}
     }
-    completedFields = totalValidFieldsAcrossJson;
+    // Cap at the fields.yaml denominator — the numerator counts fields found
+    // across result JSONs and could previously exceed it (=> >100% coverage).
+    completedFields = totalFields > 0 ? Math.min(totalFields, totalValidFieldsAcrossJson) : totalValidFieldsAcrossJson;
   }
 
   const coverage = totalItems > 0 ? Math.min(1, completedItems / totalItems) : (hasReport ? 1 : 0);
 
-  let current_phase: 1 | 2 | 3 = 1;
-  let pipeline_status = "[Phase 1: Outline] ──> Phase 2: OODA ──> Phase 3: Report";
-  let recommended_next_step = "Run /research-deep to execute Phase 2 background research waves.";
+  // Canonical pipeline status — one vocabulary across all research cards.
+  const status = derivePipelineStatus({ hasReport, completedItems, totalItems });
+  const current_phase: 1 | 2 | 3 = phaseOf(status);
 
-  if (hasReport) {
-    current_phase = 3;
-    pipeline_status = "Phase 1: Outline ──> Phase 2: OODA ──> [Phase 3: Report]";
-    recommended_next_step = "Research complete. View report.md for details.";
-  } else if (completedItems > 0) {
-    current_phase = 2;
-    pipeline_status = "Phase 1: Outline ──> [Phase 2: OODA] ──> Phase 3: Report";
-    recommended_next_step = "Run /research-report to generate the final report.";
+  // Topic from research.md front-matter (fallback: outline.yaml).
+  let topic: string | undefined;
+  try {
+    const researchMd = join(projectDir, "research.md");
+    if (existsSync(researchMd)) {
+      const m = readFileSync(researchMd, "utf8").match(/^topic:\s*["']?([^"'\r\n]+)["']?/m);
+      if (m) topic = m[1].trim();
+    }
+    if (!topic && hasOutline) {
+      const outlinePath = existsSync(join(projectDir, "outline.yaml"))
+        ? join(projectDir, "outline.yaml")
+        : join(projectDir, "outline.yml");
+      const m = readFileSync(outlinePath, "utf8").match(/^topic:\s*["']?([^"'\r\n]+)["']?/m);
+      if (m) topic = m[1].trim();
+    }
+  } catch {
+    // ignore — topic stays undefined
+  }
+
+  // as_of = newest artifact mtime (honest snapshot time, frozen at emit).
+  // Freshness only applies to RUNNING — OUTLINE/REPORT_READY are historical.
+  let asOfIso: string | undefined;
+  try {
+    const candidates = [
+      join(projectDir, "research.md"),
+      join(projectDir, "outline.yaml"),
+      join(projectDir, "fields.yaml"),
+      join(projectDir, "report.md"),
+      ...(resultsDir ? jsonFiles.map((f) => join(resultsDir, f)) : []),
+    ];
+    let newest = 0;
+    for (const c of candidates) {
+      if (existsSync(c)) newest = Math.max(newest, statSync(c).mtimeMs);
+    }
+    if (newest > 0) asOfIso = new Date(newest).toISOString();
+  } catch {
+    // ignore — no as_of
+  }
+  const freshness =
+    status === "RUNNING"
+      ? freshnessOf({ asOfIso, expectedIntervalSeconds: EXPECTED_INTERVAL_SECONDS.RUNNING })
+      : undefined;
+
+  // waves_run from research.md front-matter; pending + unresolved from results.
+  let wavesRun: number | undefined;
+  try {
+    const researchMd = join(projectDir, "research.md");
+    if (existsSync(researchMd)) {
+      const m = readFileSync(researchMd, "utf8").match(/^waves_run:\s*(\d+)/m);
+      if (m) wavesRun = parseInt(m[1], 10);
+    }
+  } catch {
+    // ignore
+  }
+  let unresolvedCount = 0;
+  let invalidResults = 0;
+  for (const file of jsonFiles) {
+    try {
+      const json = JSON.parse(readFileSync(join(resultsDir, file), "utf8")) as { uncertain?: unknown };
+      if (json && typeof json === "object") {
+        const uncertainList = Array.isArray(json.uncertain) ? json.uncertain : [];
+        unresolvedCount += uncertainList.length;
+      }
+    } catch {
+      invalidResults += 1;
+    }
+  }
+  const pendingItems = Math.max(0, totalItems - completedItems);
+
+  const next_step_command =
+    current_phase === 3
+      ? `View .omp/knowledge/research/${slug}/report.md for the full report`
+      : current_phase === 2
+        ? `/research-report ${slug}`
+        : `/research-deep ${slug}`;
+
+  const errors: string[] = [];
+  if (invalidResults > 0) {
+    errors.push(`${invalidResults} result file(s) in results/ could not be parsed.`);
   }
 
   return {
     slug,
+    topic,
+    status,
     current_phase,
-    pipeline_status,
+    pipeline_status: hasReport
+      ? "Phase 1: Outline ──> Phase 2: OODA ──> [Phase 3: Report]"
+      : completedItems > 0
+        ? "Phase 1: Outline ──> [Phase 2: OODA] ──> Phase 3: Report"
+        : "[Phase 1: Outline] ──> Phase 2: OODA ──> Phase 3: Report",
     global_metrics: {
       total_items: totalItems,
       completed_items: completedItems,
@@ -212,7 +313,16 @@ function getResearchDashboardMetrics(projectDir: string, slug: string): Research
       results_json: jsonFiles.length > 0 ? jsonFiles.length : "Pending",
       report_md: hasReport ? "Generated" : "Pending",
     },
-    recommended_next_step,
+    recommended_next_step: next_step_command,
+    next_step_command,
+    as_of: asOfIso,
+    freshness,
+    waves_run: wavesRun,
+    max_waves: 3,
+    pending_items: pendingItems,
+    unresolved_fields_count: unresolvedCount,
+    errors,
+    project_path: projectDir || undefined,
   };
 }
 
@@ -587,17 +697,40 @@ const COMMANDS: CommandSpec[] = [
 
       if (head === "dashboard" || head === "status") {
         const root = findRepoRoot();
-        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, rest);
+        const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
+        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, cleanRest);
         if (notFound) {
           ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+          pi.sendMessage({
+            customType: "my-omp-research-error",
+            display: true,
+            attribution: "user",
+            content: `Research error — project "${slug}" not found`,
+            details: {
+              slug,
+              code: "PROJECT_NOT_FOUND",
+              message: `Project "${slug}" not found under .omp/knowledge/research/`,
+              hint: "Run '/research status' to list projects, or '/research <topic>' to create one.",
+            } satisfies ResearchErrorPayload,
+          });
           return;
         }
+        const compact = /\s--compact\b/.test(rest);
         const payload = getResearchDashboardMetrics(projectDir, slug);
+        const statusWord = typeof payload.status === "string" ? payload.status : `Phase ${payload.current_phase ?? 1}`;
+        const m = payload.global_metrics ?? {};
+        const reportReady =
+          payload.artifacts && typeof payload.artifacts === "object" && !Array.isArray(payload.artifacts)
+            ? payload.artifacts.report_md
+              ? "generated"
+              : "pending"
+            : "pending";
         pi.sendMessage({
           customType: "research-dashboard",
           display: true,
           attribution: "user",
-          details: payload,
+          content: `Research dashboard — ${slug}: ${statusWord} · items ${m.completed_items ?? 0}/${m.total_items ?? 0} · fields ${m.completed_fields ?? 0}/${m.total_fields ?? 0} · report ${reportReady}`,
+          details: compact ? { ...payload, detail: "compact" } : payload,
         });
         ctx.ui?.notify?.("Research Dashboard loaded", "info");
         return;
@@ -605,19 +738,72 @@ const COMMANDS: CommandSpec[] = [
 
       if (head === "review") {
         const root = findRepoRoot();
-        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, rest);
+        const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
+        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, cleanRest);
         if (notFound) {
           ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+          pi.sendMessage({
+            customType: "my-omp-research-error",
+            display: true,
+            attribution: "user",
+            content: `Research error — project "${slug}" not found`,
+            details: {
+              slug,
+              code: "PROJECT_NOT_FOUND",
+              message: `Project "${slug}" not found under .omp/knowledge/research/`,
+              hint: "Run '/research status' to list projects, or '/research <topic>' to create one.",
+            } satisfies ResearchErrorPayload,
+          });
           return;
         }
+        const full = /\s--full\b/.test(rest);
         const payload = getResearchReviewPayload(projectDir, slug);
         pi.sendMessage({
           customType: "research-review",
           display: true,
           attribution: "user",
-          details: payload,
+          content: `Research review — ${slug}: ${payload.items?.length ?? 0} items · ${payload.fields?.length ?? 0} fields · ${payload.status ?? "DRAFT REVIEW"}`,
+          details: full ? { ...payload, detail: "full" } : payload,
         });
         ctx.ui?.notify?.("Research Review Window loaded", "info");
+        return;
+      }
+
+      if (head === "help" || head === "envcheck") {
+        const root = findRepoRoot();
+        const cleanRest = rest.replace(/\s+--\w+\b/g, "").trim();
+        const { slug, projectDir } = resolveResearchProjectDir(root, cleanRest);
+        const dash = projectDir ? getResearchDashboardMetrics(projectDir, slug) : undefined;
+        const helpPayload: ResearchHelpPayload = {
+          slug: slug === "unknown" ? "research" : slug,
+          phase: dash?.current_phase,
+          status: dash?.status,
+          next_step: dash?.next_step_command,
+          commands: RESEARCH_SUBCOMMANDS.map((sc) => ({
+            command: `/research ${sc.value}`,
+            description: sc.description,
+          })),
+          shortcuts: [{ key: "F1", description: "Open this research help card (when the extension registers it)" }],
+        };
+        if (head === "envcheck") {
+          helpPayload.env = {
+            TERM: process.env.TERM ?? "",
+            COLORTERM: process.env.COLORTERM ?? "",
+            NO_COLOR: process.env.NO_COLOR ?? "",
+            CI: process.env.CI ?? "",
+          };
+        }
+        pi.sendMessage({
+          customType: "my-omp-research-help",
+          display: true,
+          attribution: "user",
+          content: `${head === "envcheck" ? "Research environment diagnostics" : "Research help"} — ${slug}`,
+          details: helpPayload,
+        });
+        ctx.ui?.notify?.(
+          head === "envcheck" ? "Research environment diagnostics loaded" : "Research Help loaded",
+          "info",
+        );
         return;
       }
 
@@ -637,18 +823,7 @@ const COMMANDS: CommandSpec[] = [
       });
     },
     getArgumentCompletions: (argumentPrefix: string) => {
-      const subcommands = [
-        { value: "1", label: "1", description: "Phase 1: generate an outline for a new topic" },
-        { value: "2", label: "2", description: "Phase 2: run deep research (alias for /research-deep)" },
-        { value: "3", label: "3", description: "Phase 3: generate the final report (alias for /research-report)" },
-        { value: "dashboard", label: "dashboard", description: "Open the research dashboard" },
-        { value: "review", label: "review", description: "Open/emit Research Review Window for a project" },
-        { value: "add-items", label: "add-items", description: "Add research items to an existing outline" },
-        { value: "add-fields", label: "add-fields", description: "Add field definitions to an existing outline" },
-        { value: "status", label: "status", description: "Show status of a research project" },
-        { value: "run", label: "run", description: "Run deep research phase for a project" },
-        { value: "off", label: "off", description: "Close/disable Research Review Window" },
-      ];
+      const subcommands = RESEARCH_SUBCOMMANDS;
 
       const lower = argumentPrefix.toLowerCase();
       if (!argumentPrefix.includes(" ")) {
@@ -660,7 +835,7 @@ const COMMANDS: CommandSpec[] = [
 
       const spaceIdx = argumentPrefix.indexOf(" ");
       const firstWord = lower.slice(0, spaceIdx);
-      const slugSubcommands = ["2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run"];
+      const slugSubcommands = ["2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run", "help"];
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (slugSubcommands.includes(firstWord)) {
@@ -1608,6 +1783,8 @@ export default function (pi: ExtensionApi): void {
   installResearchWaveProgressRenderer(pi);
   installResearchReportPreviewRenderer(pi);
   installResearchDashboardRenderer(pi);
+  installResearchHelpRenderer(pi);
+  installResearchErrorRenderer(pi);
   installAuditCardRenderer(pi);
   installTicketBreakdownRenderer(pi);
   installTriageStatusRenderer(pi);

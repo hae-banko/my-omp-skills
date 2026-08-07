@@ -1,6 +1,22 @@
 # Changelog
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
+## v0.28.0 — Research dashboard UX overhaul (research-driven, 21 findings)
+
+Implemented from the deep-research project `.omp/knowledge/research/2026-08-07_research-dashboard-ux/` (21 items, 378/378 fields, report.md). All changes are extension-side; payload additions are optional and backward-compatible (old transcript cards replay identically).
+
+- **Canonical status vocabulary** (`src/research-status.ts`): one set of pipeline states — `OUTLINE / RUNNING / CONVERGED / REPORT_READY / PAUSED / CANCELLED / ERROR / STALE` — mapped to the AG-UI run lifecycle, replacing three inconsistent vocabularies (documented-but-never-emitted words, phase-arrow display strings, dead `RUNNING` review status). Dashboard/wave/help cards render the status badge + a phase stepper (`1. Outline ✓ → [2. OODA] → 3. Report`).
+- **Width-aware rendering** (`src/research-format.ts`): all card lines now measure display cells (CJK/emoji = 2, combining = 0) instead of UTF-16 `slice`/`padEnd` — fixes broken borders on wide glyphs and the pi-tui hard-width crash class. Header badges are never truncated (slug middle-truncated to fit).
+- **Freshness & timestamps** (`src/research-freshness.ts`): dashboard and wave cards carry absolute ISO `as_of`; `freshness` (fresh/warn/stale, WARN >1× / STALE >2× expected interval) is derived at emit time and frozen — deterministic transcript replays. OUTLINE/REPORT_READY are never stale.
+- **Honest wave card**: no more fabricated `Uncertainty Reduction (ΔU): -0.15` — ΔU renders only when a real reduction is reported; operational metrics (`total_items`, `completed_items`, `pending_items`, `wave_items`, `failed_*`, `per_item_status`, `unresolved_fields_count`, `preset`) are now rendered as Landed/In-flight/Failed/Pending; monotonic `elapsed`/`eta` + indeterminate fallback (`RUNNING…`) replace the fake 0% bar.
+- **Dashboard**: `topic` in the payload, action-first layout (`Next:` concrete command with slug), capped fields ratio (no more >100% coverage), `pending_items`, `unresolved_fields_count`, `waves_run`, explicit `errors` section, `--compact` detail flag.
+- **Review card**: `detail: compact|full` (`--full`/`--compact`), ★/★★/★★★ detail-level glyphs, real copy-pasteable `Next Commands` (the fake `[1] Launch Deep Waves` affordances are gone), "…and N more" now tells you the exact command to see the rest.
+- **Report preview**: renders `toc`, `summary_fields`, `total_items`, `resolved_items`, `unresolved_fields_count`, `preview_content` (previously ignored); honest empty state ("No results yet — run /research-deep") instead of misleading "None (all fields resolved)".
+- **New cards**: `my-omp-research-help` (`/research help` — commands/shortcuts/next step; `envcheck` adds TERM/COLORTERM/NO_COLOR/CI diagnostics) and `my-omp-research-error` (explicit error card on project-not-found instead of a toast-only path). `/research` completions now read one shared `RESEARCH_SUBCOMMANDS` registry (anti-drift).
+- **Plain-text fallback**: dashboard/review/help/envcheck emits carry `content` one-liners for non-TTY/CI/print mode; workflow bodies now include them for wave and report-preview emits.
+- **Workflow bodies**: canonical status vocabulary documented; front-matter upkeep steps added (phases 2/3 update `status`/`counts`/`waves_run`/`updated` — no more permanently stale `status: outline`); dashboard auto-emit at wave start (RUNNING) and after convergence (CONVERGED) and report generation (REPORT_READY), max one card per wave with byte-dedupe; real stop path on user interrupt (PAUSED/CANCELLED front-matter write + one terminal card) and resume announces "skips N completed item(s)".
+- **Tooling**: `validate_json.py` now supports both `field_categories:` (legacy) and `categories:` schemas with real coverage semantics (`[uncertain]` values and `uncertain`-array names count as present-but-unresolved); selftest extended with renderer unit checks (all lines ≤76 display cells incl. CJK slugs, badge/no-ΔU/no-fake-affordance assertions, help/error renderers, `/research help`+`envcheck` handlers).
+
 ## v0.27.0 — Hardened security, resilience & usability (11 bug fixes)
 
 - **Critical Security Fixes**:

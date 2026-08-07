@@ -97,6 +97,7 @@ Before executing the script to write `report.md` (or before writing `report.md`)
 pi.sendMessage({
   customType: "research-report-preview",
   display: true,
+  content: `Research report preview — ${slug}: ${resolved_items}/${total_items} items resolved · ${unresolved_fields_count} unresolved fields`,
   details: previewPayload
 })
 ```
@@ -108,13 +109,27 @@ pi.sendMessage({
 - `verified_sources_count` / `verified_sources` (count of distinct sources the report cites)
 - `executive_summary` / `summary_preview` (one-paragraph summary or the first ~500 chars of the rendered report body)
 - `unresolved_provenance` / `unresolved_fields_provenance` — the per-item provenance list of fields still marked `[uncertain]` or empty, each entry `{field, attempts, reason}` where `attempts` is a short list of `{wave, angles, modules, outcome}` (sourced from the item's `_attempts`)
-- Plus operational metrics the renderer reads: `toc` (TOC entries with anchor links + summary fields), `summary_fields` (the user-selected field names), `total_items`, `resolved_items`, `unresolved_fields_count`, `preview_content` (a short markdown excerpt suitable for the card body)
+- All of the following are **rendered** on the preview card (previously ignored): `toc` (array of `{name, summary}` entries or strings — rendered as a "Table of Contents" section), `summary_fields` (the user-selected field names), `total_items`, `resolved_items`, `unresolved_fields_count`, `preview_content` (a short markdown excerpt used as the card body)
+- The card also carries `content` (a plain-text one-liner) so non-TTY/CI/print mode degrades to readable prose
 
 Emit this **before** running `generate_report.py` (Step 4) — the preview reflects the planned report; if Step 4 fails or the user edits `generate_report.py`, re-emit with the updated `preview_content`.
 
 ### Step 4: Execute Script
 
 Run `python {project_dir}/generate_report.py`
+
+After `report.md` is written, close out Phase 3:
+
+- **Front-matter upkeep** — update `research.md` front-matter: `status: REPORT_READY`, `phase: 3`, `updated` (ISO-8601 UTC).
+- **Dashboard emission** — emit a `research-dashboard` card with `status: REPORT_READY` (details from the project directory) so the TUI lands on the final lifecycle state:
+  ```ts
+  pi.sendMessage({
+    customType: "research-dashboard",
+    display: true,
+    content: `Research — ${slug}: REPORT_READY · report generated`,
+    details: dashboardPayload // ResearchDashboardPayload (see src/research-renderer.ts)
+  })
+  ```
 
 ## Output
 
