@@ -1,7 +1,13 @@
 # Changelog
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
-installs pin to a tag (see README). Version history before v0.5.0 predates
+## v0.26.0 — Local TUI view subcommands (no LLM agent turn invocations)
+
+- **Local TUI View Subcommands**: Running view-only / status commands (`/research dashboard`, `/research review`, `/research status`, `/research off`, `/audit status`, `/audit view`, `/audit list`, `/triage status`) now renders their TUI telemetry cards and toasts locally from disk artifacts without sending a user message to the AI agent or wasting LLM turns.
+- **Performance & Token Savings**: Pure interface state queries and dashboard views resolve instantly at zero token cost.
+- **Selftest Assertions**: Added unit test assertions verifying `sent.length === 0` and custom card delivery for local view commands.
+
+## v0.25.2 — Git hygiene: untrack .omp/ runtime directory
 ## v0.25.2 — Git hygiene: untrack .omp/ runtime directory
 
 - **Untrack `.omp/` from git index**: removed `git ls-files .omp` content from the index (`git rm -r --cached .omp/`) so local runtime session knowledge, audits, research files, and reference clones never leak into the remote repository. Local files on disk are preserved.

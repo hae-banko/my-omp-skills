@@ -32,11 +32,18 @@ import {
   installResearchReportPreviewRenderer,
   installResearchReviewCardRenderer,
   installResearchWaveProgressRenderer,
+  type ResearchDashboardPayload,
+  type ResearchFieldSpec,
+  type ResearchItemSpec,
+  type ResearchReviewPayload,
 } from "./research-renderer.ts";
 import {
   installAuditCardRenderer,
   installTicketBreakdownRenderer,
   installTriageStatusRenderer,
+  type AuditCardPayload,
+  type AuditSubtopicSpec,
+  type TriageStatusPayload,
 } from "./telemetry-renderer.ts";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -66,6 +73,362 @@ function findRepoRoot(startDir: string = process.cwd()): string {
     dir = parent;
   }
 }
+
+function resolveResearchProjectDir(root: string, slugArg: string): { slug: string; projectDir: string } {
+  const researchDir = join(root, ".omp", "knowledge", "research");
+  let slug = slugArg.trim();
+  let projectDir = "";
+  if (slug && existsSync(join(researchDir, slug))) {
+    projectDir = join(researchDir, slug);
+  } else {
+    try {
+      const entries = readdirSync(researchDir, { withFileTypes: true })
+        .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+        .map((ent) => ent.name)
+        .sort()
+        .reverse();
+      if (slug) {
+        const match = entries.find((e) => e === slug || e.includes(slug) || e.endsWith(slug));
+        if (match) {
+          slug = match;
+          projectDir = join(researchDir, match);
+        }
+      }
+      if (!projectDir && entries.length > 0) {
+        slug = entries[0];
+        projectDir = join(researchDir, entries[0]);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return { slug: slug || slugArg || "unknown", projectDir };
+}
+
+function getResearchDashboardMetrics(projectDir: string, slug: string): ResearchDashboardPayload {
+  const hasOutline = projectDir ? (existsSync(join(projectDir, "outline.yaml")) || existsSync(join(projectDir, "outline.yml"))) : false;
+  const hasFields = projectDir ? (existsSync(join(projectDir, "fields.yaml")) || existsSync(join(projectDir, "fields.yml"))) : false;
+  const hasReport = projectDir ? existsSync(join(projectDir, "report.md")) : false;
+  const resultsDir = projectDir ? join(projectDir, "results") : "";
+  let jsonFiles: string[] = [];
+  if (resultsDir && existsSync(resultsDir)) {
+    try {
+      jsonFiles = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
+    } catch {}
+  }
+
+  let totalItems = 0;
+  if (hasOutline) {
+    const outlinePath = existsSync(join(projectDir, "outline.yaml"))
+      ? join(projectDir, "outline.yaml")
+      : join(projectDir, "outline.yml");
+    try {
+      const content = readFileSync(outlinePath, "utf8");
+      const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+      if (matches) {
+        totalItems = matches.length;
+      } else {
+        const lines = content.split("\n");
+        let inItems = false;
+        for (const l of lines) {
+          if (/^items:/i.test(l.trim())) { inItems = true; continue; }
+          if (inItems && /^[a-z0-9_]+:/i.test(l.trim())) { inItems = false; }
+          if (inItems && /^\s*-\s*/.test(l)) { totalItems++; }
+        }
+      }
+    } catch {}
+  }
+
+  let totalFields = 0;
+  if (hasFields) {
+    const fieldsPath = existsSync(join(projectDir, "fields.yaml"))
+      ? join(projectDir, "fields.yaml")
+      : join(projectDir, "fields.yml");
+    try {
+      const content = readFileSync(fieldsPath, "utf8");
+      const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+      if (matches) {
+        totalFields = matches.length;
+      } else {
+        const lines = content.split("\n");
+        for (const l of lines) {
+          if (/^\s*-\s*/.test(l) && !l.trim().startsWith("#")) { totalFields++; }
+        }
+      }
+    } catch {}
+  }
+
+  const completedItems = jsonFiles.length;
+  let completedFields = 0;
+  if (completedItems > 0) {
+    let totalValidFieldsAcrossJson = 0;
+    for (const file of jsonFiles) {
+      try {
+        const raw = readFileSync(join(resultsDir, file), "utf8");
+        const json = JSON.parse(raw);
+        if (json && typeof json === "object") {
+          const uncertainList = Array.isArray(json.uncertain) ? json.uncertain : [];
+          const keys = Object.keys(json).filter((k) => !k.startsWith("_") && k !== "uncertain");
+          const validCount = keys.filter((k) => !uncertainList.includes(k) && String(json[k]).indexOf("[uncertain]") === -1).length;
+          totalValidFieldsAcrossJson += validCount;
+        }
+      } catch {}
+    }
+    completedFields = totalValidFieldsAcrossJson;
+  }
+
+  const coverage = totalItems > 0 ? Math.min(1, completedItems / totalItems) : (hasReport ? 1 : 0);
+
+  let current_phase: 1 | 2 | 3 = 1;
+  let pipeline_status = "[Phase 1: Outline] ──> Phase 2: OODA ──> Phase 3: Report";
+  let recommended_next_step = "Run /research-deep to execute Phase 2 background research waves.";
+
+  if (hasReport) {
+    current_phase = 3;
+    pipeline_status = "Phase 1: Outline ──> Phase 2: OODA ──> [Phase 3: Report]";
+    recommended_next_step = "Research complete. View report.md for details.";
+  } else if (completedItems > 0) {
+    current_phase = 2;
+    pipeline_status = "Phase 1: Outline ──> [Phase 2: OODA] ──> Phase 3: Report";
+    recommended_next_step = "Run /research-report to generate the final report.";
+  }
+
+  return {
+    slug,
+    current_phase,
+    pipeline_status,
+    global_metrics: {
+      total_items: totalItems,
+      completed_items: completedItems,
+      total_fields: totalFields,
+      completed_fields: completedFields,
+      coverage,
+    },
+    artifacts: {
+      outline_yaml: hasOutline ? "Ready" : "Pending",
+      fields_yaml: hasFields ? "Ready" : "Pending",
+      results_json: jsonFiles.length > 0 ? jsonFiles.length : "Pending",
+      report_md: hasReport ? "Generated" : "Pending",
+    },
+    recommended_next_step,
+  };
+}
+
+function getResearchReviewPayload(projectDir: string, slug: string): ResearchReviewPayload {
+  const items: ResearchItemSpec[] = [];
+  const fields: ResearchFieldSpec[] = [];
+  let hasOutline = false;
+  let hasResearchMd = false;
+
+  if (projectDir) {
+    const outlinePath = existsSync(join(projectDir, "outline.yaml"))
+      ? join(projectDir, "outline.yaml")
+      : existsSync(join(projectDir, "outline.yml"))
+      ? join(projectDir, "outline.yml")
+      : "";
+    if (outlinePath) {
+      hasOutline = true;
+      try {
+        const content = readFileSync(outlinePath, "utf8");
+        const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+        if (matches) {
+          for (const m of matches) {
+            const name = m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, "");
+            items.push({ name, status: "pending" });
+          }
+        }
+      } catch {}
+    }
+
+    const fieldsPath = existsSync(join(projectDir, "fields.yaml"))
+      ? join(projectDir, "fields.yaml")
+      : existsSync(join(projectDir, "fields.yml"))
+      ? join(projectDir, "fields.yml")
+      : "";
+    if (fieldsPath) {
+      try {
+        const content = readFileSync(fieldsPath, "utf8");
+        const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+        if (matches) {
+          for (const m of matches) {
+            const name = m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, "");
+            fields.push({ name });
+          }
+        }
+      } catch {}
+    }
+
+    const researchMdPath = join(projectDir, "research.md");
+    if (existsSync(researchMdPath)) {
+      hasResearchMd = true;
+    }
+  }
+
+  return {
+    slug,
+    status: (hasOutline || hasResearchMd) ? "READY" : "DRAFT REVIEW",
+    items,
+    fields,
+    modules: [
+      "general-web",
+      "github-debug",
+      "stackoverflow",
+      "chinese-tech",
+      "academic-papers",
+    ],
+    execution: {
+      preset: "medium",
+      agents_per_wave: 4,
+      max_waves: 3,
+      approval_mode: "auto",
+    },
+  };
+}
+
+function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
+  const auditsDir = join(root, ".omp", "audits");
+  let auditSlug = slugArg.trim();
+
+  if (existsSync(auditsDir)) {
+    try {
+      const entries = readdirSync(auditsDir, { withFileTypes: true })
+        .filter((ent) => !ent.name.startsWith("."));
+      
+      let matchedDir: string | null = null;
+      if (auditSlug) {
+        const match = entries.find((e) => e.name === auditSlug || e.name.replace(/\.md$/, "") === auditSlug);
+        if (match) matchedDir = match.name;
+      }
+      if (!matchedDir && entries.length > 0) {
+        const sorted = entries.sort((a, b) => b.name.localeCompare(a.name));
+        matchedDir = sorted[0].name;
+      }
+
+      if (matchedDir) {
+        const targetPath = join(auditsDir, matchedDir);
+        let reportFile = "";
+        let isDir = false;
+        if (statSync(targetPath).isDirectory()) {
+          isDir = true;
+          auditSlug = matchedDir;
+          if (existsSync(join(targetPath, "overview.md"))) reportFile = join(targetPath, "overview.md");
+          else if (existsSync(join(targetPath, "report.md"))) reportFile = join(targetPath, "report.md");
+        } else if (matchedDir.endsWith(".md")) {
+          auditSlug = matchedDir.replace(/\.md$/, "");
+          reportFile = targetPath;
+        }
+
+        if (reportFile && existsSync(reportFile)) {
+          const body = readFileSync(reportFile, "utf8");
+          const titleMatch = body.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+          const title = titleMatch?.[1]?.trim() ?? `Audit: ${auditSlug}`;
+          const versionMatch = body.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+          const version = versionMatch?.[1]?.trim() ?? "v0.1.0";
+          const statusMatch = body.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
+          const status = statusMatch?.[1]?.trim() ?? "active";
+
+          let subtopicsCount = 0;
+          const subtopicSpecs: AuditSubtopicSpec[] = [];
+          if (isDir) {
+            const subDir = join(targetPath, "subtopics");
+            if (existsSync(subDir)) {
+              try {
+                const subs = readdirSync(subDir).filter((f) => f.endsWith(".md"));
+                subtopicsCount = subs.length;
+                for (const s of subs) {
+                  subtopicSpecs.push({ name: s.replace(/\.md$/, ""), path: `./subtopics/${s}` });
+                }
+              } catch {}
+            }
+          }
+
+          const rootReportRel = isDir
+            ? (existsSync(join(targetPath, "overview.md")) ? `.omp/audits/${auditSlug}/overview.md` : `.omp/audits/${auditSlug}/report.md`)
+            : `.omp/audits/${auditSlug}.md`;
+
+          return {
+            title,
+            slug: auditSlug,
+            version,
+            status,
+            root_report_path: rootReportRel,
+            subtopics_count: subtopicsCount,
+            subtopics: subtopicSpecs,
+            latest_revision: version,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  return {
+    title: slugArg ? `Audit: ${slugArg}` : "Codebase Audit",
+    slug: auditSlug || "overview",
+    version: "v0.1.0",
+    status: "active",
+    root_report_path: auditSlug ? `.omp/audits/${auditSlug}/overview.md` : ".omp/audits/overview.md",
+    subtopics_count: 0,
+    latest_revision: "v0.1.0",
+  };
+}
+
+function getTriageStatusPayload(root: string): TriageStatusPayload {
+  const scratchDir = join(root, ".scratch");
+  let unlabeled = 0;
+  let needsTriage = 0;
+  let agentReady = 0;
+
+  if (existsSync(scratchDir)) {
+    const mdFiles: string[] = [];
+    const collect = (dir: string) => {
+      try {
+        const entries = readdirSync(dir, { withFileTypes: true });
+        for (const ent of entries) {
+          const full = join(dir, ent.name);
+          if (ent.isDirectory() && !ent.name.startsWith(".")) {
+            collect(full);
+          } else if (ent.isFile() && ent.name.endsWith(".md")) {
+            mdFiles.push(full);
+          }
+        }
+      } catch {}
+    };
+    collect(scratchDir);
+
+    for (const file of mdFiles) {
+      try {
+        const content = readFileSync(file, "utf8");
+        const lower = content.toLowerCase();
+        if (lower.includes("needs-triage") || lower.includes("needs_triage")) {
+          needsTriage++;
+        } else if (lower.includes("agent-ready") || lower.includes("agent_ready")) {
+          agentReady++;
+        } else {
+          unlabeled++;
+        }
+      } catch {}
+    }
+  }
+
+  const totalItems = unlabeled + needsTriage + agentReady;
+  return {
+    total_items: totalItems,
+    totalItems,
+    backlog: {
+      unlabeled,
+      needs_triage: needsTriage,
+      needsTriage,
+      agent_ready: agentReady,
+      agentReady,
+    },
+    unlabeled,
+    needs_triage: needsTriage,
+    needsTriage,
+    agent_ready: agentReady,
+    agentReady,
+  };
+}
+
 
 function getSpecAndFeatureCompletions(argumentPrefix: string): Array<{ value: string; label: string; description?: string }> | null {
   if (argumentPrefix.includes(" ")) return null;
@@ -218,41 +581,36 @@ const COMMANDS: CommandSpec[] = [
         return;
       }
 
-      // `/research dashboard [slug]` = Research Lifecycle Dashboard. Emit a
-      // placeholder dashboard card immediately so the user sees the frame
-      // before the workflow body resolves real metrics; the agent replaces
-      // it with the populated payload.
-      if (head === "dashboard") {
+      if (head === "dashboard" || head === "status") {
         const root = findRepoRoot();
-        const researchDir = join(root, ".omp", "knowledge", "research");
-        let slug = rest;
-        if (!slug) {
-          try {
-            const dated = readdirSync(researchDir, { withFileTypes: true })
-              .filter((ent) => ent.isDirectory() && DATED_SLUG_RE.test(ent.name))
-              .map((ent) => ent.name)
-              .sort()
-              .reverse();
-            slug = dated[0] ?? "";
-          } catch {
-            slug = "";
-          }
-        }
+        const { slug, projectDir } = resolveResearchProjectDir(root, rest);
+        const payload = getResearchDashboardMetrics(projectDir, slug);
         pi.sendMessage({
           customType: "research-dashboard",
           display: true,
           attribution: "user",
-          details: { slug, current_phase: 1, pipeline_status: "LOADING" },
+          details: payload,
         });
-        await runDefaultHandler({
-          pi,
-          name: "research",
-          customType: undefined,
-          body,
-          args,
-          companionPaths,
-          ctx,
+        ctx.ui?.notify?.("Research Dashboard loaded", "info");
+        return;
+      }
+
+      if (head === "review") {
+        const root = findRepoRoot();
+        const { slug, projectDir } = resolveResearchProjectDir(root, rest);
+        const payload = getResearchReviewPayload(projectDir, slug);
+        pi.sendMessage({
+          customType: "research-review",
+          display: true,
+          attribution: "user",
+          details: payload,
         });
+        ctx.ui?.notify?.("Research Review Window loaded", "info");
+        return;
+      }
+
+      if (head === "off") {
+        ctx.ui?.notify?.("Research Review Window closed", "info");
         return;
       }
 
@@ -431,6 +789,36 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/audit/command.md",
     companions: ["commands/audit/AUDIT-FORMAT.md"],
     customType: "audit-card",
+    handler: (pi, { body, companionPaths }) => async (args, ctx) => {
+      const argText = args.trim();
+      const tokens = argText ? argText.split(/\s+/) : [];
+      const head = tokens[0] ?? "";
+
+      if (head === "status" || head === "list" || head === "view" || head === "--recent" || argText.startsWith("--recent")) {
+        const root = findRepoRoot();
+        const rest = tokens.slice(1).join(" ").trim();
+        const targetSlug = head === "--recent" ? "" : rest;
+        const payload = getAuditCardPayload(root, targetSlug);
+        pi.sendMessage({
+          customType: "audit-card",
+          display: true,
+          attribution: "user",
+          details: payload,
+        });
+        ctx.ui?.notify?.("Audit status loaded", "info");
+        return;
+      }
+
+      await runDefaultHandler({
+        pi,
+        name: "audit",
+        customType: "audit-card",
+        body,
+        args,
+        companionPaths,
+        ctx,
+      });
+    },
     getArgumentCompletions: (argumentPrefix: string) => {
       const root = findRepoRoot();
       const auditsDir = join(root, ".omp", "audits");
@@ -550,8 +938,35 @@ const COMMANDS: CommandSpec[] = [
       "commands/triage/OUT-OF-SCOPE.md",
     ],
     customType: "triage-status",
+    handler: (pi, { body, companionPaths }) => async (args, ctx) => {
+      const argText = args.trim();
+      const tokens = argText ? argText.split(/\s+/) : [];
+      const head = tokens[0] ?? "";
+
+      if (head === "status" || head === "--status" || argText.startsWith("status") || argText.startsWith("--status")) {
+        const root = findRepoRoot();
+        const payload = getTriageStatusPayload(root);
+        pi.sendMessage({
+          customType: "triage-status",
+          display: true,
+          attribution: "user",
+          details: payload,
+        });
+        ctx.ui?.notify?.("Triage status loaded", "info");
+        return;
+      }
+
+      await runDefaultHandler({
+        pi,
+        name: "triage",
+        customType: "triage-status",
+        body,
+        args,
+        companionPaths,
+        ctx,
+      });
+    },
     getArgumentCompletions: (argumentPrefix: string) => {
-      if (argumentPrefix.includes(" ")) return null;
       const lower = argumentPrefix.toLowerCase();
       const options = [
         { value: "--unlabeled", label: "--unlabeled", description: "Show unlabeled items needing triage" },

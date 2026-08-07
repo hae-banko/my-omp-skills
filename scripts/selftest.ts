@@ -810,6 +810,69 @@ if (!pitfallReceipt || pitfallReceipt.customType !== "knowledge-pitfall") {
   fail("pitfall: receipt custom message missing or wrong type");
 }
 
+// Pure TUI view/status handlers: /research dashboard, /research review, /audit status, /triage status
+// MUST NOT queue user messages to agent (sent.length === 0) and MUST emit custom TUI messages & toasts.
+
+sent.length = 0;
+customMessages.length = 0;
+let notifyCalls: string[] = [];
+await registered["research"].handler("dashboard", {
+  ui: { notify: (msg: string) => notifyCalls.push(msg) },
+});
+if (sent.length !== 0) fail("research dashboard: queued a user message to agent");
+if (!notifyCalls.includes("Research Dashboard loaded")) {
+  fail(`research dashboard: toast "Research Dashboard loaded" missing, got: ${JSON.stringify(notifyCalls)}`);
+}
+const dashCard = customMessages.find((m) => m.customType === "research-dashboard");
+if (!dashCard || dashCard.display !== true) {
+  fail("research dashboard: custom card research-dashboard missing or display false");
+}
+
+sent.length = 0;
+customMessages.length = 0;
+notifyCalls = [];
+await registered["research"].handler("review", {
+  ui: { notify: (msg: string) => notifyCalls.push(msg) },
+});
+if (sent.length !== 0) fail("research review: queued a user message to agent");
+if (!notifyCalls.includes("Research Review Window loaded")) {
+  fail(`research review: toast "Research Review Window loaded" missing, got: ${JSON.stringify(notifyCalls)}`);
+}
+const reviewCard = customMessages.find((m) => m.customType === "research-review");
+if (!reviewCard || reviewCard.display !== true) {
+  fail("research review: custom card research-review missing or display false");
+}
+
+sent.length = 0;
+customMessages.length = 0;
+notifyCalls = [];
+await registered["audit"].handler("status", {
+  ui: { notify: (msg: string) => notifyCalls.push(msg) },
+});
+if (sent.length !== 0) fail("audit status: queued a user message to agent");
+if (!notifyCalls.includes("Audit status loaded")) {
+  fail(`audit status: toast "Audit status loaded" missing, got: ${JSON.stringify(notifyCalls)}`);
+}
+const auditCard = customMessages.find((m) => m.customType === "audit-card");
+if (!auditCard || auditCard.display !== true) {
+  fail("audit status: custom card audit-card missing or display false");
+}
+
+sent.length = 0;
+customMessages.length = 0;
+notifyCalls = [];
+await registered["triage"].handler("status", {
+  ui: { notify: (msg: string) => notifyCalls.push(msg) },
+});
+if (sent.length !== 0) fail("triage status: queued a user message to agent");
+if (!notifyCalls.includes("Triage status loaded")) {
+  fail(`triage status: toast "Triage status loaded" missing, got: ${JSON.stringify(notifyCalls)}`);
+}
+const triageCard = customMessages.find((m) => m.customType === "triage-status");
+if (!triageCard || triageCard.display !== true) {
+  fail("triage status: custom card triage-status missing or display false");
+}
+
 // --- Hindsight: settle-time reflection pass --------------------------------
 
 // The handler runs bare (no args) in the command-surface checks above, which
