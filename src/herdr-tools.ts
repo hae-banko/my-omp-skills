@@ -14,8 +14,8 @@
 // herdr panes, workspaces, or agents.
 
 import { execFile } from "node:child_process";
-import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolDefinition, ToolResult } from "./api.ts";
+import { toolResultCard } from "./research-format.ts";
 const WHITESPACE_RE = /\s+/;
 
 function inHerdr(): boolean {
@@ -110,15 +110,14 @@ function summarize(value: unknown): string {
   return parts.length > 0 ? parts.join(" ") : JSON.stringify(v).slice(0, 200);
 }
 
-function renderHerdrCard(label: string, result: ToolResult): Container {
+/** Card content for a herdr result: lines from details.summary (else first
+ * content block, else "ok"), plus the action label from details. */
+function herdrCardContent(result: ToolResult): { lines: string[]; action: string } {
   const details = result.details as { action?: string; summary?: string } | undefined;
   const lines = (details?.summary ?? result.content[0]?.text ?? "ok")
     .split("\n")
     .slice(0, 12);
-  const box = new Container();
-  box.addChild(new Text(label));
-  lines.forEach((line) => box.addChild(new Text(`  ${line.slice(0, 120)}`, 0, 0)));
-  return box;
+  return { lines, action: details?.action ?? "?" };
 }
 
 type ExecuteArgs = Parameters<ToolDefinition["execute"]>;
@@ -230,8 +229,10 @@ export function installHerdrTools(pi: ExtensionApi): void {
       const result = await gateOrRun(args, "HERDR — LAYOUT", action, signal);
       return result;
     },
-    renderResult: (result, _options, _theme) =>
-      renderHerdrCard(`HERDR — LAYOUT (${String((result.details as { action?: string })?.action ?? "?")})`, result),
+    renderResult: (result, _options, _theme) => {
+      const card = herdrCardContent(result);
+      return toolResultCard(card.lines, `HERDR — LAYOUT (${card.action})`);
+    },
   });
 
   pi.registerTool({
@@ -342,8 +343,10 @@ export function installHerdrTools(pi: ExtensionApi): void {
         details: { action, summary },
       };
     },
-    renderResult: (result, _options, _theme) =>
-      renderHerdrCard(`HERDR — PANE (${String((result.details as { action?: string })?.action ?? "?")})`, result),
+    renderResult: (result, _options, _theme) => {
+      const card = herdrCardContent(result);
+      return toolResultCard(card.lines, `HERDR — PANE (${card.action})`);
+    },
   });
 
   pi.registerTool({
@@ -449,7 +452,9 @@ export function installHerdrTools(pi: ExtensionApi): void {
         details: { action, summary },
       };
     },
-    renderResult: (result, _options, _theme) =>
-      renderHerdrCard(`HERDR — AGENT (${String((result.details as { action?: string })?.action ?? "?")})`, result),
+    renderResult: (result, _options, _theme) => {
+      const card = herdrCardContent(result);
+      return toolResultCard(card.lines, `HERDR — AGENT (${card.action})`);
+    },
   });
 }

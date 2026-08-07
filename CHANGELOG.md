@@ -1,6 +1,17 @@
 # Changelog
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
+
+## v0.29.0 — Deeper modules: research project store, card seam, locators, contract seam
+
+Internal restructuring from the 2026-08-07 architecture review (candidates 1–5). No behavior change: payloads, cards, completions, and the policy surface behave exactly as before — the seams underneath them are now real modules instead of duplicated code.
+
+- **Research project store** (`src/research-store.ts`): one module owns every `.omp/knowledge/research/<slug>/` read behind a small `readProject` interface. The `counts` / `status` / `waves_run` values the workflow bodies already write to `research.md` front-matter are now the read source; the dashboard and review emitters became thin consumers, and `validate_json.py` is the third adapter — item/field counts stop diverging across adapters.
+- **Card seam** (`src/research-format.ts`): borders, `extractPayload`, and the label-plus-lines tool-result card live once. Telemetry-renderer and the knowledge/herdr/routine tool cards all draw through the shared width-aware primitives, so the v0.28.1 Text-padding fix is the only scaffold everywhere.
+- **Locators** (`src/locators.ts`): the entry's 18 bespoke filesystem-scanning completion adapters collapse into one locator module (`listResearchProjects`, `listSpecFiles`, `listAuditSlugs`, `listReferences`, `listRoutines`, …); each completion is a thin consumer. `/research`-family completions now consistently list dated research directories only, newest first.
+- **Contract seam**: the research payload contract sections in `commands/research{,-deep,-report}/command.md` and the `validate_json.py` comments now describe the same schema the code reads — one derivation for defined-field counts.
+- **Selftest hardened at the seam** (`scripts/selftest.ts`): the hand-rolled zod fake is replaced by the real `zod` devDependency (the extension's schema chains now run against the actual runtime), and the renderer unit checks invoke the REGISTERED `customType` renderers instead of importing card functions directly; `parseHerdrOutput` keeps its direct pure-parser test.
+
 ## v0.28.1 — Fix vertical gaps in TUI cards (Text padding misuse)
 
 - **Root cause**: all card renderers built containers with `new Text(line, 0, index)` / `(0, i + 1)` — pi-tui's `Text` constructor arguments are `paddingX`/`paddingY`, not x/y coordinates (there is no coordinate system; children stack with no gap). A nonzero `paddingY` emits that many blank rows **above and below** the content, so an N-line card rendered N² rows (research dashboard/review/help/error cards showed the largest gaps).

@@ -13,7 +13,7 @@
 // is a structural superset, so this remains assignable both ways.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
 import { installHerdrTools } from "./herdr-tools.ts";
@@ -25,7 +25,18 @@ import {
   hindsightToggleMessages,
 } from "./hindsight.ts";
 import { installKnowledgeTool } from "./knowledge-tool.ts";
+import {
+  listAuditSlugs,
+  listFeatureSpecs,
+  listReferences,
+  listResearchProjects,
+  listRoutines,
+  listScratchMarkdown,
+  listSpecFiles,
+  resolveResearchProjectDir,
+} from "./locators.ts";
 import { installPolicy } from "./policy.ts";
+import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
 import { installRoutinesTool } from "./routines.ts";
 import {
   installResearchDashboardRenderer,
@@ -53,7 +64,6 @@ import {
 } from "./telemetry-renderer.ts";
 
 const ROOT = join(import.meta.dirname, "..");
-const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
 const ARGUMENTS_RE = /\$ARGUMENTS/g;
 
@@ -96,306 +106,6 @@ function findRepoRoot(startDir: string = process.cwd()): string {
   }
 }
 
-function resolveResearchProjectDir(root: string, slugArg: string): { slug: string; projectDir: string; notFound: boolean } {
-  const researchDir = join(root, ".omp", "knowledge", "research");
-  let slug = slugArg.trim();
-  let projectDir = "";
-  const explicitSlug = slug.length > 0;
-  if (slug && existsSync(join(researchDir, slug))) {
-    projectDir = join(researchDir, slug);
-  } else {
-    try {
-      const entries = readdirSync(researchDir, { withFileTypes: true })
-        .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
-        .map((ent) => ent.name)
-        .sort()
-        .reverse();
-      if (slug) {
-        const match = entries.find((e) => e === slug || e.includes(slug) || e.endsWith(slug));
-        if (match) {
-          slug = match;
-          projectDir = join(researchDir, match);
-        }
-      }
-      if (!projectDir && !explicitSlug && entries.length > 0) {
-        slug = entries[0];
-        projectDir = join(researchDir, entries[0]);
-      }
-    } catch {
-      // ignore
-    }
-  }
-  const notFound = explicitSlug && projectDir === "";
-  return { slug: (slug || slugArg || "unknown").trim(), projectDir, notFound };
-}
-
-function getResearchDashboardMetrics(projectDir: string, slug: string): ResearchDashboardPayload {
-  const hasOutline = projectDir ? (existsSync(join(projectDir, "outline.yaml")) || existsSync(join(projectDir, "outline.yml"))) : false;
-  const hasFields = projectDir ? (existsSync(join(projectDir, "fields.yaml")) || existsSync(join(projectDir, "fields.yml"))) : false;
-  const hasReport = projectDir ? existsSync(join(projectDir, "report.md")) : false;
-  const resultsDir = projectDir ? join(projectDir, "results") : "";
-  let jsonFiles: string[] = [];
-  if (resultsDir && existsSync(resultsDir)) {
-    try {
-      jsonFiles = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
-    } catch {}
-  }
-
-  let totalItems = 0;
-  if (hasOutline) {
-    const outlinePath = existsSync(join(projectDir, "outline.yaml"))
-      ? join(projectDir, "outline.yaml")
-      : join(projectDir, "outline.yml");
-    try {
-      const content = readFileSync(outlinePath, "utf8");
-      const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
-      if (matches) {
-        totalItems = matches.length;
-      } else {
-        const lines = content.split("\n");
-        let inItems = false;
-        for (const l of lines) {
-          if (/^items:/i.test(l.trim())) { inItems = true; continue; }
-          if (inItems && /^[a-z0-9_]+:/i.test(l.trim())) { inItems = false; }
-          if (inItems && /^\s*-\s*/.test(l)) { totalItems++; }
-        }
-      }
-    } catch {}
-  }
-
-  let totalFields = 0;
-  if (hasFields) {
-    const fieldsPath = existsSync(join(projectDir, "fields.yaml"))
-      ? join(projectDir, "fields.yaml")
-      : join(projectDir, "fields.yml");
-    try {
-      const content = readFileSync(fieldsPath, "utf8");
-      const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
-      if (matches) {
-        totalFields = matches.length;
-      } else {
-        const lines = content.split("\n");
-        for (const l of lines) {
-          if (/^\s*-\s*/.test(l) && !l.trim().startsWith("#")) { totalFields++; }
-        }
-      }
-    } catch {}
-  }
-
-  const completedItems = jsonFiles.length;
-  let completedFields = 0;
-  if (completedItems > 0) {
-    let totalValidFieldsAcrossJson = 0;
-    for (const file of jsonFiles) {
-      try {
-        const raw = readFileSync(join(resultsDir, file), "utf8");
-        const json = JSON.parse(raw);
-        if (json && typeof json === "object") {
-          const uncertainList = Array.isArray(json.uncertain) ? json.uncertain : [];
-          const keys = Object.keys(json).filter((k) => !k.startsWith("_") && k !== "uncertain");
-          const validCount = keys.filter((k) => !uncertainList.includes(k) && String(json[k]).indexOf("[uncertain]") === -1).length;
-          totalValidFieldsAcrossJson += validCount;
-        }
-      } catch {}
-    }
-    // Cap at the fields.yaml denominator — the numerator counts fields found
-    // across result JSONs and could previously exceed it (=> >100% coverage).
-    completedFields = totalFields > 0 ? Math.min(totalFields, totalValidFieldsAcrossJson) : totalValidFieldsAcrossJson;
-  }
-
-  const coverage = totalItems > 0 ? Math.min(1, completedItems / totalItems) : (hasReport ? 1 : 0);
-
-  // Canonical pipeline status — one vocabulary across all research cards.
-  const status = derivePipelineStatus({ hasReport, completedItems, totalItems });
-  const current_phase: 1 | 2 | 3 = phaseOf(status);
-
-  // Topic from research.md front-matter (fallback: outline.yaml).
-  let topic: string | undefined;
-  try {
-    const researchMd = join(projectDir, "research.md");
-    if (existsSync(researchMd)) {
-      const m = readFileSync(researchMd, "utf8").match(/^topic:\s*["']?([^"'\r\n]+)["']?/m);
-      if (m) topic = m[1].trim();
-    }
-    if (!topic && hasOutline) {
-      const outlinePath = existsSync(join(projectDir, "outline.yaml"))
-        ? join(projectDir, "outline.yaml")
-        : join(projectDir, "outline.yml");
-      const m = readFileSync(outlinePath, "utf8").match(/^topic:\s*["']?([^"'\r\n]+)["']?/m);
-      if (m) topic = m[1].trim();
-    }
-  } catch {
-    // ignore — topic stays undefined
-  }
-
-  // as_of = newest artifact mtime (honest snapshot time, frozen at emit).
-  // Freshness only applies to RUNNING — OUTLINE/REPORT_READY are historical.
-  let asOfIso: string | undefined;
-  try {
-    const candidates = [
-      join(projectDir, "research.md"),
-      join(projectDir, "outline.yaml"),
-      join(projectDir, "fields.yaml"),
-      join(projectDir, "report.md"),
-      ...(resultsDir ? jsonFiles.map((f) => join(resultsDir, f)) : []),
-    ];
-    let newest = 0;
-    for (const c of candidates) {
-      if (existsSync(c)) newest = Math.max(newest, statSync(c).mtimeMs);
-    }
-    if (newest > 0) asOfIso = new Date(newest).toISOString();
-  } catch {
-    // ignore — no as_of
-  }
-  const freshness =
-    status === "RUNNING"
-      ? freshnessOf({ asOfIso, expectedIntervalSeconds: EXPECTED_INTERVAL_SECONDS.RUNNING })
-      : undefined;
-
-  // waves_run from research.md front-matter; pending + unresolved from results.
-  let wavesRun: number | undefined;
-  try {
-    const researchMd = join(projectDir, "research.md");
-    if (existsSync(researchMd)) {
-      const m = readFileSync(researchMd, "utf8").match(/^waves_run:\s*(\d+)/m);
-      if (m) wavesRun = parseInt(m[1], 10);
-    }
-  } catch {
-    // ignore
-  }
-  let unresolvedCount = 0;
-  let invalidResults = 0;
-  for (const file of jsonFiles) {
-    try {
-      const json = JSON.parse(readFileSync(join(resultsDir, file), "utf8")) as { uncertain?: unknown };
-      if (json && typeof json === "object") {
-        const uncertainList = Array.isArray(json.uncertain) ? json.uncertain : [];
-        unresolvedCount += uncertainList.length;
-      }
-    } catch {
-      invalidResults += 1;
-    }
-  }
-  const pendingItems = Math.max(0, totalItems - completedItems);
-
-  const next_step_command =
-    current_phase === 3
-      ? `View .omp/knowledge/research/${slug}/report.md for the full report`
-      : current_phase === 2
-        ? `/research-report ${slug}`
-        : `/research-deep ${slug}`;
-
-  const errors: string[] = [];
-  if (invalidResults > 0) {
-    errors.push(`${invalidResults} result file(s) in results/ could not be parsed.`);
-  }
-
-  return {
-    slug,
-    topic,
-    status,
-    current_phase,
-    pipeline_status: hasReport
-      ? "Phase 1: Outline ──> Phase 2: OODA ──> [Phase 3: Report]"
-      : completedItems > 0
-        ? "Phase 1: Outline ──> [Phase 2: OODA] ──> Phase 3: Report"
-        : "[Phase 1: Outline] ──> Phase 2: OODA ──> Phase 3: Report",
-    global_metrics: {
-      total_items: totalItems,
-      completed_items: completedItems,
-      total_fields: totalFields,
-      completed_fields: completedFields,
-      coverage,
-    },
-    artifacts: {
-      outline_yaml: hasOutline ? "Ready" : "Pending",
-      fields_yaml: hasFields ? "Ready" : "Pending",
-      results_json: jsonFiles.length > 0 ? jsonFiles.length : "Pending",
-      report_md: hasReport ? "Generated" : "Pending",
-    },
-    recommended_next_step: next_step_command,
-    next_step_command,
-    as_of: asOfIso,
-    freshness,
-    waves_run: wavesRun,
-    max_waves: 3,
-    pending_items: pendingItems,
-    unresolved_fields_count: unresolvedCount,
-    errors,
-    project_path: projectDir || undefined,
-  };
-}
-
-function getResearchReviewPayload(projectDir: string, slug: string): ResearchReviewPayload {
-  const items: ResearchItemSpec[] = [];
-  const fields: ResearchFieldSpec[] = [];
-  let hasOutline = false;
-  let hasResearchMd = false;
-
-  if (projectDir) {
-    const outlinePath = existsSync(join(projectDir, "outline.yaml"))
-      ? join(projectDir, "outline.yaml")
-      : existsSync(join(projectDir, "outline.yml"))
-      ? join(projectDir, "outline.yml")
-      : "";
-    if (outlinePath) {
-      hasOutline = true;
-      try {
-        const content = readFileSync(outlinePath, "utf8");
-        const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
-        if (matches) {
-          for (const m of matches) {
-            const name = m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, "");
-            items.push({ name, status: "pending" });
-          }
-        }
-      } catch {}
-    }
-
-    const fieldsPath = existsSync(join(projectDir, "fields.yaml"))
-      ? join(projectDir, "fields.yaml")
-      : existsSync(join(projectDir, "fields.yml"))
-      ? join(projectDir, "fields.yml")
-      : "";
-    if (fieldsPath) {
-      try {
-        const content = readFileSync(fieldsPath, "utf8");
-        const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
-        if (matches) {
-          for (const m of matches) {
-            const name = m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, "");
-            fields.push({ name });
-          }
-        }
-      } catch {}
-    }
-
-    const researchMdPath = join(projectDir, "research.md");
-    if (existsSync(researchMdPath)) {
-      hasResearchMd = true;
-    }
-  }
-
-  return {
-    slug,
-    status: (hasOutline || hasResearchMd) ? "READY" : "DRAFT REVIEW",
-    items,
-    fields,
-    modules: [
-      "general-web",
-      "github-debug",
-      "stackoverflow",
-      "chinese-tech",
-      "academic-papers",
-    ],
-    execution: {
-      preset: "medium",
-      agents_per_wave: 4,
-      max_waves: 3,
-      approval_mode: "auto",
-    },
-  };
-}
 
 function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
   const auditsDir = join(root, ".omp", "audits");
@@ -546,46 +256,22 @@ function getTriageStatusPayload(root: string): TriageStatusPayload {
 
 function getSpecAndFeatureCompletions(argumentPrefix: string): Array<{ value: string; label: string; description?: string }> | null {
   if (argumentPrefix.includes(" ")) return null;
-  const root = findRepoRoot();
+  const { dirs, files } = listFeatureSpecs(findRepoRoot());
   const options: Array<{ value: string; label: string; description?: string }> = [];
-  const addedValues = new Set<string>();
-
-  const scanDir = (baseDir: string, relBase: string) => {
-    if (!existsSync(baseDir)) return;
-    try {
-      const entries = readdirSync(baseDir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = join(baseDir, entry.name);
-        const relPath = join(relBase, entry.name);
-        if (entry.isDirectory()) {
-          if (entry.name.startsWith(".")) continue;
-          if (!addedValues.has(entry.name)) {
-            addedValues.add(entry.name);
-            options.push({
-              value: entry.name,
-              label: entry.name,
-              description: `Feature directory under ${relBase}/`,
-            });
-          }
-          scanDir(fullPath, relPath);
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          if (!addedValues.has(relPath)) {
-            addedValues.add(relPath);
-            options.push({
-              value: relPath,
-              label: relPath,
-              description: "Spec markdown file",
-            });
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  scanDir(join(root, ".scratch"), ".scratch");
-  scanDir(join(root, "docs"), "docs");
+  for (const dir of dirs) {
+    options.push({
+      value: dir.name,
+      label: dir.name,
+      description: `Feature directory under ${dir.relBase}/`,
+    });
+  }
+  for (const file of files) {
+    options.push({
+      value: file,
+      label: file,
+      description: "Spec markdown file",
+    });
+  }
 
   options.sort((a, b) => a.label.localeCompare(b.label));
 
@@ -698,7 +384,7 @@ const COMMANDS: CommandSpec[] = [
       if (head === "dashboard" || head === "status") {
         const root = findRepoRoot();
         const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
-        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, cleanRest);
+        const { slug, notFound, payload } = readProject(root, cleanRest);
         if (notFound) {
           ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
           pi.sendMessage({
@@ -716,7 +402,6 @@ const COMMANDS: CommandSpec[] = [
           return;
         }
         const compact = /\s--compact\b/.test(rest);
-        const payload = getResearchDashboardMetrics(projectDir, slug);
         const statusWord = typeof payload.status === "string" ? payload.status : `Phase ${payload.current_phase ?? 1}`;
         const m = payload.global_metrics ?? {};
         const reportReady =
@@ -839,18 +524,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (slugSubcommands.includes(firstWord)) {
-        const root = findRepoRoot();
-        const researchDir = join(root, ".omp", "knowledge", "research");
-        let slugs: string[] = [];
-        try {
-          slugs = readdirSync(researchDir, { withFileTypes: true })
-            .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
-            .map((ent) => ent.name)
-            .sort()
-            .reverse();
-        } catch {
-          slugs = [];
-        }
+        const slugs = listResearchProjects(findRepoRoot());
         const matches = slugs
           .filter((slug) => slug.toLowerCase().startsWith(rest))
           .map((slug) => ({
@@ -889,23 +563,9 @@ const COMMANDS: CommandSpec[] = [
         { value: "high", label: "high", description: "Execution preset: max parallel agents per wave" },
       ];
 
-      const getDatedSlugs = (): string[] => {
-        const root = findRepoRoot();
-        const researchDir = join(root, ".omp", "knowledge", "research");
-        try {
-          return readdirSync(researchDir, { withFileTypes: true })
-            .filter((ent) => ent.isDirectory() && DATED_SLUG_RE.test(ent.name))
-            .map((ent) => ent.name)
-            .sort()
-            .reverse();
-        } catch {
-          return [];
-        }
-      };
-
       const lower = argumentPrefix.toLowerCase();
       if (!argumentPrefix.includes(" ")) {
-        const slugs = getDatedSlugs();
+        const slugs = listResearchProjects(findRepoRoot());
         const slugOptions = slugs.map((slug) => ({
           value: slug,
           label: slug,
@@ -922,7 +582,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (["small", "medium", "high"].includes(firstWord)) {
-        const slugs = getDatedSlugs();
+        const slugs = listResearchProjects(findRepoRoot());
         const matches = slugs
           .filter((slug) => slug.toLowerCase().startsWith(rest))
           .map((slug) => ({
@@ -944,18 +604,7 @@ const COMMANDS: CommandSpec[] = [
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
 
-      const root = findRepoRoot();
-      const researchDir = join(root, ".omp", "knowledge", "research");
-      let slugs: string[] = [];
-      try {
-        slugs = readdirSync(researchDir, { withFileTypes: true })
-          .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
-          .map((ent) => ent.name)
-          .sort()
-          .reverse();
-      } catch {
-        return null;
-      }
+      const slugs = listResearchProjects(findRepoRoot());
 
       const lower = argumentPrefix.toLowerCase();
       const matches = slugs
@@ -1015,30 +664,7 @@ const COMMANDS: CommandSpec[] = [
       });
     },
     getArgumentCompletions: (argumentPrefix: string) => {
-      const root = findRepoRoot();
-      const auditsDir = join(root, ".omp", "audits");
-      const slugs: string[] = [];
-
-      if (existsSync(auditsDir)) {
-        try {
-          const entries = readdirSync(auditsDir, { withFileTypes: true });
-          for (const ent of entries) {
-            if (ent.name.startsWith(".")) continue;
-            if (ent.isDirectory()) {
-              if (
-                existsSync(join(auditsDir, ent.name, "overview.md")) ||
-                existsSync(join(auditsDir, ent.name, "report.md"))
-              ) {
-                slugs.push(ent.name);
-              }
-            } else if (ent.isFile() && ent.name.endsWith(".md")) {
-              slugs.push(ent.name.replace(/\.md$/, ""));
-            }
-          }
-        } catch {
-          // ignore read error
-        }
-      }
+      const slugs = listAuditSlugs(findRepoRoot());
       const lower = argumentPrefix.toLowerCase();
       const subcommands: Array<{ value: string; label: string; description?: string }> = [
         { value: "status", label: "status", description: "Show active audit status" },
@@ -1208,50 +834,7 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/to-spec.md",
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
-      const root = findRepoRoot();
-      const dirs = [
-        join(root, ".scratch", "specs"),
-        join(root, "docs", "specs"),
-      ];
-      const files: string[] = [];
-
-      for (const dir of dirs) {
-        const collect = (currentDir: string) => {
-          try {
-            const entries = readdirSync(currentDir, { withFileTypes: true });
-            for (const entry of entries) {
-              const fullPath = join(currentDir, entry.name);
-              if (entry.isDirectory()) {
-                collect(fullPath);
-              } else if (entry.isFile() && entry.name.endsWith(".md")) {
-                files.push(relative(root, fullPath));
-              }
-            }
-          } catch {
-            // ignore missing dirs
-          }
-        };
-        collect(dir);
-      }
-
-      const scratchDir = join(root, ".scratch");
-      if (existsSync(scratchDir)) {
-        try {
-          const entries = readdirSync(scratchDir, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory() && entry.name !== "specs" && !entry.name.startsWith(".")) {
-              const specFile = join(scratchDir, entry.name, "spec.md");
-              if (existsSync(specFile) && statSync(specFile).isFile()) {
-                files.push(relative(root, specFile));
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      files.sort();
+      const files = listSpecFiles(findRepoRoot());
 
       const lower = argumentPrefix.toLowerCase();
       const matches = files
@@ -1278,33 +861,7 @@ const COMMANDS: CommandSpec[] = [
     customType: "ticket-breakdown",
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
-      const root = findRepoRoot();
-      const dirs = [
-        join(root, ".scratch", "specs"),
-        join(root, "docs", "specs"),
-      ];
-      const files: string[] = [];
-
-      for (const dir of dirs) {
-        const collect = (currentDir: string) => {
-          try {
-            const entries = readdirSync(currentDir, { withFileTypes: true });
-            for (const entry of entries) {
-              const fullPath = join(currentDir, entry.name);
-              if (entry.isDirectory()) {
-                collect(fullPath);
-              } else if (entry.isFile() && entry.name.endsWith(".md")) {
-                files.push(relative(root, fullPath));
-              }
-            }
-          } catch {
-            // ignore missing dirs
-          }
-        };
-        collect(dir);
-      }
-
-      files.sort();
+      const files = listSpecFiles(findRepoRoot());
 
       const lower = argumentPrefix.toLowerCase();
       const matches = files
@@ -1329,32 +886,7 @@ const COMMANDS: CommandSpec[] = [
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
       const root = findRepoRoot();
-      const files: string[] = [];
-
-      const collectMdFiles = (currentDir: string) => {
-        try {
-          const entries = readdirSync(currentDir, { withFileTypes: true });
-          for (const entry of entries) {
-            const fullPath = join(currentDir, entry.name);
-            if (entry.isDirectory()) {
-              if (entry.name.startsWith(".")) continue;
-              collectMdFiles(fullPath);
-            } else if (entry.isFile() && entry.name.endsWith(".md")) {
-              files.push(relative(root, fullPath));
-            }
-          }
-        } catch {
-          // ignore missing dirs
-        }
-      };
-
-      const scratchDir = join(root, ".scratch");
-      const docsSpecsDir = join(root, "docs", "specs");
-
-      if (existsSync(scratchDir)) collectMdFiles(scratchDir);
-      if (existsSync(docsSpecsDir)) collectMdFiles(docsSpecsDir);
-
-      const uniqueFiles = Array.from(new Set(files)).sort();
+      const uniqueFiles = listScratchMarkdown(root, [join(root, "docs", "specs")]);
 
       const lower = argumentPrefix.toLowerCase();
       const matches = uniqueFiles
@@ -1396,25 +928,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (sub === "resolve") {
-        const root = findRepoRoot();
-        const scratchDir = join(root, ".scratch");
-        const files: string[] = [];
-        const collect = (currentDir: string) => {
-          try {
-            const entries = readdirSync(currentDir, { withFileTypes: true });
-            for (const entry of entries) {
-              const fullPath = join(currentDir, entry.name);
-              if (entry.isDirectory()) {
-                if (!entry.name.startsWith(".")) collect(fullPath);
-              } else if (entry.isFile() && entry.name.endsWith(".md")) {
-                files.push(relative(root, fullPath));
-              }
-            }
-          } catch {
-            // ignore
-          }
-        };
-        if (existsSync(scratchDir)) collect(scratchDir);
+        const files = listScratchMarkdown(findRepoRoot());
 
         const matches = files
           .filter(
@@ -1467,17 +981,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (sub === "update" || sub === "remove") {
-        const root = findRepoRoot();
-        const dir = join(root, ".omp", "references");
-        let dirs: string[] = [];
-        try {
-          dirs = readdirSync(dir, { withFileTypes: true })
-            .filter((ent) => ent.isDirectory() && !ent.name.startsWith(".") && existsSync(join(dir, ent.name, ".git")))
-            .map((ent) => ent.name)
-            .sort();
-        } catch {
-          return null;
-        }
+        const dirs = listReferences(findRepoRoot());
         const matches = dirs
           .filter((name) => name.toLowerCase().startsWith(rest))
           .map((name) => ({
@@ -1518,44 +1022,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (sub === "run") {
-        const root = findRepoRoot();
-        const routinesDir = join(root, "scripts", "routines");
-        const idsSet = new Set<string>();
-
-        const manifestPath = join(routinesDir, "manifest.json");
-        if (existsSync(manifestPath)) {
-          try {
-            const raw = readFileSync(manifestPath, "utf8");
-            interface ManifestData { routines?: Array<{ id?: string; file?: string }>; }
-            const parsed: ManifestData = JSON.parse(raw);
-            if (parsed && Array.isArray(parsed.routines)) {
-              for (const r of parsed.routines) {
-                if (r && typeof r.id === "string") {
-                  idsSet.add(r.id);
-                } else if (r && typeof r.file === "string") {
-                  idsSet.add(r.file);
-                }
-              }
-            }
-          } catch {
-            // ignore parse errors
-          }
-        }
-
-        try {
-          const entries = readdirSync(routinesDir, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isFile() && entry.name.endsWith(".sh")) {
-              const idWithoutExt = entry.name.slice(0, -3);
-              idsSet.add(idWithoutExt);
-              idsSet.add(entry.name);
-            }
-          }
-        } catch {
-          // ignore missing routines directory
-        }
-
-        const sortedIds = Array.from(idsSet).sort();
+        const sortedIds = listRoutines(findRepoRoot());
         const matches = sortedIds
           .filter((id) => id.toLowerCase().startsWith(rest))
           .map((id) => ({

@@ -1,6 +1,6 @@
 {
   "name": "my-omp-skills",
-  "version": "0.28.1",
+  "version": "0.29.0",
   "private": true,
   "description": "Personal omp extensions: slash commands and model-invoked skills adapted from Matt Pocock's engineering workflow suite (grilling, spec/ticket flows, TDD, code review, triage, wayfinder, handoff, teach).",
   "license": "MIT",
@@ -20,7 +20,9 @@
     "triage"
   ],
   "omp": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "zod": "^4.4.3"
   }
 }

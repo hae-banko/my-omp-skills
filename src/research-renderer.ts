@@ -16,6 +16,7 @@ import {
   boxLine,
   clamp01,
   displayWidth,
+  extractPayload,
   formatDuration,
   makeProgressBar,
   starsFor,
@@ -181,17 +182,6 @@ export interface ResearchErrorPayload {
   code?: string;
   message?: string;
   hint?: string;
-}
-
-/** Extract `details` from a custom message; falls back to the message itself. */
-function extractPayload<T>(message: unknown): T | undefined {
-  if (message && typeof message === "object") {
-    if ("details" in message && message.details && typeof message.details === "object") {
-      return message.details as T;
-    }
-    return message as T;
-  }
-  return undefined;
 }
 
 function toRecord(payload: unknown): Record<string, unknown> {

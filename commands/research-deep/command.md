@@ -70,6 +70,8 @@ Phase 2 runs repeated waves until convergence (replaces single-pass batch execut
   - `status: RUNNING` (canonical word) while the loop continues
   - `updated` (ISO-8601 UTC)
   At convergence, set `status: CONVERGED` (keeping `waves_run` and `counts` truthful).
+
+**Contract — research.md front-matter ↔ code**: the TUI research cards read a project through `src/research-store.ts` (the module owning every read of `.omp/knowledge/research/<slug>/`), which uses these front-matter fields as the read source for `total_items` / `total_fields` / `waves_run` / `status`. Keep them truthful on every write: `status` is the canonical pipeline word (`OUTLINE` | `RUNNING` | `CONVERGED` | `REPORT_READY` | `PAUSED` | `CANCELLED` | `ERROR` | `STALE`); `counts.items` / `counts.fields` are the defined totals; `counts.filled` / `counts.partial` / `counts.pending` the item completion state; `waves_run` the completed waves; `updated` an ISO-8601 UTC timestamp. `src/research-store.ts` and `commands/research/validate_json.py` are the two adapters on this seam — one adapter would be a hypothetical seam, two make it real. The store falls back to scanning `outline.yaml` / `fields.yaml` / `results/` only when a front-matter value is absent.
 - **Lifecycle Dashboard Emission** — keep the TUI's lifecycle dashboard current at phase boundaries, at **most one dashboard card per wave**:
   - At the **start of each wave** (before dispatching the batch), emit a `research-dashboard` card with `status: RUNNING`, details from the project directory.
   - After **convergence**, emit a `research-dashboard` card with `status: CONVERGED`.

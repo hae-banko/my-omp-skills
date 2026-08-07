@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { Container, Text } from "@oh-my-pi/pi-tui";
+import type { Container } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolResult } from "./api.ts";
+import { toolResultCard } from "./research-format.ts";
 
 const UNDERSCORE_RE = /_/g;
 const repoRootCache = new Map<string, string>();
@@ -86,10 +87,7 @@ export function renderRoutineResult(result: ToolResult): Container {
     .slice(0, 8);
   if (lines.length === 0) lines.push(code === 0 ? "completed with no output" : "failed with no output");
 
-  const box = new Container();
-  box.addChild(new Text(label));
-  lines.slice(0, 10).forEach((line) => box.addChild(new Text(`  ${line.slice(0, 100)}`, 0, 0)));
-  return box;
+  return toolResultCard(lines, label);
 }
 
 export function installRoutinesTool(pi: ExtensionApi): void {

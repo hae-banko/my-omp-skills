@@ -24,6 +24,11 @@ _NESTED_KEYS = {k for keys in CATEGORY_MAPPING.values() for k in keys}
 
 
 def load_fields_yaml(fields_path):
+    # Counting rule is shared with the TS store: src/research-store.ts counts
+    # the same defined fields (total_fields) from fields.yaml — `- name:`
+    # entries under `categories:` / `field_categories` only. Keep the two
+    # adapters on the same denominator; the report/dashboard coverage math
+    # depends on it.
     with fields_path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):

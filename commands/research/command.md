@@ -26,7 +26,7 @@ When `/research` is invoked with a subcommand:
 - **`3 [slug]`**: Delegate to Phase 3 summary report compilation (equivalent to `/research-report [slug]`).
 - **`dashboard [slug]`** or **`status [slug]`** — Research Lifecycle Dashboard:
   1. Locate the project directory under `<repo-root>/.omp/knowledge/research/` matching `slug` (or the most recent dated directory if `slug` is omitted).
-  2. Read `research.md` (or `outline.yaml` & `fields.yaml`), scan completed JSON results, and check whether `report.md` exists.
+  2. Read `research.md` front-matter (the workflow-owned counts/status — see Contract below), fall back to scanning `outline.yaml` & `fields.yaml` only when a front-matter value is absent; scan completed JSON results; check whether `report.md` exists.
   3. **Emit the `research-dashboard` custom message** to trigger the Research Lifecycle Dashboard card:
      ```ts
      pi.sendMessage({
@@ -215,6 +215,18 @@ Create `research.md` living outline in the project directory alongside `outline.
   - `## Required fields (<N> total)`: Grouped by category, showing field names, descriptions, and `detail_level` (★/★★/★★★).
   - `## Progress`: Timestamped log starting with `### Phase 1 — outline`.
   - `## Notes`: Free-form notes section.
+
+### Contract — research.md front-matter ↔ code
+
+The TUI research cards (dashboard, review, wave progress, report preview) read a research project through `src/research-store.ts` — that module owns every read of `.omp/knowledge/research/<slug>/`. This workflow body is the authoring surface; the store is the reading surface. They meet at the `research.md` front-matter fields this workflow MUST keep truthful on every write:
+
+- `status` — the canonical pipeline word: `OUTLINE` | `RUNNING` | `CONVERGED` | `REPORT_READY` | `PAUSED` | `CANCELLED` | `ERROR` | `STALE`
+- `counts.items` / `counts.fields` — defined totals
+- `counts.filled` / `counts.partial` / `counts.pending` — item completion state
+- `waves_run` — completed waves
+- `updated` — ISO-8601 UTC timestamp
+
+`src/research-store.ts` and `commands/research/validate_json.py` are the two adapters reading these files — one adapter would be a hypothetical seam, two make the seam real. The store reads the front-matter counts first and falls back to scanning `outline.yaml` / `fields.yaml` / `results/` only when a front-matter value is absent — keep the counts truthful so the cards never re-derive them.
 
 ### Step 5: Save Files and Update Index
 

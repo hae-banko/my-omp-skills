@@ -1,4 +1,6 @@
-// Width-aware text formatting for research cards.
+// Card-format module: width-aware text primitives plus the shared card
+// scaffold — borders, extractPayload, and the tool-result card. Every card
+// renderer in the package draws through this seam.
 //
 // All card lines are measured in terminal display cells, not code points:
 // CJK ideographs, Hangul, fullwidth forms and emoji occupy 2 cells, combining
@@ -6,6 +8,12 @@
 // on wide glyphs and could exceed the pi-tui hard line-width limit (a
 // fail-fast crash). The width table is self-contained so the renderers stay
 // deterministic and testable without the runtime pi-tui.
+
+// Width table + primitives + card scaffold. Container/Text come from pi-tui
+// (aliased to the headless stub in tests); the width math below needs no
+// runtime.
+
+import { Container, Text } from "@oh-my-pi/pi-tui";
 
 export const BOX_WIDTH = 76;
 export const INNER_WIDTH = BOX_WIDTH - 2;
@@ -120,6 +128,38 @@ export function boxLine(text: string): string {
 export const TOP_BORDER = `┌${"─".repeat(INNER_WIDTH)}┐`;
 export const DIVIDER = `├${"─".repeat(INNER_WIDTH)}┤`;
 export const BOTTOM_BORDER = `└${"─".repeat(INNER_WIDTH)}┘`;
+
+/** Extract `details` from a custom message; falls back to the message itself. */
+export function extractPayload<T>(message: unknown): T | undefined {
+  if (message && typeof message === "object") {
+    if ("details" in message && message.details && typeof message.details === "object") {
+      return message.details as T;
+    }
+    return message as T;
+  }
+  return undefined;
+}
+
+/**
+ * Label-plus-lines tool-result card: the title as a bordered header row, then
+ * each content line `  `-indented. Reproduces the card the tool renderers
+ * previously hand-rolled, now inside the shared 76-cell box.
+ */
+export function toolResultCard(lines: string[], title?: string): Container {
+  const container = new Container();
+  container.addChild(new Text(TOP_BORDER, 0, 0));
+  if (title) {
+    container.addChild(new Text(boxLine(` ${title}`), 0, 0));
+  }
+  if (title && lines.length > 0) {
+    container.addChild(new Text(DIVIDER, 0, 0));
+  }
+  for (const line of lines) {
+    container.addChild(new Text(boxLine(`  ${line}`), 0, 0));
+  }
+  container.addChild(new Text(BOTTOM_BORDER, 0, 0));
+  return container;
+}
 
 export function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));

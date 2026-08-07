@@ -2,18 +2,11 @@
 // The tool gives the model a sanctioned way to look up past findings; the
 // renderers give the TUI compact cards instead of raw text.
 
-import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolResult } from "./api.ts";
 import { findKnowledgeRoot, readKnowledge, type KnowledgeQuery } from "./knowledge.ts";
+import { toolResultCard } from "./research-format.ts";
 
 const TOOL_NAME = "knowledge_read";
-
-function renderCard(label: string, lines: string[]): Container {
-  const box = new Container();
-  box.addChild(new Text(label));
-  lines.slice(0, 8).forEach((line) => box.addChild(new Text(`  ${line.slice(0, 100)}`, 0, 0)));
-  return box;
-}
 
 function knowledgeResultLines(result: ToolResult): string[] {
   const text = (result.content ?? [])
@@ -66,10 +59,10 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
       // details: { found, type, count, paths } — validated by the execute path.
       const details = result.details as { found?: boolean; type?: string; count?: number };
       if (details && details.found === false) {
-        return renderCard("KNOWLEDGE — not found", ["no knowledge base here"]);
+        return toolResultCard(["no knowledge base here"], "KNOWLEDGE — not found");
       }
       const label = `KNOWLEDGE — ${String(details?.type ?? "index").toUpperCase()} (${details?.count ?? 0})`;
-      return renderCard(label, knowledgeResultLines(result));
+      return toolResultCard(knowledgeResultLines(result).slice(0, 8), label);
     },
   });
 
@@ -79,7 +72,7 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
         message && typeof message === "object" && "content" in message
           ? String(message.content ?? "")
           : "";
-      return renderCard(label, content.split("\n"));
+      return toolResultCard(content.split("\n").slice(0, 8), label);
     });
   };
   registerMessageCard("knowledge-record", "RECORD");

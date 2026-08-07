@@ -121,6 +121,8 @@ Run `python {project_dir}/generate_report.py`
 After `report.md` is written, close out Phase 3:
 
 - **Front-matter upkeep** — update `research.md` front-matter: `status: REPORT_READY`, `phase: 3`, `updated` (ISO-8601 UTC).
+
+**Contract — research.md front-matter ↔ code**: the TUI research cards read a project through `src/research-store.ts` (the module owning every read of `.omp/knowledge/research/<slug>/`), which uses the front-matter fields as the read source for `total_items` / `total_fields` / `waves_run` / `status`. Keep them truthful on every write: `status` is the canonical pipeline word (`OUTLINE` | `RUNNING` | `CONVERGED` | `REPORT_READY` | `PAUSED` | `CANCELLED` | `ERROR` | `STALE`); `counts.items` / `counts.fields` are the defined totals; `counts.filled` / `counts.partial` / `counts.pending` the item completion state; `waves_run` the completed waves; `updated` an ISO-8601 UTC timestamp. `src/research-store.ts` and `commands/research/validate_json.py` are the two adapters on this seam — one adapter would be a hypothetical seam, two make it real. The store falls back to scanning `outline.yaml` / `fields.yaml` / `results/` only when a front-matter value is absent.
 - **Dashboard emission** — emit a `research-dashboard` card with `status: REPORT_READY` (details from the project directory) so the TUI lands on the final lifecycle state:
   ```ts
   pi.sendMessage({

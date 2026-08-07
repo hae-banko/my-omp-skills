@@ -18,30 +18,35 @@ import { join } from "node:path";
 // served at runtime by the omp binary.
 import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
 
+// Real zod. The extension authors its tool parameter schemas through the
+// `pi.zod` slot at module load (see src/{knowledge-tool,herdr-tools,routines}.ts),
+// so the mock slot is the real `z` — the chains the extension builds run
+// against the actual runtime, not a hand-rolled fake. The extension only
+// uses object/enum/string/record/number().int().min().max()/boolean with
+// `.optional()`/`.default()`, which real zod v4 implements.
+import { z } from "zod";
+
 import extension from "../src/index.ts";
+// parseHerdrOutput is a PURE parser with no registered seam of its own (the
+// herdr tools themselves are the registered surface, gated below), so the
+// harness imports it directly — the one deliberate direct import left in.
+import { parseHerdrOutput } from "../src/herdr-tools.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
-import {
-  renderResearchReviewCard,
-  renderResearchWaveProgressCard,
-  renderResearchReportPreviewCard,
-  renderResearchDashboardCard,
-  renderResearchHelpCard,
-  renderResearchErrorCard,
-  type ResearchReviewPayload,
-  type ResearchWaveProgressPayload,
-  type ResearchReportPreviewPayload,
-  type ResearchDashboardPayload,
-  type ResearchHelpPayload,
-  type ResearchErrorPayload,
+import type {
+  ResearchReviewPayload,
+  ResearchWaveProgressPayload,
+  ResearchReportPreviewPayload,
+  ResearchDashboardPayload,
+  ResearchHelpPayload,
+  ResearchErrorPayload,
 } from "../src/research-renderer.ts";
+// displayWidth is a pure display-cell measurement primitive (not part of the
+// renderer seam); the ≤76-cell budget checks below use it to verify lines.
 import { displayWidth } from "../src/research-format.ts";
-import {
-  renderAuditCard,
-  renderTicketBreakdownCard,
-  renderTriageStatusCard,
-  type AuditCardPayload,
-  type TicketBreakdownPayload,
-  type TriageStatusPayload,
+import type {
+  AuditCardPayload,
+  TicketBreakdownPayload,
+  TriageStatusPayload,
 } from "../src/telemetry-renderer.ts";
 
 interface HandlerContext {
@@ -121,22 +126,20 @@ const handlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
 const tools: RegisteredTool[] = [];
 const renderers: Record<string, (message: unknown, options: unknown, theme: unknown) => unknown> = {};
 
-const zod = {
-  object: (shape: Record<string, unknown>) => ({ shape }),
-  enum: (values: readonly string[]) => ({
-    default: (value: string) => ({ values, default: value }),
-    optional: () => ({ kind: "enum", values }),
-  }),
-  string: () => ({ optional: () => ({ kind: "string" }) }),
-  record: (keyType?: unknown, valueType?: unknown) => ({ optional: () => ({ kind: "record" }) }),
-  number: () => ({
-    int: () => ({
-      min: (n: number) => ({
-        max: (m: number) => ({ optional: () => ({ kind: "number", min: n, max: m }) }),
-      }),
-    }),
-  }),
-  boolean: () => ({ optional: () => ({ kind: "boolean" }) }),
+/**
+ * Children text lines of a stub Container (the pi-tui stub exposes `.text`
+ * on each Text child). Renderer unit checks invoke the REGISTERED renderer
+ * (renderers[customType]) and assert on these lines. Accepts `unknown` and
+ * narrows via instanceof so callers never cast the seam's return value.
+ */
+const collectLines = (container: unknown): string[] => {
+  if (!(container instanceof TuiContainer)) return [];
+  return (container.children ?? []).map((c) => {
+    if (c && typeof c === "object" && "text" in c) {
+      return String(c.text ?? "");
+    }
+    return "";
+  });
 };
 
 const mockPi = {
@@ -164,7 +167,9 @@ const mockPi = {
   ): void {
     renderers[customType] = renderer;
   },
-  zod,
+  // Real zod (see the import comment above). The extension's chain surface is
+  // a structural subset of real z, so this slot passes the real runtime.
+  zod: z,
 };
 
 extension(mockPi);
@@ -510,39 +515,27 @@ if (!renderers["research-review"]) {
     },
   };
 
-  const directCard = renderResearchReviewCard(samplePayload) as TuiContainer;
-  if (!(directCard instanceof TuiContainer)) {
-    fail("renderer: renderResearchReviewCard did not return a Container");
-  }
-  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
-  const directTexts = directChildren
-    .map((c: unknown) => {
-      if (c && typeof c === "object" && "text" in c) {
-        return String(c.text ?? "");
-      }
-      return "";
-    })
-    .join("\n");
-  if (!directTexts.includes("RESEARCH DRAFT REVIEW")) {
-    fail("research-review: output missing RESEARCH DRAFT REVIEW header");
-  }
-  if (!directTexts.includes("Section 1: Living Outline")) {
-    fail("research-review: output missing Section 1 title");
-  }
-  if (!directTexts.includes("Section 2: Execution Settings")) {
-    fail("research-review: output missing Section 2 title");
-  }
-  if (!directTexts.includes("Section 3: Next Commands")) {
-    fail("research-review: output missing Section 3 title");
-  }
-
-  const msgCard = renderers["research-review"](
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["research-review"](
     { customType: "research-review", details: samplePayload },
     {},
     null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
+  );
+  if (!(card instanceof TuiContainer)) {
     fail("renderer: registered research-review renderer did not return a Container");
+  }
+  const texts = collectLines(card).join("\n");
+  if (!texts.includes("RESEARCH DRAFT REVIEW")) {
+    fail("research-review: output missing RESEARCH DRAFT REVIEW header");
+  }
+  if (!texts.includes("Section 1: Living Outline")) {
+    fail("research-review: output missing Section 1 title");
+  }
+  if (!texts.includes("Section 2: Execution Settings")) {
+    fail("research-review: output missing Section 2 title");
+  }
+  if (!texts.includes("Section 3: Next Commands")) {
+    fail("research-review: output missing Section 3 title");
   }
 }
 
@@ -560,34 +553,27 @@ if (!renderers["research-wave-progress"]) {
     active_modules: ["academic-papers", "github-debug"],
     uncertainty_delta: "-0.25",
   };
-  const directCard = renderResearchWaveProgressCard(wavePayload) as TuiContainer;
-  if (!(directCard instanceof TuiContainer)) {
-    fail("renderer: renderResearchWaveProgressCard did not return a Container");
-  }
-  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
-  const directTexts = directChildren
-    .map((c: unknown) => (c && typeof c === "object" && "text" in c ? String(c.text ?? "") : ""))
-    .join("\n");
-  if (!directTexts.includes("RESEARCH WAVE PROGRESS")) {
-    fail("research-wave-progress: output missing header");
-  }
-  if (!directTexts.includes("[WAVE 2/3]")) {
-    fail("research-wave-progress: output missing wave badge");
-  }
-  if (!directTexts.includes("[████░░░░]")) {
-    fail("research-wave-progress: output missing progress bar");
-  }
-  if (!directTexts.includes("Uncertainty Reduction (ΔU)")) {
-    fail("research-wave-progress: output missing ΔU metric");
-  }
-
-  const msgCard = renderers["research-wave-progress"](
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["research-wave-progress"](
     { customType: "research-wave-progress", details: wavePayload },
     {},
     null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
+  );
+  if (!(card instanceof TuiContainer)) {
     fail("renderer: registered research-wave-progress renderer did not return a Container");
+  }
+  const texts = collectLines(card).join("\n");
+  if (!texts.includes("RESEARCH WAVE PROGRESS")) {
+    fail("research-wave-progress: output missing header");
+  }
+  if (!texts.includes("[WAVE 2/3]")) {
+    fail("research-wave-progress: output missing wave badge");
+  }
+  if (!texts.includes("[████░░░░]")) {
+    fail("research-wave-progress: output missing progress bar");
+  }
+  if (!texts.includes("Uncertainty Reduction (ΔU)")) {
+    fail("research-wave-progress: output missing ΔU metric");
   }
 }
 
@@ -603,37 +589,30 @@ if (!renderers["research-report-preview"]) {
       { field: "eval_benchmark", attempts: 3, reason: "No standardized benchmark dataset found" },
     ],
   };
-  const directCard = renderResearchReportPreviewCard(reportPayload) as TuiContainer;
-  if (!(directCard instanceof TuiContainer)) {
-    fail("renderer: renderResearchReportPreviewCard did not return a Container");
-  }
-  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
-  const directTexts = directChildren
-    .map((c: unknown) => (c && typeof c === "object" && "text" in c ? String(c.text ?? "") : ""))
-    .join("\n");
-  if (!directTexts.includes("RESEARCH REPORT PREVIEW")) {
-    fail("research-report-preview: output missing header");
-  }
-  if (!directTexts.includes("Coverage:")) {
-    fail("research-report-preview: output missing coverage");
-  }
-  if (!directTexts.includes("Verified Sources Count:")) {
-    fail("research-report-preview: output missing verified sources count");
-  }
-  if (!directTexts.includes("Executive Summary Preview:")) {
-    fail("research-report-preview: output missing summary preview");
-  }
-  if (!directTexts.includes("Unresolved Field Provenance:")) {
-    fail("research-report-preview: output missing unresolved field provenance");
-  }
-
-  const msgCard = renderers["research-report-preview"](
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["research-report-preview"](
     { customType: "research-report-preview", details: reportPayload },
     {},
     null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
+  );
+  if (!(card instanceof TuiContainer)) {
     fail("renderer: registered research-report-preview renderer did not return a Container");
+  }
+  const texts = collectLines(card).join("\n");
+  if (!texts.includes("RESEARCH REPORT PREVIEW")) {
+    fail("research-report-preview: output missing header");
+  }
+  if (!texts.includes("Coverage:")) {
+    fail("research-report-preview: output missing coverage");
+  }
+  if (!texts.includes("Verified Sources Count:")) {
+    fail("research-report-preview: output missing verified sources count");
+  }
+  if (!texts.includes("Executive Summary Preview:")) {
+    fail("research-report-preview: output missing summary preview");
+  }
+  if (!texts.includes("Unresolved Field Provenance:")) {
+    fail("research-report-preview: output missing unresolved field provenance");
   }
 }
 
@@ -658,44 +637,37 @@ if (!renderers["research-dashboard"]) {
     },
     recommended_next_step: "Run /research-deep medium dashboard-selftest",
   };
-  const directCard = renderResearchDashboardCard(dashPayload) as TuiContainer;
-  if (!(directCard instanceof TuiContainer)) {
-    fail("renderer: renderResearchDashboardCard did not return a Container");
-  }
-  const directChildren = (directCard as unknown as { children: unknown[] }).children ?? [];
-  const directTexts = directChildren
-    .map((c: unknown) => (c && typeof c === "object" && "text" in c ? String(c.text ?? "") : ""))
-    .join("\n");
-  if (!directTexts.includes("RESEARCH DASHBOARD")) {
-    fail("research-dashboard: output missing header");
-  }
-  if (!directTexts.includes("Pipeline:")) {
-    fail("research-dashboard: output missing pipeline stepper");
-  }
-  if (
-    !directTexts.includes("1. Outline ✓") ||
-    !directTexts.includes("[2. OODA]") ||
-    !directTexts.includes("3. Report")
-  ) {
-    fail("research-dashboard: output missing phase stepper marks");
-  }
-  if (!directTexts.includes("Global Completion Metrics:")) {
-    fail("research-dashboard: output missing global completion metrics");
-  }
-  if (!directTexts.includes("Project Artifacts Status:")) {
-    fail("research-dashboard: output missing project artifacts status");
-  }
-  if (!directTexts.includes("Next:")) {
-    fail("research-dashboard: output missing next step section");
-  }
-
-  const msgCard = renderers["research-dashboard"](
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["research-dashboard"](
     { customType: "research-dashboard", details: dashPayload },
     {},
     null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
+  );
+  if (!(card instanceof TuiContainer)) {
     fail("renderer: registered research-dashboard renderer did not return a Container");
+  }
+  const texts = collectLines(card).join("\n");
+  if (!texts.includes("RESEARCH DASHBOARD")) {
+    fail("research-dashboard: output missing header");
+  }
+  if (!texts.includes("Pipeline:")) {
+    fail("research-dashboard: output missing pipeline stepper");
+  }
+  if (
+    !texts.includes("1. Outline ✓") ||
+    !texts.includes("[2. OODA]") ||
+    !texts.includes("3. Report")
+  ) {
+    fail("research-dashboard: output missing phase stepper marks");
+  }
+  if (!texts.includes("Global Completion Metrics:")) {
+    fail("research-dashboard: output missing global completion metrics");
+  }
+  if (!texts.includes("Project Artifacts Status:")) {
+    fail("research-dashboard: output missing project artifacts status");
+  }
+  if (!texts.includes("Next:")) {
+    fail("research-dashboard: output missing next step section");
   }
 }
 
@@ -706,7 +678,7 @@ if (!renderers["my-omp-research-help"]) {
     { customType: "my-omp-research-help", details: { slug: "research", commands: [] } },
     {},
     null,
-  ) as TuiContainer;
+  );
   if (!(card instanceof TuiContainer)) fail("renderer: my-omp-research-help did not produce a component");
 }
 if (!renderers["my-omp-research-error"]) {
@@ -719,7 +691,7 @@ if (!renderers["my-omp-research-error"]) {
     },
     {},
     null,
-  ) as TuiContainer;
+  );
   if (!(card instanceof TuiContainer)) fail("renderer: my-omp-research-error did not produce a component");
 }
 
@@ -727,116 +699,156 @@ if (!renderers["my-omp-research-error"]) {
 
 // Every line of every research card must fit the fixed 76-cell box. The
 // renderers measure in display cells (CJK/emoji = 2), so this must hold even
-// for the CJK-slug dashboard below.
-const collectLines = (container: TuiContainer): string[] =>
-  ((container as unknown as { children: unknown[] }).children ?? []).map(
-    (c) => (c as { text?: string }).text ?? "",
-  );
+// for the CJK-slug dashboard below. All cards render through the REGISTERED
+// seam (renderers[customType] — see collectLines above).
 
-const cardsUnderTest: Array<{ label: string; render: () => TuiContainer }> = [];
+const cardsUnderTest: Array<{ label: string; render: () => unknown }> = [];
 
 cardsUnderTest.push({
   label: "research-dashboard (RUNNING/stale/CJK)",
   render: () =>
-    renderResearchDashboardCard({
-      slug: "2026-08-07_研究",
-      status: "RUNNING",
-      topic: "UX improvements",
-      as_of: "2026-08-07T12:00:00Z",
-      freshness: "stale",
-      global_metrics: {
-        total_items: 21,
-        completed_items: 12,
-        total_fields: 18,
-        completed_fields: 18,
-        coverage: 12 / 21,
+    renderers["research-dashboard"](
+      {
+        details: {
+          slug: "2026-08-07_研究",
+          status: "RUNNING",
+          topic: "UX improvements",
+          as_of: "2026-08-07T12:00:00Z",
+          freshness: "stale",
+          global_metrics: {
+            total_items: 21,
+            completed_items: 12,
+            total_fields: 18,
+            completed_fields: 18,
+            coverage: 12 / 21,
+          },
+          next_step_command: "/research-deep 2026-08-07_研究",
+        },
       },
-      next_step_command: "/research-deep 2026-08-07_研究",
-    }),
+      {},
+      null,
+    ),
 });
 
 cardsUnderTest.push({
   label: "research-wave-progress (indeterminate)",
   render: () =>
-    renderResearchWaveProgressCard({
-      wave: 1,
-      max_waves: 3,
-      status: "RUNNING",
-      indeterminate: true,
-    }),
+    renderers["research-wave-progress"](
+      {
+        details: {
+          wave: 1,
+          max_waves: 3,
+          status: "RUNNING",
+          indeterminate: true,
+        },
+      },
+      {},
+      null,
+    ),
 });
 
 cardsUnderTest.push({
   label: "research-wave-progress (elapsed/eta/statuses)",
   render: () =>
-    renderResearchWaveProgressCard({
-      elapsed_seconds: 192,
-      eta_seconds: 240,
-      per_item_status: [
-        { name: "a", status: "landed" },
-        { name: "b", status: "failed" },
-      ],
-    }),
+    renderers["research-wave-progress"](
+      {
+        details: {
+          elapsed_seconds: 192,
+          eta_seconds: 240,
+          per_item_status: [
+            { name: "a", status: "landed" },
+            { name: "b", status: "failed" },
+          ],
+        },
+      },
+      {},
+      null,
+    ),
 });
 
 cardsUnderTest.push({
   label: "research-report-preview (toc/counts)",
   render: () =>
-    renderResearchReportPreviewCard({
-      toc: [{ name: "Alpha", summary: "P1" }],
-      total_items: 21,
-      resolved_items: 21,
-      unresolved_fields_count: 0,
-      coverage: 1,
-    }),
+    renderers["research-report-preview"](
+      {
+        details: {
+          toc: [{ name: "Alpha", summary: "P1" }],
+          total_items: 21,
+          resolved_items: 21,
+          unresolved_fields_count: 0,
+          coverage: 1,
+        },
+      },
+      {},
+      null,
+    ),
 });
 
 cardsUnderTest.push({
   label: "research-review (full/detailed field)",
   render: () =>
-    renderResearchReviewCard({
-      slug: "s",
-      detail: "full",
-      items: Array.from({ length: 12 }, (_, i) => ({ name: `item-${i + 1}` })),
-      fields: [{ name: "f", detail_level: "detailed" }],
-    }),
+    renderers["research-review"](
+      {
+        details: {
+          slug: "s",
+          detail: "full",
+          items: Array.from({ length: 12 }, (_, i) => ({ name: `item-${i + 1}` })),
+          fields: [{ name: "f", detail_level: "detailed" }],
+        },
+      },
+      {},
+      null,
+    ),
 });
 
 cardsUnderTest.push({
   label: "research-help",
   render: () =>
-    renderResearchHelpCard({
-      slug: "research",
-      status: "RUNNING",
-      commands: [{ command: "/research dashboard", description: "Open the dashboard" }],
-      shortcuts: [{ key: "F1", description: "Open help" }],
-      env: { TERM: "xterm-256color", CI: "" },
-    }),
+    renderers["my-omp-research-help"](
+      {
+        details: {
+          slug: "research",
+          status: "RUNNING",
+          commands: [{ command: "/research dashboard", description: "Open the dashboard" }],
+          shortcuts: [{ key: "F1", description: "Open help" }],
+          env: { TERM: "xterm-256color", CI: "" },
+        },
+      },
+      {},
+      null,
+    ),
 });
 
 cardsUnderTest.push({
   label: "research-error",
   render: () =>
-    renderResearchErrorCard({
-      slug: "s",
-      code: "PROJECT_NOT_FOUND",
-      message: 'Project "s" not found under .omp/knowledge/research/',
-      hint: "Run '/research status' to list projects.",
-    }),
+    renderers["my-omp-research-error"](
+      {
+        details: {
+          slug: "s",
+          code: "PROJECT_NOT_FOUND",
+          message: 'Project "s" not found under .omp/knowledge/research/',
+          hint: "Run '/research status' to list projects.",
+        },
+      },
+      {},
+      null,
+    ),
 });
 
 for (const { label, render } of cardsUnderTest) {
-  let card: TuiContainer;
+  let rendered: unknown;
   try {
-    card = render();
+    rendered = render();
   } catch (err) {
     fail(`unit: ${label} threw: ${err}`);
     continue;
   }
-  if (!(card instanceof TuiContainer)) {
+  if (!(rendered instanceof TuiContainer)) {
     fail(`unit: ${label} did not return a Container`);
     continue;
   }
+  const card = rendered;
   for (const line of collectLines(card)) {
     if (displayWidth(line) > 76) {
       fail(`unit: ${label} line exceeds 76 cells (${displayWidth(line)}): ${JSON.stringify(line)}`);
@@ -844,77 +856,100 @@ for (const { label, render } of cardsUnderTest) {
   }
 }
 
-// Content contracts per card.
+// Content contracts per card (all rendered through the REGISTERED seam).
 {
-  const dashText = collectLines(
-    renderResearchDashboardCard({
-      slug: "2026-08-07_研究",
-      status: "RUNNING",
-      topic: "UX improvements",
-      as_of: "2026-08-07T12:00:00Z",
-      freshness: "stale",
-      global_metrics: {
-        total_items: 21,
-        completed_items: 12,
-        total_fields: 18,
-        completed_fields: 18,
-        coverage: 12 / 21,
+  const card = renderers["research-dashboard"](
+    {
+      details: {
+        slug: "2026-08-07_研究",
+        status: "RUNNING",
+        topic: "UX improvements",
+        as_of: "2026-08-07T12:00:00Z",
+        freshness: "stale",
+        global_metrics: {
+          total_items: 21,
+          completed_items: 12,
+          total_fields: 18,
+          completed_fields: 18,
+          coverage: 12 / 21,
+        },
+        next_step_command: "/research-deep 2026-08-07_研究",
       },
-      next_step_command: "/research-deep 2026-08-07_研究",
-    }),
-  ).join("\n");
+    },
+    {},
+    null,
+  );
+  const dashText = collectLines(card).join("\n");
   for (const needle of ["[RUNNING]", "STALE", "Next:", "Topic:"]) {
     if (!dashText.includes(needle)) fail(`unit: dashboard missing "${needle}"`);
   }
 }
 
 {
-  const text = collectLines(
-    renderResearchWaveProgressCard({ wave: 1, max_waves: 3, status: "RUNNING", indeterminate: true }),
-  ).join("\n");
+  const card = renderers["research-wave-progress"](
+    { details: { wave: 1, max_waves: 3, status: "RUNNING", indeterminate: true } },
+    {},
+    null,
+  );
+  const text = collectLines(card).join("\n");
   if (!text.includes("indeterminate")) fail("unit: wave(indeterminate) missing 'indeterminate'");
   if (text.includes("-0.15")) fail("unit: wave(indeterminate) fabricated a ΔU default (-0.15)");
 }
 
 {
-  const text = collectLines(
-    renderResearchWaveProgressCard({
-      elapsed_seconds: 192,
-      eta_seconds: 240,
-      per_item_status: [
-        { name: "a", status: "landed" },
-        { name: "b", status: "failed" },
-      ],
-    }),
-  ).join("\n");
+  const card = renderers["research-wave-progress"](
+    {
+      details: {
+        elapsed_seconds: 192,
+        eta_seconds: 240,
+        per_item_status: [
+          { name: "a", status: "landed" },
+          { name: "b", status: "failed" },
+        ],
+      },
+    },
+    {},
+    null,
+  );
+  const text = collectLines(card).join("\n");
   if (!text.includes("3m12s")) fail("unit: wave elapsed 192s did not render 3m12s");
   if (!text.includes("ETA ≈ 4m")) fail("unit: wave eta 240s did not render 'ETA ≈ 4m'");
   if (!text.includes("landed")) fail("unit: wave per-item status 'landed' missing");
 }
 
 {
-  const text = collectLines(
-    renderResearchReportPreviewCard({
-      toc: [{ name: "Alpha", summary: "P1" }],
-      total_items: 21,
-      resolved_items: 21,
-      unresolved_fields_count: 0,
-      coverage: 1,
-    }),
-  ).join("\n");
+  const card = renderers["research-report-preview"](
+    {
+      details: {
+        toc: [{ name: "Alpha", summary: "P1" }],
+        total_items: 21,
+        resolved_items: 21,
+        unresolved_fields_count: 0,
+        coverage: 1,
+      },
+    },
+    {},
+    null,
+  );
+  const text = collectLines(card).join("\n");
   if (!text.includes("Table of Contents")) fail("unit: report preview missing 'Table of Contents'");
   if (!text.includes("items 21")) fail("unit: report preview missing 'items 21'");
 }
 
 {
-  const text = collectLines(
-    renderResearchReviewCard({
-      slug: "s",
-      detail: "full",
-      items: Array.from({ length: 12 }, (_, i) => ({ name: `item-${i + 1}` })),
-      fields: [{ name: "f", detail_level: "detailed" }],
-    }),
-  ).join("\n");
+  const card = renderers["research-review"](
+    {
+      details: {
+        slug: "s",
+        detail: "full",
+        items: Array.from({ length: 12 }, (_, i) => ({ name: `item-${i + 1}` })),
+        fields: [{ name: "f", detail_level: "detailed" }],
+      },
+    },
+    {},
+    null,
+  );
+  const text = collectLines(card).join("\n");
   if (!text.includes("★★★")) fail("unit: review detailed field missing ★★★");
   if (!text.includes("Next Commands")) fail("unit: review missing 'Next Commands' section");
   if (text.includes("[1] Launch Deep Waves")) {
@@ -934,14 +969,12 @@ if (!renderers["audit-card"]) {
     subtopics_count: 2,
     latest_revision: "v0.1.0 (Initial draft)",
   };
-  const card = renderAuditCard(auditPayload) as TuiContainer;
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["audit-card"]({ details: auditPayload }, {}, null);
   if (!(card instanceof TuiContainer)) {
-    fail("renderer: renderAuditCard did not return a Container");
+    fail("renderer: registered audit-card renderer did not return a Container");
   }
-  const children = (card as unknown as { children: unknown[] }).children ?? [];
-  const texts = children
-    .map((c: unknown) => (c && typeof c === "object" && "text" in c && typeof c.text === "string" ? c.text : ""))
-    .join("\n");
+  const texts = collectLines(card).join("\n");
   if (!texts.includes("AUDIT REPORT")) fail("audit-card: output missing header");
   if (!texts.includes("security-audit")) fail("audit-card: output missing slug");
   if (!texts.includes("v0.1.0")) fail("audit-card: output missing version");
@@ -949,15 +982,6 @@ if (!renderers["audit-card"]) {
   if (!texts.includes(".omp/audits/security-audit/overview.md")) fail("audit-card: output missing root report path");
   if (!texts.includes("Subtopics Count: 2")) fail("audit-card: output missing subtopics count");
   if (!texts.includes("Initial draft")) fail("audit-card: output missing latest revision");
-
-  const msgCard = renderers["audit-card"](
-    { customType: "audit-card", details: auditPayload },
-    {},
-    null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
-    fail("renderer: registered audit-card renderer did not return a Container");
-  }
 }
 
 if (!renderers["ticket-breakdown"]) {
@@ -973,29 +997,18 @@ if (!renderers["ticket-breakdown"]) {
       { id: "02", title: "API Handler", blocked_by: ["01"] },
     ],
   };
-  const card = renderTicketBreakdownCard(ticketPayload) as TuiContainer;
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["ticket-breakdown"]({ details: ticketPayload }, {}, null);
   if (!(card instanceof TuiContainer)) {
-    fail("renderer: renderTicketBreakdownCard did not return a Container");
+    fail("renderer: registered ticket-breakdown renderer did not return a Container");
   }
-  const children = (card as unknown as { children: unknown[] }).children ?? [];
-  const texts = children
-    .map((c: unknown) => (c && typeof c === "object" && "text" in c && typeof c.text === "string" ? c.text : ""))
-    .join("\n");
+  const texts = collectLines(card).join("\n");
   if (!texts.includes("TICKET BREAKDOWN")) fail("ticket-breakdown: output missing header");
   if (!texts.includes(".scratch/auth-flow/issues/")) fail("ticket-breakdown: output missing tracker path");
   if (!texts.includes("Ticket Count: 2")) fail("ticket-breakdown: output missing ticket count");
   if (!texts.includes("ready-for-agent")) fail("ticket-breakdown: output missing ready status");
   if (!texts.includes("Ticket 01 -> Ticket 02")) {
     fail("ticket-breakdown: output missing blocking dependency arrow");
-  }
-
-  const msgCard = renderers["ticket-breakdown"](
-    { customType: "ticket-breakdown", details: ticketPayload },
-    {},
-    null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
-    fail("renderer: registered ticket-breakdown renderer did not return a Container");
   }
 }
 
@@ -1011,29 +1024,18 @@ if (!renderers["triage-status"]) {
     },
     next_action: "Categorize unlabeled issues",
   };
-  const card = renderTriageStatusCard(triagePayload) as TuiContainer;
+  // Through the REGISTERED seam (customType → callback), never a direct import.
+  const card = renderers["triage-status"]({ details: triagePayload }, {}, null);
   if (!(card instanceof TuiContainer)) {
-    fail("renderer: renderTriageStatusCard did not return a Container");
+    fail("renderer: registered triage-status renderer did not return a Container");
   }
-  const children = (card as unknown as { children: unknown[] }).children ?? [];
-  const texts = children
-    .map((c: unknown) => (c && typeof c === "object" && "text" in c && typeof c.text === "string" ? c.text : ""))
-    .join("\n");
+  const texts = collectLines(card).join("\n");
   if (!texts.includes("TRIAGE STATUS")) fail("triage-status: output missing header");
   if (!texts.includes("Total Items: 6")) fail("triage-status: output missing total items");
   if (!texts.includes("unlabeled: 2")) fail("triage-status: output missing unlabeled count");
   if (!texts.includes("needs-triage: 3")) fail("triage-status: output missing needs-triage count");
   if (!texts.includes("agent-ready: 1")) fail("triage-status: output missing agent-ready count");
   if (!texts.includes("Categorize unlabeled issues")) fail("triage-status: output missing next action");
-
-  const msgCard = renderers["triage-status"](
-    { customType: "triage-status", details: triagePayload },
-    {},
-    null,
-  ) as TuiContainer;
-  if (!(msgCard instanceof TuiContainer)) {
-    fail("renderer: registered triage-status renderer did not return a Container");
-  }
 }
 
 // --- Telemetry card resilience & file stat checks ---------------------------
@@ -1050,48 +1052,28 @@ const malformedPayloads: unknown[] = [
   { global_metrics: { coverage: NaN, total_items: "abc" }, artifacts: [null, 123] },
 ];
 
+// All seven registered renderers must stay Container-producing for malformed
+// payloads. Through the REGISTERED seam: the message carries `details`, which
+// is exactly how the runtime delivers custom messages to the renderers.
+const resilienceCards: Array<[string, string]> = [
+  ["audit-card", "renderAuditCard"],
+  ["ticket-breakdown", "renderTicketBreakdownCard"],
+  ["triage-status", "renderTriageStatusCard"],
+  ["research-review", "renderResearchReviewCard"],
+  ["research-wave-progress", "renderResearchWaveProgressCard"],
+  ["research-report-preview", "renderResearchReportPreviewCard"],
+  ["research-dashboard", "renderResearchDashboardCard"],
+];
 for (const bad of malformedPayloads) {
-  try {
-    const c1 = renderAuditCard(bad as AuditCardPayload);
-    if (!(c1 instanceof TuiContainer)) fail("resilience: renderAuditCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderAuditCard threw exception for malformed payload: ${err}`);
-  }
-  try {
-    const c2 = renderTicketBreakdownCard(bad as TicketBreakdownPayload);
-    if (!(c2 instanceof TuiContainer)) fail("resilience: renderTicketBreakdownCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderTicketBreakdownCard threw exception for malformed payload: ${err}`);
-  }
-  try {
-    const c3 = renderTriageStatusCard(bad as TriageStatusPayload);
-    if (!(c3 instanceof TuiContainer)) fail("resilience: renderTriageStatusCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderTriageStatusCard threw exception for malformed payload: ${err}`);
-  }
-  try {
-    const c4 = renderResearchReviewCard(bad as ResearchReviewPayload);
-    if (!(c4 instanceof TuiContainer)) fail("resilience: renderResearchReviewCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderResearchReviewCard threw exception for malformed payload: ${err}`);
-  }
-  try {
-    const c5 = renderResearchWaveProgressCard(bad as ResearchWaveProgressPayload);
-    if (!(c5 instanceof TuiContainer)) fail("resilience: renderResearchWaveProgressCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderResearchWaveProgressCard threw exception for malformed payload: ${err}`);
-  }
-  try {
-    const c6 = renderResearchReportPreviewCard(bad as ResearchReportPreviewPayload);
-    if (!(c6 instanceof TuiContainer)) fail("resilience: renderResearchReportPreviewCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderResearchReportPreviewCard threw exception for malformed payload: ${err}`);
-  }
-  try {
-    const c7 = renderResearchDashboardCard(bad as ResearchDashboardPayload);
-    if (!(c7 instanceof TuiContainer)) fail("resilience: renderResearchDashboardCard failed to return Container for malformed payload");
-  } catch (err) {
-    fail(`resilience: renderResearchDashboardCard threw exception for malformed payload: ${err}`);
+  for (const [customType, cardName] of resilienceCards) {
+    try {
+      const card = renderers[customType]({ details: bad }, {}, null);
+      if (!(card instanceof TuiContainer)) {
+        fail(`resilience: ${cardName} failed to return Container for malformed payload`);
+      }
+    } catch (err) {
+      fail(`resilience: ${cardName} threw exception for malformed payload: ${err}`);
+    }
   }
 }
 
@@ -1578,7 +1560,6 @@ for (const name of HERDR_TOOLS) {
 
 // `pane read`/`agent read` print raw terminal content, everything else prints
 // {"id":…,"result":…} / {"error":…}. The parser must classify all three.
-const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
 {
   const envelope = parseHerdrOutput('{"id":"cli:agent:list","result":{"agents":[]}}');
   if (!envelope.ok || (envelope.value as { agents?: unknown[] })?.agents === undefined) {
@@ -1771,8 +1752,12 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     if (!researchSubSpace || researchSubSpace.length < 2) {
       fail(`research: expected research slugs for 'review ', got ${researchSubSpace?.length}`);
     } else {
-      if (researchSubSpace[0].value !== "review other-slug") {
+      // C3: completions list dated research dirs only, newest first.
+      if (researchSubSpace[0].value !== "review 2026-08-02_deep-demo") {
         fail(`research: unexpected completion value for subcommand space: ${researchSubSpace[0].value}`);
+      }
+      if (researchSubSpace.some((c) => c.label === "other-slug")) {
+        fail("research: non-dated research slug was not filtered out");
       }
     }
     // 2. /research-deep
@@ -1803,11 +1788,17 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
 
     // 3. /research-report
     const reportEmpty = registered["research-report"].getArgumentCompletions?.("") ?? null;
-    if (!reportEmpty || reportEmpty.length !== 3) {
-      fail("research-report: expected all research slugs including non-dated for empty prefix");
+    if (!reportEmpty || reportEmpty.length !== 2) {
+      fail("research-report: expected dated research slugs for empty prefix");
     } else {
-      const labels = reportEmpty.map((c) => c.label).sort().join(",");
-      if (!labels.includes("other-slug")) fail("research-report: expected all research slugs");
+      // C3: completions list dated research dirs only (other-slug is filtered).
+      const labels = reportEmpty.map((c) => c.label);
+      if (!labels.includes("2026-08-01_demo") || !labels.includes("2026-08-02_deep-demo")) {
+        fail("research-report: expected dated research slugs");
+      }
+      if (labels.includes("other-slug")) {
+        fail("research-report: non-dated research slug was not filtered out");
+      }
     }
 
     if (registered["research-report"].getArgumentCompletions?.("slug ") !== null) {

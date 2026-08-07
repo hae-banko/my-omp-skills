@@ -1,5 +1,6 @@
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi } from "./api.ts";
+import { BOTTOM_BORDER, DIVIDER, TOP_BORDER, boxLine, extractPayload } from "./research-format.ts";
 
 export interface AuditSubtopicSpec {
   name: string;
@@ -83,28 +84,6 @@ export interface ThemeHelper {
   [key: string]: unknown;
 }
 
-const BOX_WIDTH = 76;
-const INNER_WIDTH = BOX_WIDTH - 2; // 74
-
-function formatContentLine(text: string): string {
-  const truncated = text.length > INNER_WIDTH ? text.slice(0, INNER_WIDTH - 3) + "..." : text;
-  return `│${truncated.padEnd(INNER_WIDTH, " ")}│`;
-}
-
-const TOP_BORDER = `┌${"─".repeat(INNER_WIDTH)}┐`;
-const DIVIDER = `├${"─".repeat(INNER_WIDTH)}┤`;
-const BOTTOM_BORDER = `└${"─".repeat(INNER_WIDTH)}┘`;
-
-function extractPayload<T>(message: unknown): T | undefined {
-  if (message && typeof message === "object") {
-    if ("details" in message && message.details && typeof message.details === "object") {
-      return message.details as T;
-    }
-    return message as T;
-  }
-  return undefined;
-}
-
 function parseContentArg(messagePayload: unknown): string | undefined {
   if (messagePayload && typeof messagePayload === "object" && "content" in messagePayload) {
     const rawContent = messagePayload.content;
@@ -162,15 +141,15 @@ export function renderAuditCard(
   const rawLines: string[] = [];
 
   rawLines.push(TOP_BORDER);
-  rawLines.push(formatContentLine(` AUDIT REPORT — ${title} [${version} | ${status}]`));
+  rawLines.push(boxLine(` AUDIT REPORT — ${title} [${version} | ${status}]`));
   rawLines.push(DIVIDER);
 
-  rawLines.push(formatContentLine(`   Slug: ${slug}`));
-  rawLines.push(formatContentLine(`   Version: ${version}`));
-  rawLines.push(formatContentLine(`   Status: ${status}`));
-  rawLines.push(formatContentLine(`   Root Report Path: ${rootReportPath}`));
-  rawLines.push(formatContentLine(`   Subtopics Count: ${subtopicsCount}`));
-  rawLines.push(formatContentLine(`   Latest Revision: ${latestRevisionStr}`));
+  rawLines.push(boxLine(`   Slug: ${slug}`));
+  rawLines.push(boxLine(`   Version: ${version}`));
+  rawLines.push(boxLine(`   Status: ${status}`));
+  rawLines.push(boxLine(`   Root Report Path: ${rootReportPath}`));
+  rawLines.push(boxLine(`   Subtopics Count: ${subtopicsCount}`));
+  rawLines.push(boxLine(`   Latest Revision: ${latestRevisionStr}`));
 
   rawLines.push(BOTTOM_BORDER);
 
@@ -216,21 +195,21 @@ export function renderTicketBreakdownCard(
   const rawLines: string[] = [];
 
   rawLines.push(TOP_BORDER);
-  rawLines.push(formatContentLine(` TICKET BREAKDOWN — ${feature} [${readyStatus}]`));
+  rawLines.push(boxLine(` TICKET BREAKDOWN — ${feature} [${readyStatus}]`));
   rawLines.push(DIVIDER);
 
-  rawLines.push(formatContentLine(`   Tracker Path: ${trackerPath}`));
-  rawLines.push(formatContentLine(`   Ticket Count: ${ticketCount}`));
-  rawLines.push(formatContentLine(`   Ready Status: ${readyStatus}`));
+  rawLines.push(boxLine(`   Tracker Path: ${trackerPath}`));
+  rawLines.push(boxLine(`   Ticket Count: ${ticketCount}`));
+  rawLines.push(boxLine(`   Ready Status: ${readyStatus}`));
 
   rawLines.push(DIVIDER);
-  rawLines.push(formatContentLine("   Tickets & Blocking Dependencies:"));
+  rawLines.push(boxLine("   Tickets & Blocking Dependencies:"));
 
   if (tickets.length === 0) {
     if (ticketCount > 0) {
-      rawLines.push(formatContentLine(`     - ${ticketCount} ticket(s) configured in backlog`));
+      rawLines.push(boxLine(`     - ${ticketCount} ticket(s) configured in backlog`));
     } else {
-      rawLines.push(formatContentLine("     (none)"));
+      rawLines.push(boxLine("     (none)"));
     }
   } else {
     const previewTickets = tickets.slice(0, 8);
@@ -254,13 +233,13 @@ export function renderTicketBreakdownCard(
               : `Ticket ${b}`,
           )
           .join(", ");
-        rawLines.push(formatContentLine(`     - ${formattedBlockers} -> ${idStr}: ${titleStr}`));
+        rawLines.push(boxLine(`     - ${formattedBlockers} -> ${idStr}: ${titleStr}`));
       } else {
-        rawLines.push(formatContentLine(`     - ${idStr}: ${titleStr} [ready]`));
+        rawLines.push(boxLine(`     - ${idStr}: ${titleStr} [ready]`));
       }
     }
     if (tickets.length > 8) {
-      rawLines.push(formatContentLine(`     ... and ${tickets.length - 8} more ticket(s)`));
+      rawLines.push(boxLine(`     ... and ${tickets.length - 8} more ticket(s)`));
     }
   }
 
@@ -334,20 +313,20 @@ export function renderTriageStatusCard(
   const rawLines: string[] = [];
 
   rawLines.push(TOP_BORDER);
-  rawLines.push(formatContentLine(" TRIAGE STATUS — Backlog Overview"));
+  rawLines.push(boxLine(" TRIAGE STATUS — Backlog Overview"));
   rawLines.push(DIVIDER);
 
-  rawLines.push(formatContentLine(`   Total Items: ${totalItems}`));
+  rawLines.push(boxLine(`   Total Items: ${totalItems}`));
 
   rawLines.push(DIVIDER);
-  rawLines.push(formatContentLine("   Backlog Breakdown:"));
-  rawLines.push(formatContentLine(`     - unlabeled: ${unlabeled}`));
-  rawLines.push(formatContentLine(`     - needs-triage: ${needsTriage}`));
-  rawLines.push(formatContentLine(`     - agent-ready: ${agentReady}`));
+  rawLines.push(boxLine("   Backlog Breakdown:"));
+  rawLines.push(boxLine(`     - unlabeled: ${unlabeled}`));
+  rawLines.push(boxLine(`     - needs-triage: ${needsTriage}`));
+  rawLines.push(boxLine(`     - agent-ready: ${agentReady}`));
 
   rawLines.push(DIVIDER);
-  rawLines.push(formatContentLine(`   Next Recommended Action:`));
-  rawLines.push(formatContentLine(`     ${nextAction}`));
+  rawLines.push(boxLine(`   Next Recommended Action:`));
+  rawLines.push(boxLine(`     ${nextAction}`));
 
   rawLines.push(BOTTOM_BORDER);
 
