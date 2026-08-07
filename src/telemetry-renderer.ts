@@ -175,8 +175,8 @@ export function renderAuditCard(
   rawLines.push(BOTTOM_BORDER);
 
   const container = new Container();
-  rawLines.forEach((line, index) => {
-    container.addChild(new Text(line, 0, index));
+  rawLines.forEach((line) => {
+    container.addChild(new Text(line, 0, 0));
   });
 
   return container;
@@ -267,8 +267,8 @@ export function renderTicketBreakdownCard(
   rawLines.push(BOTTOM_BORDER);
 
   const container = new Container();
-  rawLines.forEach((line, index) => {
-    container.addChild(new Text(line, 0, index));
+  rawLines.forEach((line) => {
+    container.addChild(new Text(line, 0, 0));
   });
 
   return container;
@@ -352,8 +352,8 @@ export function renderTriageStatusCard(
   rawLines.push(BOTTOM_BORDER);
 
   const container = new Container();
-  rawLines.forEach((line, index) => {
-    container.addChild(new Text(line, 0, index));
+  rawLines.forEach((line) => {
+    container.addChild(new Text(line, 0, 0));
   });
 
   return container;

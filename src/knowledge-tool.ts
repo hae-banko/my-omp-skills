@@ -11,7 +11,7 @@ const TOOL_NAME = "knowledge_read";
 function renderCard(label: string, lines: string[]): Container {
   const box = new Container();
   box.addChild(new Text(label));
-  lines.slice(0, 8).forEach((line, i) => box.addChild(new Text(`  ${line.slice(0, 100)}`, 0, i + 1)));
+  lines.slice(0, 8).forEach((line) => box.addChild(new Text(`  ${line.slice(0, 100)}`, 0, 0)));
   return box;
 }
 

@@ -88,7 +88,7 @@ export function renderRoutineResult(result: ToolResult): Container {
 
   const box = new Container();
   box.addChild(new Text(label));
-  lines.slice(0, 10).forEach((line, i) => box.addChild(new Text(`  ${line.slice(0, 100)}`, 0, i + 1)));
+  lines.slice(0, 10).forEach((line) => box.addChild(new Text(`  ${line.slice(0, 100)}`, 0, 0)));
   return box;
 }
 

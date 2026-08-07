@@ -117,7 +117,7 @@ function renderHerdrCard(label: string, result: ToolResult): Container {
     .slice(0, 12);
   const box = new Container();
   box.addChild(new Text(label));
-  lines.forEach((line, i) => box.addChild(new Text(`  ${line.slice(0, 120)}`, 0, i + 1)));
+  lines.forEach((line) => box.addChild(new Text(`  ${line.slice(0, 120)}`, 0, 0)));
   return box;
 }
 

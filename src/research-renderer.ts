@@ -224,8 +224,8 @@ function freshnessSuffix(freshness: unknown, asOf: unknown): string {
 
 function buildContainer(rawLines: string[]): Container {
   const container = new Container();
-  rawLines.forEach((line, index) => {
-    container.addChild(new Text(line, 0, index));
+  rawLines.forEach((line) => {
+    container.addChild(new Text(line, 0, 0));
   });
   return container;
 }

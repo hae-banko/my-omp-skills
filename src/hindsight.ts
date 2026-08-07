@@ -201,7 +201,7 @@ export function installHindsight(pi: ExtensionApi): void {
           ? "  reflection pass runs after real-work turns"
           : "  turns settle after the first pass",
         0,
-        1,
+        0,
       ),
     );
     return box;

@@ -1,6 +1,11 @@
 # Changelog
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
+## v0.28.1 — Fix vertical gaps in TUI cards (Text padding misuse)
+
+- **Root cause**: all card renderers built containers with `new Text(line, 0, index)` / `(0, i + 1)` — pi-tui's `Text` constructor arguments are `paddingX`/`paddingY`, not x/y coordinates (there is no coordinate system; children stack with no gap). A nonzero `paddingY` emits that many blank rows **above and below** the content, so an N-line card rendered N² rows (research dashboard/review/help/error cards showed the largest gaps).
+- **Fix**: every card line now uses `new Text(line, 0, 0)`; cards render exactly their intended rows with the transcript's standard single-blank separator between messages. Files touched: `src/research-renderer.ts`, `src/telemetry-renderer.ts` (audit, ticket-breakdown, triage), `src/herdr-tools.ts`, `src/knowledge-tool.ts`, `src/routines.ts`, `src/hindsight.ts`; `scripts/stubs/pi-tui.ts` renamed the misleading `x`/`y` constructor params to `paddingX`/`paddingY` with a warning comment so the stub does not perpetuate the confusion. Payloads unchanged — old transcript cards replay identically.
+
 ## v0.28.0 — Research dashboard UX overhaul (research-driven, 21 findings)
 
 Implemented from the deep-research project `.omp/knowledge/research/2026-08-07_research-dashboard-ux/` (21 items, 378/378 fields, report.md). All changes are extension-side; payload additions are optional and backward-compatible (old transcript cards replay identically).
