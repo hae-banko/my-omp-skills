@@ -335,6 +335,16 @@ const cases: Array<[string, string, Record<string, unknown>, boolean]> = [
   ["audit: controlled write overview.md update", "write", { path: ".omp/audits/complex-audit/overview.md", content: "---\nversion: v0.2.0\n---\n## Revision History\n- **v0.2.0**: updated" }, false],
   ["audit: controlled edit subtopic file", "edit", { path: ".omp/audits/complex-audit/subtopics/frontend.md", input: "PUT 1:\n+version: v0.1.1\n+## Revision History\n+- **v0.1.1**: patch" }, false],
   ["audit: bash rm audit dir", "bash", { command: "rm -rf .omp/audits/demo-audit" }, true],
+  ["edit record via input header", "edit", { input: "[.omp/knowledge/records/2026-08-03_dtcm.md#A1B2]\nPUT 1.=1:\n+hacked" }, true],
+  ["edit pitfall via input header", "edit", { input: "[.omp/knowledge/pitfalls/2026-08-02_oops.md#C3D4]\nPUT 1.=1:\n+hacked" }, true],
+  ["edit INDEX via input header", "edit", { input: "[.omp/knowledge/INDEX.md#E5F6]\nPUT 1.=1:\n+hacked" }, true],
+  ["edit audit via input header", "edit", { input: "[.omp/audits/demo-audit/report.md#1234]\nPUT 1:\n+no version bump" }, true],
+  ["bash python -c rm record", "bash", { command: "python3 -c \"import os; os.remove('.omp/knowledge/records/2026-08-03_dtcm.md')\"" }, true],
+  ["bash node -e unlink record", "bash", { command: "node -e \"fs.unlinkSync('.omp/knowledge/records/2026-08-03_dtcm.md')\"" }, true],
+  ["bash git rm record", "bash", { command: "git rm .omp/knowledge/records/2026-08-03_dtcm.md" }, true],
+  ["bash find delete record", "bash", { command: "find .omp/knowledge/records -name '*.md' -delete" }, true],
+  ["bash rm double slash record", "bash", { command: "rm .omp//knowledge/records/2026-08-03_dtcm.md" }, true],
+  ["bash rm dot slash record", "bash", { command: "rm .omp/knowledge/./records/2026-08-03_dtcm.md" }, true],
 ];
 
 for (const [label, toolName, input, expectBlock] of cases) {
@@ -794,6 +804,80 @@ if (!renderers["triage-status"]) {
   }
 }
 
+// --- Telemetry card resilience & file stat checks ---------------------------
+
+const malformedPayloads: unknown[] = [
+  null,
+  undefined,
+  123,
+  "string payload",
+  true,
+  {},
+  { items: [null, undefined, 456, {}], subtopics: [null], tickets: [null, {}] },
+  { fields: [null, "str"], modules: [null], active_subagents: [null, { name: null }] },
+  { global_metrics: { coverage: NaN, total_items: "abc" }, artifacts: [null, 123] },
+];
+
+for (const bad of malformedPayloads) {
+  try {
+    const c1 = renderAuditCard(bad as AuditCardPayload);
+    if (!(c1 instanceof TuiContainer)) fail("resilience: renderAuditCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderAuditCard threw exception for malformed payload: ${err}`);
+  }
+  try {
+    const c2 = renderTicketBreakdownCard(bad as TicketBreakdownPayload);
+    if (!(c2 instanceof TuiContainer)) fail("resilience: renderTicketBreakdownCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderTicketBreakdownCard threw exception for malformed payload: ${err}`);
+  }
+  try {
+    const c3 = renderTriageStatusCard(bad as TriageStatusPayload);
+    if (!(c3 instanceof TuiContainer)) fail("resilience: renderTriageStatusCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderTriageStatusCard threw exception for malformed payload: ${err}`);
+  }
+  try {
+    const c4 = renderResearchReviewCard(bad as ResearchReviewPayload);
+    if (!(c4 instanceof TuiContainer)) fail("resilience: renderResearchReviewCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderResearchReviewCard threw exception for malformed payload: ${err}`);
+  }
+  try {
+    const c5 = renderResearchWaveProgressCard(bad as ResearchWaveProgressPayload);
+    if (!(c5 instanceof TuiContainer)) fail("resilience: renderResearchWaveProgressCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderResearchWaveProgressCard threw exception for malformed payload: ${err}`);
+  }
+  try {
+    const c6 = renderResearchReportPreviewCard(bad as ResearchReportPreviewPayload);
+    if (!(c6 instanceof TuiContainer)) fail("resilience: renderResearchReportPreviewCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderResearchReportPreviewCard threw exception for malformed payload: ${err}`);
+  }
+  try {
+    const c7 = renderResearchDashboardCard(bad as ResearchDashboardPayload);
+    if (!(c7 instanceof TuiContainer)) fail("resilience: renderResearchDashboardCard failed to return Container for malformed payload");
+  } catch (err) {
+    fail(`resilience: renderResearchDashboardCard threw exception for malformed payload: ${err}`);
+  }
+}
+
+const filePathAsDir = join(fixtureRoot, ".omp", "knowledge", "records", "2026-08-03_dtcm.md");
+if (knowledgeTool) {
+  try {
+    const resFileAsDir = await knowledgeTool.execute(
+      "t_stat1",
+      { type: "records" },
+      undefined,
+      undefined,
+      { cwd: filePathAsDir },
+    );
+    if (!resFileAsDir) fail("stat-check: knowledgeTool returned falsy for file path as cwd");
+  } catch (err) {
+    fail(`stat-check: knowledgeTool threw exception when cwd is a file path: ${err}`);
+  }
+}
 // Receipts: /record and /pitfall emit a custom message with the right type.
 customMessages.length = 0;
 await registered["record"].handler("remember the DTCM thing", {});
@@ -856,6 +940,97 @@ if (!notifyCalls.includes("Audit status loaded")) {
 const auditCard = customMessages.find((m) => m.customType === "audit-card");
 if (!auditCard || auditCard.display !== true) {
   fail("audit status: custom card audit-card missing or display false");
+}
+
+// Finding 3.1: explicit slugs that do NOT exist must emit a warning notify
+// and skip the custom card, instead of silently falling back to entries[0].
+{
+  const prevCwd2 = process.cwd();
+  process.chdir(fixtureRoot);
+  try {
+    const captureNotify = (): { msgs: string[]; levels: string[] } => {
+      const msgs: string[] = [];
+      const levels: string[] = [];
+      return {
+        msgs,
+        levels,
+        // The mock will be installed by each handler call below.
+      };
+    };
+
+    // /research dashboard typo-slug
+    sent.length = 0;
+    customMessages.length = 0;
+    const dashNotify: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["research"].handler("dashboard typo-slug", {
+      ui: {
+        notify: (msg: string, level?: string) => {
+          dashNotify.msgs.push(msg);
+          dashNotify.levels.push(level ?? "");
+        },
+      },
+    });
+    if (sent.length !== 0) fail("research dashboard (bad slug): queued a user message to agent");
+    if (!dashNotify.levels.includes("warning")) {
+      fail(`research dashboard (bad slug): expected warning notify, got levels: ${JSON.stringify(dashNotify.levels)}`);
+    }
+    if (!dashNotify.msgs.some((m) => m.includes("typo-slug"))) {
+      fail(`research dashboard (bad slug): notify message must include the slug, got: ${JSON.stringify(dashNotify.msgs)}`);
+    }
+    if (customMessages.some((m) => m.customType === "research-dashboard")) {
+      fail("research dashboard (bad slug): custom card should not be emitted on missing slug");
+    }
+
+    // /research review typo-slug
+    sent.length = 0;
+    customMessages.length = 0;
+    const reviewNotify: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["research"].handler("review typo-slug", {
+      ui: {
+        notify: (msg: string, level?: string) => {
+          reviewNotify.msgs.push(msg);
+          reviewNotify.levels.push(level ?? "");
+        },
+      },
+    });
+    if (sent.length !== 0) fail("research review (bad slug): queued a user message to agent");
+    if (!reviewNotify.levels.includes("warning")) {
+      fail(`research review (bad slug): expected warning notify, got levels: ${JSON.stringify(reviewNotify.levels)}`);
+    }
+    if (!reviewNotify.msgs.some((m) => m.includes("typo-slug"))) {
+      fail(`research review (bad slug): notify message must include the slug, got: ${JSON.stringify(reviewNotify.msgs)}`);
+    }
+    if (customMessages.some((m) => m.customType === "research-review")) {
+      fail("research review (bad slug): custom card should not be emitted on missing slug");
+    }
+
+    // /audit status typo-slug
+    sent.length = 0;
+    customMessages.length = 0;
+    const auditNotify: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["audit"].handler("status typo-slug", {
+      ui: {
+        notify: (msg: string, level?: string) => {
+          auditNotify.msgs.push(msg);
+          auditNotify.levels.push(level ?? "");
+        },
+      },
+    });
+    if (sent.length !== 0) fail("audit status (bad slug): queued a user message to agent");
+    if (!auditNotify.levels.includes("warning")) {
+      fail(`audit status (bad slug): expected warning notify, got levels: ${JSON.stringify(auditNotify.levels)}`);
+    }
+    if (!auditNotify.msgs.some((m) => m.includes("typo-slug"))) {
+      fail(`audit status (bad slug): notify message must include the slug, got: ${JSON.stringify(auditNotify.msgs)}`);
+    }
+    if (customMessages.some((m) => m.customType === "audit-card")) {
+      fail("audit status (bad slug): custom card should not be emitted on missing slug");
+    }
+
+    void captureNotify;
+  } finally {
+    process.chdir(prevCwd2);
+  }
 }
 
 sent.length = 0;
@@ -1216,6 +1391,17 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
     } else {
       fail("run_routine: missing renderResult renderer");
     }
+    const pathTraversalRes = await runRoutineTool.execute(
+      "selftest-traversal",
+      { routineId: "../../etc/passwd" },
+      undefined,
+      undefined,
+      { cwd: fixtureRoot },
+    );
+    const traversalText = (pathTraversalRes.content ?? []).map((b) => (b.type === "text" ? b.text : "")).join(" ");
+    if (!traversalText.includes("Path traversal attempt detected")) {
+      fail(`run_routine: path traversal attempt not rejected (got: ${traversalText})`);
+    }
   }
 }
 
@@ -1223,14 +1409,20 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
 
 {
   mkdirSync(join(fixtureRoot, ".omp", "references", "ref-a"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "references", "ref-a", ".git"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".omp", "references", "ref-b"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "references", "ref-b", ".git"), { recursive: true });
+  // Non-reference directory (no .git) — must NOT appear in update/remove completions.
+  mkdirSync(join(fixtureRoot, ".omp", "references", "ref-c"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-02_deep-demo"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "other-slug"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".scratch", "specs"), { recursive: true });
   mkdirSync(join(fixtureRoot, "docs", "specs"), { recursive: true });
   writeFileSync(join(fixtureRoot, ".scratch", "specs", "spec-a.md"), "# Spec A");
   writeFileSync(join(fixtureRoot, "docs", "specs", "spec-b.md"), "# Spec B");
-
+  // /to-spec Finding 4.1 fixture: a feature dir whose spec.md is a *directory*
+  // (not a file). The completion must NOT add it as a suggestion.
+  mkdirSync(join(fixtureRoot, ".scratch", "spec-c", "spec.md", "nested"), { recursive: true });
   const prevCwd = process.cwd();
   process.chdir(fixtureRoot);
   try {
@@ -1259,6 +1451,15 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
 
     if (registered["reference"].getArgumentCompletions?.("add ") !== null) {
       fail("reference: add offered unexpected completions");
+    }
+    // Finding 4.2: directories without a .git subdirectory must NOT be
+    // suggested for /reference update or /reference remove (ref-c lacks .git).
+    if (refUpdate && refUpdate.some((c) => c.label === "ref-c")) {
+      fail(`reference: ref-c (no .git) leaked into update completions`);
+    }
+    const refRemoveAny = registered["reference"].getArgumentCompletions?.("remove ") ?? null;
+    if (refRemoveAny && refRemoveAny.some((c) => c.label === "ref-c")) {
+      fail(`reference: ref-c (no .git) leaked into remove completions`);
     }
     // 1b. /audit
     const auditEmpty = registered["audit"].getArgumentCompletions?.("") ?? null;
@@ -1431,6 +1632,11 @@ const { parseHerdrOutput } = await import("../src/herdr-tools.ts");
       const values = toSpecEmpty.map((c) => c.value).sort().join(",");
       if (values !== ".scratch/specs/spec-a.md,docs/specs/spec-b.md") {
         fail(`to-spec: unexpected spec file completion values: ${values}`);
+      }
+      // Finding 4.1: a directory named spec.md (fixture .scratch/spec-c/spec.md/)
+      // must NOT appear in completions.
+      if (values.includes("spec-c")) {
+        fail(`to-spec: directory named spec.md should be excluded (got: ${values})`);
       }
     }
 

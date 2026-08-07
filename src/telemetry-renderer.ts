@@ -122,32 +122,41 @@ export function renderAuditCard(
   payload?: AuditCardPayload,
   _theme?: ThemeHelper,
 ): Container {
+  const p = (payload && typeof payload === "object" ? payload : {}) as unknown as Record<string, unknown>;
   const contentArg = parseContentArg(payload);
-  const slug = payload?.slug ?? contentArg ?? "overview";
-  const title = payload?.title ?? (slug ? `Audit: ${slug}` : "Codebase Audit");
-  const version = payload?.version ?? "v0.1.0";
-  const status = payload?.status ?? "active";
+  const rawSlug = p.slug;
+  const slug = typeof rawSlug === "string" ? rawSlug : (contentArg ?? "overview");
+  const rawTitle = p.title;
+  const title = typeof rawTitle === "string" ? rawTitle : (slug ? `Audit: ${slug}` : "Codebase Audit");
+  const rawVersion = p.version;
+  const version = typeof rawVersion === "string" ? rawVersion : "v0.1.0";
+  const rawStatus = p.status;
+  const status = typeof rawStatus === "string" ? rawStatus : "active";
+  const rawRootReportPath = p.root_report_path ?? p.rootReportPath;
   const rootReportPath =
-    payload?.root_report_path ??
-    payload?.rootReportPath ??
-    (slug === "overview" ? "overview.md" : `.omp/audits/${slug}/overview.md`);
+    typeof rawRootReportPath === "string"
+      ? rawRootReportPath
+      : (slug === "overview" ? "overview.md" : `.omp/audits/${slug}/overview.md`);
 
+  const rawSubCount = p.subtopics_count ?? p.subtopicsCount;
   const subtopicsCount =
-    payload?.subtopics_count ??
-    payload?.subtopicsCount ??
-    (Array.isArray(payload?.subtopics) ? payload.subtopics.length : 0);
+    typeof rawSubCount === "number" && !isNaN(rawSubCount)
+      ? rawSubCount
+      : (Array.isArray(p.subtopics) ? p.subtopics.length : 0);
 
   let latestRevisionStr = "v0.1.0 (Initial draft)";
-  const rawRev = payload?.latest_revision ?? payload?.latestRevision;
+  const rawRev = p.latest_revision ?? p.latestRevision;
+  const updatedStr = typeof p.updated === "string" ? p.updated : undefined;
   if (typeof rawRev === "string") {
     latestRevisionStr = rawRev;
   } else if (rawRev && typeof rawRev === "object") {
-    const v = rawRev.version ?? version;
-    const d = rawRev.date ?? payload?.updated ?? "today";
-    const s = rawRev.summary ? ` - ${rawRev.summary}` : "";
+    const revObj = rawRev as Record<string, unknown>;
+    const v = typeof revObj.version === "string" ? revObj.version : version;
+    const d = typeof revObj.date === "string" ? revObj.date : (updatedStr ?? "today");
+    const s = typeof revObj.summary === "string" && revObj.summary ? ` - ${revObj.summary}` : "";
     latestRevisionStr = `${v} (${d})${s}`;
-  } else if (payload?.updated) {
-    latestRevisionStr = `${version} (${payload.updated})`;
+  } else if (updatedStr) {
+    latestRevisionStr = `${version} (${updatedStr})`;
   }
 
   const rawLines: string[] = [];
@@ -186,17 +195,23 @@ export function renderTicketBreakdownCard(
   payload?: TicketBreakdownPayload,
   _theme?: ThemeHelper,
 ): Container {
+  const p = (payload && typeof payload === "object" ? payload : {}) as unknown as Record<string, unknown>;
   const contentArg = parseContentArg(payload);
-  const feature = payload?.feature ?? contentArg ?? "feature";
+  const rawFeature = p.feature;
+  const feature = typeof rawFeature === "string" ? rawFeature : (contentArg ?? "feature");
+  const rawTrackerPath = p.tracker_path ?? p.trackerPath;
   const trackerPath =
-    payload?.tracker_path ??
-    payload?.trackerPath ??
-    `.scratch/${feature}/issues/`;
+    typeof rawTrackerPath === "string"
+      ? rawTrackerPath
+      : `.scratch/${feature}/issues/`;
 
-  const tickets = payload?.tickets ?? [];
+  const rawTickets = Array.isArray(p.tickets) ? p.tickets : [];
+  const tickets = rawTickets.filter((t): t is TicketItemSpec => Boolean(t && typeof t === "object"));
+  const rawTicketCount = p.ticket_count ?? p.ticketCount;
   const ticketCount =
-    payload?.ticket_count ?? payload?.ticketCount ?? tickets.length;
-  const readyStatus = payload?.ready_status ?? payload?.readyStatus ?? "ready-for-agent";
+    typeof rawTicketCount === "number" && !isNaN(rawTicketCount) ? rawTicketCount : tickets.length;
+  const rawReadyStatus = p.ready_status ?? p.readyStatus;
+  const readyStatus = typeof rawReadyStatus === "string" ? rawReadyStatus : "ready-for-agent";
 
   const rawLines: string[] = [];
 
@@ -220,13 +235,16 @@ export function renderTicketBreakdownCard(
   } else {
     const previewTickets = tickets.slice(0, 8);
     for (const t of previewTickets) {
+      const idVal = t.id;
       const idStr =
-        t.id !== undefined
-          ? String(t.id).startsWith("Ticket") || String(t.id).startsWith("#")
-            ? String(t.id)
-            : `Ticket ${t.id}`
+        idVal !== undefined && idVal !== null
+          ? String(idVal).startsWith("Ticket") || String(idVal).startsWith("#")
+            ? String(idVal)
+            : `Ticket ${idVal}`
           : "Ticket";
-      const blockers = t.blocked_by ?? t.blockedBy ?? [];
+      const titleStr = typeof t.title === "string" ? t.title : String(t.title ?? "");
+      const rawBlockers = t.blocked_by ?? t.blockedBy;
+      const blockers = Array.isArray(rawBlockers) ? rawBlockers.filter((b) => b !== null && b !== undefined) : [];
 
       if (blockers.length > 0) {
         const formattedBlockers = blockers
@@ -236,9 +254,9 @@ export function renderTicketBreakdownCard(
               : `Ticket ${b}`,
           )
           .join(", ");
-        rawLines.push(formatContentLine(`     - ${formattedBlockers} -> ${idStr}: ${t.title}`));
+        rawLines.push(formatContentLine(`     - ${formattedBlockers} -> ${idStr}: ${titleStr}`));
       } else {
-        rawLines.push(formatContentLine(`     - ${idStr}: ${t.title} [ready]`));
+        rawLines.push(formatContentLine(`     - ${idStr}: ${titleStr} [ready]`));
       }
     }
     if (tickets.length > 8) {
@@ -269,30 +287,37 @@ export function renderTriageStatusCard(
   payload?: TriageStatusPayload,
   _theme?: ThemeHelper,
 ): Container {
-  const unlabeled = payload?.backlog?.unlabeled ?? payload?.unlabeled ?? 0;
+  const p = (payload && typeof payload === "object" ? payload : {}) as unknown as Record<string, unknown>;
+  const backlog = p.backlog && typeof p.backlog === "object" ? (p.backlog as Record<string, unknown>) : {};
+
+  const getNum = (v: unknown): number | undefined => (typeof v === "number" && !isNaN(v) ? v : undefined);
+
+  const unlabeled = getNum(backlog.unlabeled) ?? getNum(p.unlabeled) ?? 0;
   const needsTriage =
-    payload?.backlog?.needs_triage ??
-    payload?.backlog?.needsTriage ??
-    payload?.needs_triage ??
-    payload?.needsTriage ??
+    getNum(backlog.needs_triage) ??
+    getNum(backlog.needsTriage) ??
+    getNum(p.needs_triage) ??
+    getNum(p.needsTriage) ??
     0;
   const agentReady =
-    payload?.backlog?.agent_ready ??
-    payload?.backlog?.agentReady ??
-    payload?.agent_ready ??
-    payload?.agentReady ??
+    getNum(backlog.agent_ready) ??
+    getNum(backlog.agentReady) ??
+    getNum(p.agent_ready) ??
+    getNum(p.agentReady) ??
     0;
 
   const totalItems =
-    payload?.total_items ??
-    payload?.totalItems ??
+    getNum(p.total_items) ??
+    getNum(p.totalItems) ??
     unlabeled + needsTriage + agentReady;
 
-  let nextAction =
-    payload?.next_action ??
-    payload?.nextAction ??
-    payload?.recommended_action ??
-    payload?.recommendedAction;
+  const rawNext =
+    p.next_action ??
+    p.nextAction ??
+    p.recommended_action ??
+    p.recommendedAction;
+
+  let nextAction = typeof rawNext === "string" ? rawNext : undefined;
 
   if (!nextAction) {
     if (unlabeled > 0) {

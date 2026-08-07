@@ -52,11 +52,15 @@ export function findKnowledgeRoot(startDir: string): string | null {
 }
 
 function listMarkdownFiles(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((name) => name.endsWith(".md"))
-    .sort()
-    .reverse();
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) return [];
+  try {
+    return readdirSync(dir)
+      .filter((name) => name.endsWith(".md"))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
 }
 
 function firstLine(body: string): string {
@@ -74,7 +78,7 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
 
   if (type === "index") {
     const indexPath = join(base, "INDEX.md");
-    if (!existsSync(indexPath)) {
+    if (!existsSync(indexPath) || !statSync(indexPath).isFile()) {
       return {
         found: true,
         text: "INDEX.md does not exist yet — no entries recorded.",
@@ -101,26 +105,39 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
           details: { found: true, type, count: 0, paths: [] },
         };
       }
-      const full = readFileSync(join(dir, match), "utf8");
+      const matchPath = join(dir, match);
+      if (!existsSync(matchPath) || !statSync(matchPath).isFile()) {
+        return {
+          found: true,
+          text: `No ${type} entry matching "${query.slug}".`,
+          details: { found: true, type, count: 0, paths: [] },
+        };
+      }
+      const full = readFileSync(matchPath, "utf8");
       return {
         found: true,
         text: full,
-        details: { found: true, type, count: 1, paths: [join(dir, match)] },
+        details: { found: true, type, count: 1, paths: [matchPath] },
       };
     }
     const picked = files.slice(0, limit);
-    const lines = picked.map((f) => {
-      const body = readFileSync(join(dir, f), "utf8");
-      return query.full ? `## ${f}\n${body}` : `- ${f} — ${firstLine(body)}`;
-    });
+    const lines: string[] = [];
+    const validPaths: string[] = [];
+    for (const f of picked) {
+      const filePath = join(dir, f);
+      if (!existsSync(filePath) || !statSync(filePath).isFile()) continue;
+      const body = readFileSync(filePath, "utf8");
+      lines.push(query.full ? `## ${f}\n${body}` : `- ${f} — ${firstLine(body)}`);
+      validPaths.push(filePath);
+    }
     return {
       found: true,
       text: lines.join("\n") || `No ${type} entries yet.`,
       details: {
         found: true,
         type,
-        count: picked.length,
-        paths: picked.map((f) => join(dir, f)),
+        count: validPaths.length,
+        paths: validPaths,
       },
     };
   }
@@ -129,14 +146,16 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
   if (type === "research") {
     const researchDir = join(base, "research");
     let projects: string[] = [];
-    try {
-      projects = readdirSync(researchDir, { withFileTypes: true })
-        .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
-        .map((ent) => ent.name)
-        .sort()
-        .reverse();
-    } catch {
-      projects = [];
+    if (existsSync(researchDir) && statSync(researchDir).isDirectory()) {
+      try {
+        projects = readdirSync(researchDir, { withFileTypes: true })
+          .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+          .map((ent) => ent.name)
+          .sort()
+          .reverse();
+      } catch {
+        projects = [];
+      }
     }
     if (query.slug) {
       const match = projects.find((p) => p.startsWith(query.slug ?? "") || p.includes(query.slug ?? ""));
@@ -148,7 +167,10 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
         };
       }
       const projectDir = join(researchDir, match);
-      const entries = existsSync(projectDir) ? readdirSync(projectDir).sort() : [];
+      const entries =
+        existsSync(projectDir) && statSync(projectDir).isDirectory()
+          ? readdirSync(projectDir).sort()
+          : [];
       return {
         found: true,
         text: `Research project: ${match}\n${entries.map((e) => `- ${e}`).join("\n")}`,
@@ -187,7 +209,7 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
       subtopics: SubtopicEntry[];
     }
     const auditsMap = new Map<string, AuditEntry>();
-    if (existsSync(auditsDir)) {
+    if (existsSync(auditsDir) && statSync(auditsDir).isDirectory()) {
       let entries: Dirent[] = [];
       try {
         entries = readdirSync(auditsDir, { withFileTypes: true });
@@ -206,75 +228,79 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
           const auditDir = join(auditsDir, ent.name);
           const overviewPath = join(auditDir, "overview.md");
           const reportPath = join(auditDir, "report.md");
-          if (existsSync(overviewPath)) {
+          if (existsSync(overviewPath) && statSync(overviewPath).isFile()) {
             filePath = overviewPath;
-          } else if (existsSync(reportPath)) {
+          } else if (existsSync(reportPath) && statSync(reportPath).isFile()) {
             filePath = reportPath;
           }
 
           if (filePath !== null) {
             // Scan subtopics directory if exists
             const subtopicsDir = join(auditDir, "subtopics");
-            if (existsSync(subtopicsDir)) {
+            if (existsSync(subtopicsDir) && statSync(subtopicsDir).isDirectory()) {
               try {
                 const subEntries = readdirSync(subtopicsDir, { withFileTypes: true });
                 for (const subEnt of subEntries) {
                   if (subEnt.isFile() && subEnt.name.endsWith(".md")) {
                     const subPath = join(subtopicsDir, subEnt.name);
-                    const relPath = `./subtopics/${subEnt.name}`;
-                    const subBody = readFileSync(subPath, "utf8");
-                    const subTitleMatch = subBody.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
-                    const subTitle =
-                      (subTitleMatch?.[1]?.trim() ?? firstLine(subBody)) || subEnt.name.replace(/\.md$/, "");
-                    subtopics.push({
-                      slug: subEnt.name.replace(/\.md$/, ""),
-                      relPath,
-                      path: subPath,
-                      body: subBody,
-                      title: subTitle,
-                    });
-                    seenSubPaths.add(subPath);
+                    if (existsSync(subPath) && statSync(subPath).isFile()) {
+                      const relPath = `./subtopics/${subEnt.name}`;
+                      const subBody = readFileSync(subPath, "utf8");
+                      const subTitleMatch = subBody.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+                      const subTitle =
+                        (subTitleMatch?.[1]?.trim() ?? firstLine(subBody)) || subEnt.name.replace(/\.md$/, "");
+                      subtopics.push({
+                        slug: subEnt.name.replace(/\.md$/, ""),
+                        relPath,
+                        path: subPath,
+                        body: subBody,
+                        title: subTitle,
+                      });
+                      seenSubPaths.add(subPath);
+                    }
                   }
                 }
               } catch {}
             }
 
             // Scan direct subtopic files under audit directory (excluding overview.md and report.md)
-            try {
-              const directEntries = readdirSync(auditDir, { withFileTypes: true });
-              for (const dEnt of directEntries) {
-                if (
-                  dEnt.isFile() &&
-                  dEnt.name.endsWith(".md") &&
-                  dEnt.name !== "overview.md" &&
-                  dEnt.name !== "report.md"
-                ) {
-                  const subPath = join(auditDir, dEnt.name);
-                  if (!seenSubPaths.has(subPath)) {
-                    const relPath = `./${dEnt.name}`;
-                    const subBody = readFileSync(subPath, "utf8");
-                    const subTitleMatch = subBody.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
-                    const subTitle =
-                      (subTitleMatch?.[1]?.trim() ?? firstLine(subBody)) || dEnt.name.replace(/\.md$/, "");
-                    subtopics.push({
-                      slug: dEnt.name.replace(/\.md$/, ""),
-                      relPath,
-                      path: subPath,
-                      body: subBody,
-                      title: subTitle,
-                    });
-                    seenSubPaths.add(subPath);
+            if (existsSync(auditDir) && statSync(auditDir).isDirectory()) {
+              try {
+                const directEntries = readdirSync(auditDir, { withFileTypes: true });
+                for (const dEnt of directEntries) {
+                  if (
+                    dEnt.isFile() &&
+                    dEnt.name.endsWith(".md") &&
+                    dEnt.name !== "overview.md" &&
+                    dEnt.name !== "report.md"
+                  ) {
+                    const subPath = join(auditDir, dEnt.name);
+                    if (!seenSubPaths.has(subPath) && existsSync(subPath) && statSync(subPath).isFile()) {
+                      const relPath = `./${dEnt.name}`;
+                      const subBody = readFileSync(subPath, "utf8");
+                      const subTitleMatch = subBody.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+                      const subTitle =
+                        (subTitleMatch?.[1]?.trim() ?? firstLine(subBody)) || dEnt.name.replace(/\.md$/, "");
+                      subtopics.push({
+                        slug: dEnt.name.replace(/\.md$/, ""),
+                        relPath,
+                        path: subPath,
+                        body: subBody,
+                        title: subTitle,
+                      });
+                      seenSubPaths.add(subPath);
+                    }
                   }
                 }
-              }
-            } catch {}
+              } catch {}
+            }
           }
         } else if (ent.isFile() && ent.name.endsWith(".md")) {
           filePath = join(auditsDir, ent.name);
           slug = ent.name.replace(/\.md$/, "");
         }
 
-        if (filePath !== null && !auditsMap.has(slug)) {
+        if (filePath !== null && !auditsMap.has(slug) && existsSync(filePath) && statSync(filePath).isFile()) {
           const resolvedPath = filePath;
           const body = readFileSync(resolvedPath, "utf8");
 
@@ -287,7 +313,7 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
               const linkTitle = match[1];
               const linkRel = match[2];
               const absPath = resolve(auditDir, linkRel);
-              if (existsSync(absPath) && !seenSubPaths.has(absPath)) {
+              if (existsSync(absPath) && statSync(absPath).isFile() && !seenSubPaths.has(absPath)) {
                 try {
                   const subBody = readFileSync(absPath, "utf8");
                   subtopics.push({

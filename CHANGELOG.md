@@ -1,6 +1,22 @@
 # Changelog
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
+## v0.27.0 — Hardened security, resilience & usability (11 bug fixes)
+
+- **Critical Security Fixes**:
+  - `policy.ts`: Fixed `getPathList` to extract paths from `edit` tool header tags (`[<path>#<tag>]`), enforcing append-only rules for `.omp/knowledge/` and `.omp/audits/` during `edit` operations.
+  - `routines.ts`: Path traversal hardening in `run_routine` tool using normalized path checks (`resolve` & `relative`) to prevent running scripts outside `scripts/routines/`.
+- **High-Severity Reliability Fixes**:
+  - `telemetry-renderer.ts` & `research-renderer.ts`: Added defensive array, string, and null guards across all 7 card renderers to prevent uncaught `TypeError` crashes on sparse or malformed details payloads.
+  - `policy.ts`: Hardened `refersToProtected` path tokenization and extended `isDestructiveShell` to detect interpreter inline scripts (`python3 -c`, `node -e`), `git rm`, and `find -delete`.
+  - `knowledge-tool.ts`: Added `"audits"` to `knowledge_read` Zod parameter enum schema.
+- **Medium & Low Usability Polish**:
+  - `index.ts`: Stopped silent fallback to `entries[0]` on nonexistent slugs in `/research` and `/audit`, notifying users of missing slugs instead.
+  - `routines.ts`: Filtered out null/non-object array entries in `manifest.json` routines parsing.
+  - `knowledge.ts`: Added `statSync().isDirectory()` and `isFile()` guards to prevent `EISDIR` / `ENOTDIR` crashes.
+  - `index.ts`: Updated YAML parsing regex to exclude commented outline lines (`# - name:`).
+  - `index.ts`: Excluded directories named `spec.md` from `/to-spec` completions, and non-git directories from `/reference update` completions.
+
 ## v0.26.0 — Local TUI view subcommands (no LLM agent turn invocations)
 
 - **Local TUI View Subcommands**: Running view-only / status commands (`/research dashboard`, `/research review`, `/research status`, `/research off`, `/audit status`, `/audit view`, `/audit list`, `/triage status`) now renders their TUI telemetry cards and toasts locally from disk artifacts without sending a user message to the AI agent or wasting LLM turns.

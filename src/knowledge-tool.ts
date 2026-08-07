@@ -33,7 +33,7 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
       "Read entries from the repo-local knowledge base (.omp/knowledge/): the INDEX, records, pitfalls, or research projects. " +
       "Use when the user asks about past findings, lessons, or recorded pitfalls.",
     parameters: zod.object({
-      type: zod.enum(["index", "records", "pitfalls", "research"]).default("index"),
+      type: zod.enum(["index", "records", "pitfalls", "research", "audits"]).default("index"),
       slug: zod.string().optional(),
       limit: zod.number().int().min(1).max(50).optional(),
       full: zod.boolean().optional(),

@@ -71,16 +71,28 @@ function anyExistingProtectedPath(cwd: string, input: Record<string, unknown>): 
 
 /** True when the command text references the append-only stores. */
 function refersToProtected(command: string): boolean {
-  return (
-    command.includes(".omp/knowledge/records") ||
-    command.includes(".omp/knowledge/pitfalls") ||
-    command.includes(".omp/knowledge/INDEX.md") ||
-    command.includes(".omp/audits")
-  );
+  const normalizedCmd = command.replace(/\\/g, "/").replace(/\/\/+/g, "/").replace(/\/\.\//g, "/");
+  if (
+    /\.omp\/knowledge\/(?:records|pitfalls|INDEX\.md)\b/i.test(normalizedCmd) ||
+    /\.omp\/audits\b/i.test(normalizedCmd)
+  ) {
+    return true;
+  }
+
+  const tokens = command.split(/[\s"'`=;&|]+/);
+  const cwd = process.cwd();
+  for (const token of tokens) {
+    if (!token) continue;
+    if (isProtectedPath(cwd, token)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 const DESTRUCTIVE_SHELL_RE =
-  /(?:^|\s)sed\s+-i\b|\btee\b|(?<!>)>(?!>)|\bmv\b|\brm\b|\bcp\b|\btruncate\b|\bshred\b|\bunlink\b/;
+  /(?:^|\s)(?:sed\s+-i\b|\btee\b|(?<!>)>(?!>)|\bmv\b|\brm\b|\bcp\b|\btruncate\b|\bshred\b|\bunlink\b|git\s+rm\b|find\b.*-delete\b|(?:python3?|node|bun|deno|perl|ruby)\s+-(?:c|e)\b)/i;
 
 /** True when the shell command can mutate a file (append `>>` excluded — INDEX.md grows by appending). */
 function isDestructiveShell(command: string): boolean {
@@ -94,13 +106,20 @@ function isAuditSubpath(cwd: string, raw: unknown): boolean {
 
 function getPathList(input: Record<string, unknown>): string[] {
   const res: string[] = [];
-  if (typeof input.path === "string") res.push(input.path);
+  if (typeof input.path === "string" && input.path.length > 0) res.push(input.path);
   if (Array.isArray(input.paths)) {
     for (const p of input.paths) {
-      if (typeof p === "string") res.push(p);
+      if (typeof p === "string" && p.length > 0) res.push(p);
     }
   }
-  return res;
+  if (typeof input.input === "string") {
+    const matches = input.input.matchAll(/^\[([^#\]\r\n]+)(?:#[^\]\r\n]+)?\]/gm);
+    for (const match of matches) {
+      const p = match[1].trim();
+      if (p.length > 0) res.push(p);
+    }
+  }
+  return Array.from(new Set(res));
 }
 
 function isControlledAuditUpdate(

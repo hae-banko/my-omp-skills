@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolResult } from "./api.ts";
 
@@ -110,6 +110,24 @@ export function installRoutinesTool(pi: ExtensionApi): void {
       const routinesDir = join(repoRoot, "scripts", "routines");
       const manifestPath = join(routinesDir, "manifest.json");
 
+      const resolvedRoutine = resolve(routinesDir, params.routineId);
+      const relRoutine = relative(routinesDir, resolvedRoutine);
+      if (relRoutine.startsWith("..") || isAbsolute(relRoutine)) {
+        const msg = `Error: Path traversal attempt detected for routineId "${params.routineId}"`;
+        return {
+          content: [{ type: "text", text: msg }],
+          details: {
+            routineId: params.routineId,
+            name: params.routineId,
+            exitCode: 1,
+            stdout: "",
+            stderr: msg,
+            success: false,
+            error: msg,
+          },
+        };
+      }
+
       let routineEntry: RoutineEntry | undefined;
       let scriptFile: string | undefined;
       let routineName: string | undefined;
@@ -121,10 +139,12 @@ export function installRoutinesTool(pi: ExtensionApi): void {
           if (manifest && Array.isArray(manifest.routines)) {
             routineEntry = manifest.routines.find(
               (r) =>
-                r.id === params.routineId ||
-                r.file === params.routineId ||
-                basename(r.file) === params.routineId ||
-                r.name?.toLowerCase() === params.routineId.toLowerCase(),
+                r &&
+                typeof r === "object" &&
+                (r.id === params.routineId ||
+                  r.file === params.routineId ||
+                  (typeof r.file === "string" && basename(r.file) === params.routineId) ||
+                  (typeof r.name === "string" && r.name.toLowerCase() === params.routineId.toLowerCase())),
             );
           }
         } catch {
@@ -164,7 +184,25 @@ export function installRoutinesTool(pi: ExtensionApi): void {
         };
       }
 
-      const scriptPath = join(routinesDir, scriptFile);
+      const scriptPath = resolve(routinesDir, scriptFile);
+      const relScript = relative(routinesDir, scriptPath);
+      if (relScript.startsWith("..") || isAbsolute(relScript)) {
+        const msg = `Error: Path traversal attempt detected for script "${scriptFile}"`;
+        return {
+          content: [{ type: "text", text: msg }],
+          details: {
+            routineId: params.routineId,
+            name: routineName ?? params.routineId,
+            file: scriptFile,
+            scriptPath,
+            exitCode: 1,
+            stdout: "",
+            stderr: msg,
+            success: false,
+            error: msg,
+          },
+        };
+      }
       if (!existsSync(scriptPath)) {
         const msg = `Error: Routine script file "${scriptPath}" does not exist.`;
         return {

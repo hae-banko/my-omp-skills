@@ -74,10 +74,11 @@ function findRepoRoot(startDir: string = process.cwd()): string {
   }
 }
 
-function resolveResearchProjectDir(root: string, slugArg: string): { slug: string; projectDir: string } {
+function resolveResearchProjectDir(root: string, slugArg: string): { slug: string; projectDir: string; notFound: boolean } {
   const researchDir = join(root, ".omp", "knowledge", "research");
   let slug = slugArg.trim();
   let projectDir = "";
+  const explicitSlug = slug.length > 0;
   if (slug && existsSync(join(researchDir, slug))) {
     projectDir = join(researchDir, slug);
   } else {
@@ -94,7 +95,7 @@ function resolveResearchProjectDir(root: string, slugArg: string): { slug: strin
           projectDir = join(researchDir, match);
         }
       }
-      if (!projectDir && entries.length > 0) {
+      if (!projectDir && !explicitSlug && entries.length > 0) {
         slug = entries[0];
         projectDir = join(researchDir, entries[0]);
       }
@@ -102,7 +103,8 @@ function resolveResearchProjectDir(root: string, slugArg: string): { slug: strin
       // ignore
     }
   }
-  return { slug: slug || slugArg || "unknown", projectDir };
+  const notFound = explicitSlug && projectDir === "";
+  return { slug: (slug || slugArg || "unknown").trim(), projectDir, notFound };
 }
 
 function getResearchDashboardMetrics(projectDir: string, slug: string): ResearchDashboardPayload {
@@ -124,7 +126,7 @@ function getResearchDashboardMetrics(projectDir: string, slug: string): Research
       : join(projectDir, "outline.yml");
     try {
       const content = readFileSync(outlinePath, "utf8");
-      const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+      const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
       if (matches) {
         totalItems = matches.length;
       } else {
@@ -146,7 +148,7 @@ function getResearchDashboardMetrics(projectDir: string, slug: string): Research
       : join(projectDir, "fields.yml");
     try {
       const content = readFileSync(fieldsPath, "utf8");
-      const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+      const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
       if (matches) {
         totalFields = matches.length;
       } else {
@@ -230,7 +232,7 @@ function getResearchReviewPayload(projectDir: string, slug: string): ResearchRev
       hasOutline = true;
       try {
         const content = readFileSync(outlinePath, "utf8");
-        const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+        const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
         if (matches) {
           for (const m of matches) {
             const name = m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, "");
@@ -248,7 +250,7 @@ function getResearchReviewPayload(projectDir: string, slug: string): ResearchRev
     if (fieldsPath) {
       try {
         const content = readFileSync(fieldsPath, "utf8");
-        const matches = content.match(/^\s*-\s*name:\s*(.+)$/gm);
+        const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
         if (matches) {
           for (const m of matches) {
             const name = m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, "");
@@ -299,7 +301,7 @@ function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
         const match = entries.find((e) => e.name === auditSlug || e.name.replace(/\.md$/, "") === auditSlug);
         if (match) matchedDir = match.name;
       }
-      if (!matchedDir && entries.length > 0) {
+      if (!matchedDir && !auditSlug && entries.length > 0) {
         const sorted = entries.sort((a, b) => b.name.localeCompare(a.name));
         matchedDir = sorted[0].name;
       }
@@ -361,15 +363,17 @@ function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
     } catch {}
   }
 
+  const notFound = auditSlug.length > 0;
   return {
-    title: slugArg ? `Audit: ${slugArg}` : "Codebase Audit",
+    title: notFound ? `Audit not found: ${auditSlug}` : "Codebase Audit",
     slug: auditSlug || "overview",
     version: "v0.1.0",
-    status: "active",
+    status: notFound ? "missing" : "active",
     root_report_path: auditSlug ? `.omp/audits/${auditSlug}/overview.md` : ".omp/audits/overview.md",
     subtopics_count: 0,
     latest_revision: "v0.1.0",
-  };
+    not_found: notFound,
+  } as AuditCardPayload & { not_found?: boolean };
 }
 
 function getTriageStatusPayload(root: string): TriageStatusPayload {
@@ -583,7 +587,11 @@ const COMMANDS: CommandSpec[] = [
 
       if (head === "dashboard" || head === "status") {
         const root = findRepoRoot();
-        const { slug, projectDir } = resolveResearchProjectDir(root, rest);
+        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, rest);
+        if (notFound) {
+          ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+          return;
+        }
         const payload = getResearchDashboardMetrics(projectDir, slug);
         pi.sendMessage({
           customType: "research-dashboard",
@@ -597,7 +605,11 @@ const COMMANDS: CommandSpec[] = [
 
       if (head === "review") {
         const root = findRepoRoot();
-        const { slug, projectDir } = resolveResearchProjectDir(root, rest);
+        const { slug, projectDir, notFound } = resolveResearchProjectDir(root, rest);
+        if (notFound) {
+          ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+          return;
+        }
         const payload = getResearchReviewPayload(projectDir, slug);
         pi.sendMessage({
           customType: "research-review",
@@ -799,6 +811,14 @@ const COMMANDS: CommandSpec[] = [
         const rest = tokens.slice(1).join(" ").trim();
         const targetSlug = head === "--recent" ? "" : rest;
         const payload = getAuditCardPayload(root, targetSlug);
+        const isNotFound =
+          payload && typeof payload === "object"
+            ? Boolean(("not_found" in payload && payload.not_found) || ("notFound" in payload && payload.notFound))
+            : false;
+        if (targetSlug && isNotFound) {
+          ctx.ui?.notify?.(`Audit report slug not found: ${targetSlug}`, "warning");
+          return;
+        }
         pi.sendMessage({
           customType: "audit-card",
           display: true,
@@ -1046,7 +1066,7 @@ const COMMANDS: CommandSpec[] = [
           for (const entry of entries) {
             if (entry.isDirectory() && entry.name !== "specs" && !entry.name.startsWith(".")) {
               const specFile = join(scratchDir, entry.name, "spec.md");
-              if (existsSync(specFile)) {
+              if (existsSync(specFile) && statSync(specFile).isFile()) {
                 files.push(relative(root, specFile));
               }
             }
@@ -1277,7 +1297,7 @@ const COMMANDS: CommandSpec[] = [
         let dirs: string[] = [];
         try {
           dirs = readdirSync(dir, { withFileTypes: true })
-            .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
+            .filter((ent) => ent.isDirectory() && !ent.name.startsWith(".") && existsSync(join(dir, ent.name, ".git")))
             .map((ent) => ent.name)
             .sort();
         } catch {
