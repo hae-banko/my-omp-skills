@@ -38,7 +38,10 @@ try:
 except ImportError:
     sys.exit("pyyaml required: pip install pyyaml")
 
-PROJECT_DIR = Path(__file__).resolve().parent
+# Canonical script: run from the package path with the project dir as argv[1]
+# (python commands/research-report/generate_report.py <project_dir>). A
+# project-local copy (script parent dir) still works for backward compat.
+PROJECT_DIR = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent
 RESULTS_DIR = PROJECT_DIR / "results"
 FIELDS_PATH = PROJECT_DIR / "fields.yaml"
 OUTLINE_PATH = PROJECT_DIR / "outline.yaml"

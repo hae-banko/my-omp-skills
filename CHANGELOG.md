@@ -2,9 +2,15 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.30.1 — Report generator runs from the package, no per-project copy
+
+- `/research-report` Step 3 now runs the canonical script in place: `python3 <package>/commands/research-report/generate_report.py {project_dir}`. The per-project `generate_report.py` copy is gone — no snapshot drift, no model-written scripts, single source of truth (matches how `/research-deep` already runs `validate_json.py`).
+- The script accepts the project dir as `argv[1]`; a legacy project-local copy (no argument) still works.
+- Spec: `commands/research-report/command.md` Steps 3/4 and the Output section updated; `generate_report.py` docstring + header comment describe the run mode.
+
 ## v0.30.0 — Research report v2: summary-first, detail-preserving
 
-`/research-report` now produces a report that opens with what to fix first instead of a 300KB wall of blockquotes. The generator moved from "model writes a script per the spec" to a canonical, generic companion script (`commands/research-report/generate_report.py`) copied into the project and run.
+`/research-report` now produces a report that opens with what to fix first instead of a 300KB wall of blockquotes. The generator moved from "model writes a script per the spec" to a canonical, generic companion script (`commands/research-report/generate_report.py`).
 
 - **Executive Summary** — coverage paragraph (waves, strategy modules, unresolved, sources), priority/severity/effort mix lines ordered by rank, every P0+P1 finding as a one-line anchored entry, and a most-affected-surfaces histogram.
 - **Action Plan** — table of all items sorted by priority then severity (`# | Finding | Severity | Priority | Effort | Affected component`) so the report opens with the fix order.
