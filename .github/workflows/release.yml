@@ -42,26 +42,3 @@ jobs:
           else
             gh release create "${TAG}" --repo "${{ github.repository }}" --title "${TAG}" --notes-file /tmp/notes.md
           fi
-
-  # Publish the package to the public npm registry.
-  # Runs only on tag pushes (v*) after the release job — including its
-  # version-guard — has passed. Scoped packages default to restricted on
-  # npmjs, so --access public is required. Auth comes from the NPM_TOKEN
-  # secret (an npmjs automation token with packages write).
-  publish:
-    runs-on: ubuntu-latest
-    needs: release
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v5
-      - name: Set up Node for npm
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: "https://registry.npmjs.org/"
-      - name: Publish to npm
-        run: npm publish --access public --registry https://registry.npmjs.org/
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

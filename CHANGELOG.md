@@ -2,6 +2,13 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.2 — Drop npm publishing; git-based installs
+
+- **npm publishing abandoned** — npm's 2FA + deprecated classic-token friction is not worth it for a personal plugin; the release workflow's `publish` job failed on every tag, so the npm route is dropped entirely.
+- **Package name restored to `my-omp-skills`** — no scope, since nothing is published to a registry anymore; `publishConfig` removed.
+- **Release workflow now only creates GitHub Releases** — `.github/workflows/release.yml` keeps the `release` job (changelog-notes extraction + `package.json` version guard + `gh release create`); the `publish` job is gone. Every tag push runs just the release job and must go green.
+- **Install/update is keyless git+https tag installs** — the repo is public, so `omp plugin install "https://github.com/hae-banko/my-omp-skills.git#v0.32.2"` works with no SSH key and no token; `git ls-remote --tags` lists available versions.
+
 ## v0.32.1 — Publish under @vankopfs scope
 
 - The npm package is now `@vankopfs/my-omp-skills` — the token's npm account (`vankopfs`) owns that scope; `@hae-banko` was unclaimed and rejected with E404, so v0.32.0 never reached the registry.
