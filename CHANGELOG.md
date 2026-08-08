@@ -2,6 +2,10 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.30.4 — README badges
+
+Added a shields.io badge row to the README (version, license, platform, command/skill counts) using static badges only — GitHub-API badges would render invalid on this private repo. Cosmetic change; no behavior change.
+
 ## v0.30.3 — CI/CD release automation
 
 Tag pushes now auto-create GitHub Releases: `.github/workflows/release.yml` extracts the matching CHANGELOG section as release notes and publishes via `gh release create` (idempotent — skips if the release exists). A guard fails the run when `package.json` version doesn't match the tag. No more manual release creation; tags and releases can no longer drift.
