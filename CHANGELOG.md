@@ -2,6 +2,14 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.30.2 — summary.md digest + shared-context front matter
+
+`/research-report` now writes an accessible digest next to the long report, and the report front matter surfaces repeated repo anchors once instead of 21 times.
+
+- **`summary.md` digest** — the same generator run now writes `{project_dir}/summary.md` next to `report.md`: identical header stats and Executive Summary, plus an Action Plan of every item with a one-line **Problem** column (the `ux_issue` one-liner, ~140 chars) and a Notes footer. No `<details>` blocks, no per-item bodies — readable without opening `report.md`. The full report is byte-for-byte unchanged.
+- **`## Shared context` front matter** — anchors that recur across items (source symbols, issue numbers, conventions like `NO_COLOR`, `pi.sendMessage`, `Kiro #7471`, `AG-UI`) are now surfaced once, before the Action Plan: `- {label} — mentioned in N/21 items`, only for anchors cited in ≥2 items. Generic and extensible: the curated regex list (`SHARED_CONTEXT_PATTERNS`) sits at the top of the script, and projects mentioning none of the anchors get no section. Summary.md deliberately stays a digest — no shared-context section.
+- **Spec**: `commands/research-report/command.md` Step 3 and the Output section document `summary.md` and the shared-context section.
+
 ## v0.30.1 — Report generator runs from the package, no per-project copy
 
 - `/research-report` Step 3 now runs the canonical script in place: `python3 <package>/commands/research-report/generate_report.py {project_dir}`. The per-project `generate_report.py` copy is gone — no snapshot drift, no model-written scripts, single source of truth (matches how `/research-deep` already runs `validate_json.py`).
