@@ -2,6 +2,17 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.0 — Public release: user-facing README + publish to public npm
+
+The repository is now public and the package is published to the public npm registry under the `@hae-banko` scope. No npmrc, no auth token, no SSH key — `omp plugin install @hae-banko/my-omp-skills` is the only per-machine step.
+
+- **Repo made public** — `hae-banko/my-omp-skills` is now visible to everyone; issues, PRs, and stars are open to the community.
+- **README rewritten user-facing** — replaced the developer-architecture narrative with a value-first layout: a "What You Get" family table (Plan & Decide / Ship & Build / Audit / Deep Research / Knowledge base / Hindsight / Native LaTeX math), a keyless `omp plugin install @hae-banko/my-omp-skills` quick-install snippet, and a `First Run` guide (`/omp-setup` once per repo, three 60-second starters, `/hindsight on`). The full command directory and model-invoked skills table are retained.
+- **Package published to the public npm registry as `@hae-banko/my-omp-skills`** — scoped name, `npm publish --access public` (scoped packages default to restricted on npmjs, so the flag is required), `publishConfig.registry` pinned to `https://registry.npmjs.org/`, and a `files` allowlist (`src`, `commands`, `skills`, `rules`, `README.md`, `CHANGELOG.md`, `AGENTS.md`, `LICENSE`) so the working tree is what ships.
+- **Release workflow now npm-publishes on tag pushes** — `.github/workflows/release.yml` adds a `publish` job that runs only on `v*` tags after the existing `release` job (with its `package.json`-version guard) succeeds, uses `actions/setup-node@v4` against the public registry URL, and authenticates with `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`. If the secret is missing, the publish job fails while the GitHub Release succeeds — the release is still created, the package is not.
+- **Per-machine install is `omp plugin install @hae-banko/my-omp-skills`** — no `.npmrc`, no `NPM_TOKEN`, no GitHub auth; npm public registry handles the publish. Upgrades pin with `@<version>`; uninstall via `omp plugin uninstall`. Bun mirror cache invalidation instructions retained for downstream installers.
+
+
 ## v0.31.0 — /reference is local and deterministic (zero agent turns)
 
 `/reference` no longer dispatches a user message to the agent for `add` / `update` / `remove` / `list`. A new `src/references.ts` module runs git directly via `execFile` args arrays (no shell interpolation, no agent turn); the spec is thinned to a subcommand table. Long-running clone/pull ops surface progress toasts before the work begins.
