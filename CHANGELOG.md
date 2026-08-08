@@ -2,6 +2,11 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.1 — Publish under @vankopfs scope
+
+- The npm package is now `@vankopfs/my-omp-skills` — the token's npm account (`vankopfs`) owns that scope; `@hae-banko` was unclaimed and rejected with E404, so v0.32.0 never reached the registry.
+- Install command updated in README to `omp plugin install @vankopfs/my-omp-skills`.
+
 ## v0.32.0 — Public release: user-facing README + publish to public npm
 
 The repository is now public and the package is published to the public npm registry under the `@hae-banko` scope. No npmrc, no auth token, no SSH key — `omp plugin install @hae-banko/my-omp-skills` is the only per-machine step.

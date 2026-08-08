@@ -29,13 +29,13 @@ Each family is a set of commands that do one job for you — pick the ones you n
 The package is published to the **public npm registry** — no npmrc, no auth token, no SSH key needed.
 
 ```bash
-omp plugin install @hae-banko/my-omp-skills
+omp plugin install @vankopfs/my-omp-skills
 ```
 
 Or pin a specific release:
 
 ```bash
-omp plugin install @hae-banko/my-omp-skills@0.32.0
+omp plugin install @vankopfs/my-omp-skills@0.32.1
 ```
 
 **Alternative — install straight from git** (keyless over HTTPS, or SSH if you have a key set up):
@@ -137,18 +137,18 @@ Native LaTeX math rendering is always on in the omp TUI — no configuration. `/
 
 All plugin management goes through `omp plugin`:
 
-1. **View installed plugins**: `omp plugin list` shows `@hae-banko/my-omp-skills@v0.32.0`.
+1. **View installed plugins**: `omp plugin list` shows `@vankopfs/my-omp-skills@v0.32.1`.
 2. **Upgrade to a pinned version**:
    ```bash
-   omp plugin install @hae-banko/my-omp-skills@<new-version>
+   omp plugin install @vankopfs/my-omp-skills@<new-version>
    ```
-   Or reinstall latest: `omp plugin install @hae-banko/my-omp-skills`.
+   Or reinstall latest: `omp plugin install @vankopfs/my-omp-skills`.
 3. **Check tagged releases**: `git ls-remote https://github.com/hae-banko/my-omp-skills.git --tags`. Tag pushes auto-create GitHub Releases from the matching CHANGELOG section and publish the package to npm (`.github/workflows/release.yml`); a guard fails the run if `package.json`'s version doesn't match the tag.
 4. **Fix cached mirror mismatches**: if Bun's cache predates a new tag:
    ```bash
    git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
    ```
-5. **Uninstall**: `omp plugin uninstall @hae-banko/my-omp-skills`.
+5. **Uninstall**: `omp plugin uninstall @vankopfs/my-omp-skills`.
 
 For maintainers: architecture notes live in [AGENTS.md](AGENTS.md), release history in [CHANGELOG.md](CHANGELOG.md).
 
