@@ -1,0 +1,44 @@
+name: release
+on:
+  push:
+    tags:
+      - "v*"
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract changelog notes
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          awk -v v="v${VERSION} " '
+            $0 ~ "^## " v { flag=1; next }
+            /^## v[0-9]+\./ && flag { exit }
+            flag { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then echo "::error::No CHANGELOG section found for ${TAG}"; exit 1; fi
+      - name: Guard version matches tag
+        run: |
+          set -euo pipefail
+          PKG=$(python3 -c "import json;print(json.load(open('package.json'))['version'])")
+          TAG="${{ github.ref_name }}"
+          if [ "${PKG}" != "${TAG#v}" ]; then
+            echo "::error::package.json version ${PKG} does not match tag ${TAG}"; exit 1
+          fi
+      - name: Create or skip release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          if gh release view "${TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists — skipping"
+          else
+            gh release create "${TAG}" --repo "${{ github.repository }}" --title "${TAG}" --notes-file /tmp/notes.md
+          fi
