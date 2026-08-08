@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.32.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.32.3-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-26-orange" alt="26 slash commands" />
@@ -26,17 +26,19 @@ Each family is a set of commands that do one job for you — pick the ones you n
 
 ## Quick Install
 
-This is a **public repository**, so installs work keyless over HTTPS — no SSH key, no token, no npm registry.
+This is a **private repository**, so installs go over SSH (or git+https with a PAT). You need an **SSH key with read access** to `hae-banko/my-omp-skills` on each machine you install on — either `~/.ssh/id_ed25519` listed in your GitHub account, or available through `ssh-agent`.
 
 ```bash
-omp plugin install "https://github.com/hae-banko/my-omp-skills.git#v0.32.2"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.3"
 ```
 
-**Alternative — git+ssh** (only if you have an SSH key set up for GitHub):
+Equivalent scp form:
 
 ```bash
-omp plugin install git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.2
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.32.3"
 ```
+
+**Alternative — git+https with a PAT** (only on machines where SSH is unavailable): embed a personal access token with `repo` scope in the URL, or configure a credential helper that supplies it. Without a token, git+https to a private repo returns `Repository not found`.
 
 You need [oh-my-pi](https://github.com/can1357/oh-my-pi) installed. After installing, **exit and re-enter `omp`** — commands, skills, rules, and tools are discovered at session start.
 
@@ -130,12 +132,16 @@ Native LaTeX math rendering is always on in the omp TUI — no configuration. `/
 
 All plugin management goes through `omp plugin`:
 
-1. **View installed plugins**: `omp plugin list` shows `my-omp-skills@v0.32.2`.
-2. **Upgrade to a new release**: re-run the install command with the newest tag:
+1. **View installed plugins**: `omp plugin list` shows `my-omp-skills@v0.32.3`.
+2. **Upgrade to a new release**: re-run the SSH install command with the newest tag:
    ```bash
-   omp plugin install "https://github.com/hae-banko/my-omp-skills.git#v0.32.2"
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#<new-tag>"
    ```
-3. **List available versions**: `git ls-remote https://github.com/hae-banko/my-omp-skills.git --tags`. Every tag push auto-creates a GitHub Release from the matching CHANGELOG section (`.github/workflows/release.yml`); a guard fails the run if `package.json`'s version doesn't match the tag.
+3. **List available versions** (requires SSH access to the private repo):
+   ```bash
+   git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags
+   ```
+   Every tag push auto-creates a GitHub Release from the matching CHANGELOG section (`.github/workflows/release.yml`); a guard fails the run if `package.json`'s version doesn't match the tag.
 4. **Fix cached mirror mismatches**: if Bun's cache predates a new tag:
    ```bash
    git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main

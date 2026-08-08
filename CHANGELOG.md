@@ -1,6 +1,14 @@
 # Changelog
 
+
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
+
+## v0.32.3 — Repo is private again; installs via git+ssh
+
+- **Repository returned to private** — `hae-banko/my-omp-skills` is private again; v0.32.2's keyless git+https install instructions no longer work.
+- **`"private": true` restored in `package.json`** — guards against accidental `npm publish`; the v0.32.2 publish workflow is gone, but the field stays so a stale `npm publish` run is rejected at the manifest level.
+- **Install/update is git+ssh tag-pinned** — `omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.3"` requires an SSH key with read access to the private repository on each machine (or `ssh-agent`). `git+https` works only with a PAT embedded in the URL or supplied by a credential helper.
+- **GitHub Releases remain the artifact source** — `.github/workflows/release.yml` runs on tag push and creates the release; nothing about that path changed for a private repo.
 
 ## v0.32.2 — Drop npm publishing; git-based installs
 
