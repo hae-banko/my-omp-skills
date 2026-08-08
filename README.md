@@ -8,10 +8,6 @@
   <img src="https://img.shields.io/badge/skills-12-teal" alt="12 model-invoked skills" />
 </p>
 
-<p align="center">
-  <img src="assets/banner.png" alt="my-omp-skills banner" width="100%" />
-</p>
-
 **my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness, for developers who want their AI pair programmer to work with discipline instead of vibes: **plan, build, audit, research, remember** — deterministic workflow on top of the omp harness. It adds 26 user-invoked slash commands and 12 model-invoked skills, plus a persistent local knowledge base, so the same rigor applies across every session and every repo.
 
 ## What You Get
