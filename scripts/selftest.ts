@@ -10,7 +10,8 @@
 //
 // Run: bun run scripts/selftest.ts
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -100,7 +101,11 @@ const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   wayfinder: {},
   "omp-handoff": {},
   "plugin-issue": {},
-  reference: {},
+  // /reference is a LOCAL command (runs git itself, never queues a user
+  // message) — the generic "clean user prompt" loop must skip it, exactly
+  // like /hindsight. Its silence + card emission are asserted in the
+  // dedicated reference block below.
+  reference: { silent: true },
   record: { companions: 1 },
   pitfall: { companions: 1 },
   routinize: { companions: 2 },
@@ -1960,6 +1965,166 @@ for (const name of HERDR_TOOLS) {
   }
 }
 
+// --- /reference: LOCAL deterministic handler --------------------------------
+// The command runs git itself and must NEVER queue a user message (zero
+// agent turns). Each subcommand reports via a reference-result card + UI
+// toast. The MY_OMP_SKILLS_TEST_ROOT override points the write paths at a
+// temp fixture so the real .omp/references/ is never touched. The seed is a
+// real git repo cloned through a file:// URL; `git init -b main` becomes
+// init + symbolic-ref for git < 2.28 compatibility.
+{
+  const refFixture = mkdtempSync(join(tmpdir(), "my-omp-reference-test-"));
+  const seedRepo = join(refFixture, "seed");
+  const refRoot = join(refFixture, "root");
+  // Identity via env vars, never repo-level config: this machine's git init
+  // template ships a pre-commit hook that rejects commits with local
+  // user.name/user.email (identity must inherit the global config).
+  const git = (args: string[], cwd: string): string => {
+    const out = execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "selftest",
+        GIT_AUTHOR_EMAIL: "selftest@example.com",
+        GIT_COMMITTER_NAME: "selftest",
+        GIT_COMMITTER_EMAIL: "selftest@example.com",
+      },
+    });
+    return out.trim();
+  };
+  mkdirSync(seedRepo, { recursive: true }); // execFileSync cwd must exist before git init runs
+  git(["init"], seedRepo);
+  git(["symbolic-ref", "HEAD", "refs/heads/main"], seedRepo);
+  writeFileSync(join(seedRepo, "seed.txt"), "hello");
+  git(["add", "seed.txt"], seedRepo);
+  git(["commit", "-m", "seed"], seedRepo);
+  const seedUrl = `file://${seedRepo}`;
+  const refResultCard = (): string =>
+    String(customMessages.find((m) => m.customType === "reference-result")?.content ?? "");
+
+  const prevRefEnv = process.env.MY_OMP_SKILLS_TEST_ROOT;
+  process.env.MY_OMP_SKILLS_TEST_ROOT = refRoot;
+  try {
+    // add: clones, creates .gitignore line, reports remote + HEAD, no user message.
+    sent.length = 0;
+    customMessages.length = 0;
+    const addToasts: string[] = [];
+    await registered["reference"].handler(`add ${seedUrl}`, { ui: { notify: (m: string) => addToasts.push(m) } });
+    if (sent.length !== 0) fail("reference add: queued a user message to agent");
+    if (!existsSync(join(refRoot, ".omp", "references", "seed", "seed.txt"))) {
+      fail("reference add: committed file missing after clone");
+    }
+    const gitignoreContent = existsSync(join(refRoot, ".gitignore"))
+      ? readFileSync(join(refRoot, ".gitignore"), "utf8")
+      : "";
+    if (!gitignoreContent.includes(".omp/references/")) {
+      fail("reference add: .gitignore missing the .omp/references/ line");
+    }
+    if (!addToasts.some((t) => t.includes("Cloning"))) fail("reference add: no cloning toast");
+    const addContent = refResultCard();
+    if (!addContent.includes("seed") || !addContent.includes(seedUrl) || !addContent.includes("HEAD")) {
+      fail(`reference add: card missing name/remote/HEAD: ${addContent}`);
+    }
+    const seedHead1 = git(["rev-parse", "HEAD"], seedRepo);
+
+    // add duplicate → error toast mentioning /reference update; nothing re-cloned.
+    sent.length = 0;
+    customMessages.length = 0;
+    const dupToasts: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["reference"].handler(`add ${seedUrl}`, {
+      ui: { notify: (m: string, l?: string) => { dupToasts.msgs.push(m); dupToasts.levels.push(l ?? ""); } },
+    });
+    if (sent.length !== 0) fail("reference add (duplicate): queued a user message to agent");
+    if (!dupToasts.levels.includes("error")) fail("reference add (duplicate): expected error toast");
+    if (!dupToasts.msgs.some((m) => m.includes("update"))) {
+      fail("reference add (duplicate): error does not mention /reference update");
+    }
+
+    // update: new upstream commit → HEAD before → after moves.
+    writeFileSync(join(seedRepo, "seed2.txt"), "world");
+    git(["add", "seed2.txt"], seedRepo);
+    git(["commit", "-m", "second"], seedRepo);
+    const seedHead2 = git(["rev-parse", "HEAD"], seedRepo);
+    sent.length = 0;
+    customMessages.length = 0;
+    const updToasts: string[] = [];
+    await registered["reference"].handler("update seed", { ui: { notify: (m: string) => updToasts.push(m) } });
+    if (sent.length !== 0) fail("reference update: queued a user message to agent");
+    if (!refResultCard().includes(`${seedHead1} → ${seedHead2}`)) {
+      fail(`reference update: HEAD did not move ${seedHead1} → ${seedHead2}, card: ${refResultCard()}`);
+    }
+    if (!updToasts.some((t) => t.includes("seed"))) fail("reference update: toast missing name");
+
+    // list: fixture corpus with remote + HEAD.
+    sent.length = 0;
+    customMessages.length = 0;
+    await registered["reference"].handler("list", { ui: { notify: () => {} } });
+    if (sent.length !== 0) fail("reference list: queued a user message to agent");
+    const listContent = refResultCard();
+    if (!listContent.includes("seed") || !listContent.includes(seedUrl) || !listContent.includes(seedHead2)) {
+      fail(`reference list: corpus card missing name/remote/HEAD: ${listContent}`);
+    }
+
+    // remove: directory gone, toast reports it.
+    sent.length = 0;
+    customMessages.length = 0;
+    const rmToasts: string[] = [];
+    await registered["reference"].handler("remove seed", { ui: { notify: (m: string) => rmToasts.push(m) } });
+    if (sent.length !== 0) fail("reference remove: queued a user message to agent");
+    if (existsSync(join(refRoot, ".omp", "references", "seed"))) {
+      fail("reference remove: directory still present after removal");
+    }
+    if (!rmToasts.some((t) => t.includes("seed"))) fail("reference remove: toast missing name");
+
+    // remove refusal: traversal must be refused and delete nothing.
+    sent.length = 0;
+    customMessages.length = 0;
+    const refuseToasts: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["reference"].handler("remove ../escape", {
+      ui: { notify: (m: string, l?: string) => { refuseToasts.msgs.push(m); refuseToasts.levels.push(l ?? ""); } },
+    });
+    if (sent.length !== 0) fail("reference remove (traversal): queued a user message to agent");
+    if (!refuseToasts.levels.includes("error")) fail("reference remove (traversal): expected error toast");
+    if (existsSync(join(refFixture, "escape")) || existsSync(join(refRoot, ".omp", "references", "escape"))) {
+      fail("reference remove (traversal): escaped the corpus");
+    }
+
+    // list (bare = list) on the now-empty corpus → empty message.
+    sent.length = 0;
+    customMessages.length = 0;
+    await registered["reference"].handler("", { ui: { notify: () => {} } });
+    if (sent.length !== 0) fail("reference list (bare): queued a user message to agent");
+    if (!refResultCard().includes("empty")) fail("reference list (bare): missing empty-corpus message");
+
+    // bad URL → error toast, no throw, no stray directory.
+    sent.length = 0;
+    customMessages.length = 0;
+    const badToasts: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["reference"].handler("add file:///nonexistent/no-such-repo", {
+      ui: { notify: (m: string, l?: string) => { badToasts.msgs.push(m); badToasts.levels.push(l ?? ""); } },
+    });
+    if (sent.length !== 0) fail("reference add (bad url): queued a user message to agent");
+    if (!badToasts.levels.includes("error")) fail("reference add (bad url): expected error toast");
+    if (existsSync(join(refRoot, ".omp", "references", "no-such-repo"))) {
+      fail("reference add (bad url): stray directory created on failure");
+    }
+
+    // unknown subcommand → error toast, no throw.
+    sent.length = 0;
+    customMessages.length = 0;
+    const unknownToasts: { msgs: string[]; levels: string[] } = { msgs: [], levels: [] };
+    await registered["reference"].handler("frobnicate", {
+      ui: { notify: (m: string, l?: string) => { unknownToasts.msgs.push(m); unknownToasts.levels.push(l ?? ""); } },
+    });
+    if (sent.length !== 0) fail("reference unknown subcommand: queued a user message to agent");
+    if (!unknownToasts.levels.includes("error")) fail("reference unknown subcommand: expected error toast");
+  } finally {
+    if (prevRefEnv === undefined) delete process.env.MY_OMP_SKILLS_TEST_ROOT;
+    else process.env.MY_OMP_SKILLS_TEST_ROOT = prevRefEnv;
+    rmSync(refFixture, { recursive: true, force: true });
+  }
+}
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

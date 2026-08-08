@@ -2,6 +2,17 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.31.0 — /reference is local and deterministic (zero agent turns)
+
+`/reference` no longer dispatches a user message to the agent for `add` / `update` / `remove` / `list`. A new `src/references.ts` module runs git directly via `execFile` args arrays (no shell interpolation, no agent turn); the spec is thinned to a subcommand table. Long-running clone/pull ops surface progress toasts before the work begins.
+
+- **New `src/references.ts` local handler** — `add` / `update` / `remove` / `list` run `git clone` / `git pull` / `git rm -rf` / `readdir` directly via `execFile` with args arrays (no `shell: true`, no string interpolation). Zero LLM turns for any subcommand; the visible transcript shows only the `/reference …` line and the result card.
+- **Safety** — `remove` and `update` refuse any name that escapes `.omp/references/`; traversal (`../`, `..\\`, absolute paths, `~`) and hidden names (`.dotfiles`, names containing `/` or `\\`) are rejected with an explicit error card. URL validation rejects non-`http(s)://` schemes for `add`. The real `.omp/references/` directory is never touched by the test seam.
+- **UX** — `Cloning…` / `Pulling…` toasts emit before long git ops so the user sees progress during slow clones; a `reference-result` transcript card shows the operation, name, and outcome (added / updated / removed / listed) with one-line summaries.
+- **`MY_OMP_SKILLS_TEST_ROOT` test seam** — selftest points the handler at a throwaway root so the real local references tree is left untouched; selftest creates a real local git fixture and exercises the live `execFile` paths.
+- **`commands/reference.md` thinned** — the workflow body is now a subcommand table (`add <url> [name]` / `update [name]` / `remove <name]` / `list`) instead of an LLM-driven prompt.
+- **Selftest extended** — real git fixture covers `add` / `update` / `remove` / `list`, duplicate-add refusal, `../` escape refusal, bad-URL refusal, unknown-subcommand refusal, asserts `sent.length === 0` (zero user messages), and verifies the real `.omp/references/` directory is untouched by the test run.
+
 ## v0.30.4 — README badges
 
 Added a shields.io badge row to the README (version, license, platform, command/skill counts) using static badges only — GitHub-API badges would render invalid on this private repo. Cosmetic change; no behavior change.

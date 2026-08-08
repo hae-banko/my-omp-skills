@@ -36,6 +36,7 @@ import {
   resolveResearchProjectDir,
 } from "./locators.ts";
 import { installPolicy } from "./policy.ts";
+import { installReferenceResultRenderer, runReferenceCommand } from "./references.ts";
 import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
 import { installRoutinesTool } from "./routines.ts";
 import {
@@ -963,6 +964,17 @@ const COMMANDS: CommandSpec[] = [
     description:
       "Manage the repo's reference corpus at .omp/references/ — add <url> | update <name> | remove <name> | list. User-invoked: acquisition happens only when you type it.",
     bodyPath: "commands/reference.md",
+    // /reference is a LOCAL, deterministic command: the handler runs git
+    // itself (clone/pull/delete), emits a card + toasts, and never queues a
+    // user message — zero agent turns. Root resolution honors the test-only
+    // MY_OMP_SKILLS_TEST_ROOT override so the selftest can drive the write
+    // paths against a fixture instead of the real corpus (same pattern as
+    // the injectable clock in research-freshness.ts).
+    handler: (pi) => async (args, ctx) => {
+      const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+      const root = override && override.trim() ? override.trim() : findRepoRoot();
+      await runReferenceCommand(pi, root, args, ctx);
+    },
     getArgumentCompletions: (argumentPrefix: string) => {
       const lower = argumentPrefix.toLowerCase();
       const options = [
@@ -1256,6 +1268,7 @@ export default function (pi: ExtensionApi): void {
   installAuditCardRenderer(pi);
   installTicketBreakdownRenderer(pi);
   installTriageStatusRenderer(pi);
+  installReferenceResultRenderer(pi);
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));
