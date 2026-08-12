@@ -38,8 +38,10 @@ import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/
 import { findFrontierTicket } from "../src/locators.ts";
 import {
   CLARIFY_PROMPT,
+  isClarifyDebugEnabled,
   isClarifyEnabled,
   isVagueInput,
+  setClarifyDebugEnabled,
   setClarifyEnabled,
   shouldBypassClarify,
   stripClarifyBypassPrefix,
@@ -2262,6 +2264,12 @@ for (const name of HERDR_TOOLS) {
 
   // 4. State & System Prompt Injection
   setClarifyEnabled(false);
+  setClarifyDebugEnabled(false);
+  if (isClarifyDebugEnabled()) fail("setClarifyDebugEnabled(false) failed");
+  setClarifyDebugEnabled(true);
+  if (!isClarifyDebugEnabled()) fail("setClarifyDebugEnabled(true) failed");
+  setClarifyDebugEnabled(false);
+
   const notifyMsgs: string[] = [];
   const testCtx = { ui: { notify: (m: string) => notifyMsgs.push(m) } };
 
@@ -2276,6 +2284,28 @@ for (const name of HERDR_TOOLS) {
   if (isClarifyEnabled()) fail("/clarify off failed to disable clarification");
   if (!notifyMsgs.some((m) => m.includes("disabled"))) fail("/clarify off missing notify disabled");
 
+  // Toggle debug on / off / toggle / status
+  notifyMsgs.length = 0;
+  registered["clarify"].handler("debug on", testCtx);
+  if (!isClarifyDebugEnabled()) fail("/clarify debug on failed to enable debug mode");
+  if (!notifyMsgs.some((m) => m.includes("debug mode enabled"))) fail("/clarify debug on missing notify");
+
+  notifyMsgs.length = 0;
+  registered["clarify"].handler("debug off", testCtx);
+  if (isClarifyDebugEnabled()) fail("/clarify debug off failed to disable debug mode");
+  if (!notifyMsgs.some((m) => m.includes("debug mode disabled"))) fail("/clarify debug off missing notify");
+
+  notifyMsgs.length = 0;
+  registered["clarify"].handler("debug", testCtx);
+  if (!isClarifyDebugEnabled()) fail("/clarify debug failed to toggle debug mode");
+  if (!notifyMsgs.some((m) => m.includes("debug mode enabled"))) fail("/clarify debug missing notify");
+
+  notifyMsgs.length = 0;
+  registered["clarify"].handler("status", testCtx);
+  if (!notifyMsgs.some((m) => m.includes("Prompt clarification is") && m.includes("debug: enabled"))) {
+    fail(`/clarify status notification missing/mismatched: ${notifyMsgs.join("; ")}`);
+  }
+
   // Toggle (bare)
   registered["clarify"].handler("", testCtx);
   if (!isClarifyEnabled()) fail("bare /clarify failed to toggle to enabled");
@@ -2284,18 +2314,23 @@ for (const name of HERDR_TOOLS) {
   const inputFn = handlers["input"];
   const extensionInputEvent = { source: "extension", text: "~ fix the bug" };
   if (inputFn) {
-    const resExt = inputFn(extensionInputEvent);
-    if (resExt !== undefined || extensionInputEvent.text !== "~ fix the bug") {
-      fail("input hook did not ignore event with source='extension'");
+    const resExt = inputFn(extensionInputEvent) as { action?: string } | undefined;
+    if (resExt?.action !== "continue" || extensionInputEvent.text !== "~ fix the bug") {
+      fail("input hook did not return { action: 'continue' } for event with source='extension'");
+    }
+
+    const normEvent = { text: "normal request" };
+    const resNorm = inputFn(normEvent) as { action?: string } | undefined;
+    if (resNorm?.action !== "continue") {
+      fail("input hook did not return { action: 'continue' } for normal request");
     }
   }
 
   const inputEvent = { text: "~ fix the bug" };
-  const inputResult = inputFn ? (inputFn(inputEvent) as { text?: string } | undefined) : undefined;
-  if (inputEvent.text !== "fix the bug" || inputResult?.text !== "fix the bug") {
-    fail(`input hook did not strip ~ prefix: event.text=${inputEvent.text}, result=${inputResult?.text}`);
+  const inputResult = inputFn ? (inputFn(inputEvent) as { action?: string; text?: string } | undefined) : undefined;
+  if (inputEvent.text !== "fix the bug" || inputResult?.action !== "transform" || inputResult?.text !== "fix the bug") {
+    fail(`input hook did not return { action: 'transform', text }: action=${inputResult?.action}, text=${inputResult?.text}`);
   }
-
   // System prompt injection when bypassed: should NOT inject
   const startEventBypassed = { systemPrompt: "BASE_PROMPT" };
   const beforeStartFn = handlers["before_agent_start"];
@@ -2336,6 +2371,32 @@ for (const name of HERDR_TOOLS) {
     fail("systemPrompt missing prompt clarification when selectedTools includes clarify_prompt");
   }
 
+  // Debug card emission test
+  setClarifyEnabled(true);
+  setClarifyDebugEnabled(true);
+  customMessages.length = 0;
+
+  const startEventDebug = { promptText: "please fix it", systemPrompt: "BASE_PROMPT" };
+  if (beforeStartFn) beforeStartFn(startEventDebug);
+  const debugMsg = customMessages.find((m) => m.customType === "clarify-debug");
+  if (!debugMsg || typeof debugMsg.content !== "string" || !debugMsg.content.includes("please fix it")) {
+    fail(`clarify-debug message not sent in before_agent_start: ${JSON.stringify(debugMsg)}`);
+  }
+
+  // Render clarify-debug message
+  const clarifyDebugRenderer = renderers["clarify-debug"];
+  if (!clarifyDebugRenderer) {
+    fail("clarify-debug message renderer not registered");
+  } else {
+    const renderedCard = clarifyDebugRenderer(
+      { content: "- System Prompt Injection: ACTIVE\n- Prompt Text: fix it\n- Injected Guidelines: Present" },
+      {},
+      {},
+    ) as { children?: Array<{ text?: string }> };
+    if (!renderedCard || !renderedCard.children) {
+      fail("clarify-debug message renderer returned invalid Container");
+    }
+  }
   // 5. clarify_prompt tool execution and renderers
   const clarifyTool = tools.find((t) => t.name === "clarify_prompt");
   if (!clarifyTool) {
@@ -2447,6 +2508,12 @@ for (const name of HERDR_TOOLS) {
     }
 
     // Renderers
+    const mockTheme = {
+      fg: (color: string, text: string) => `<fg color="${color}">${text}</fg>`,
+      bold: (text: string) => `<b>${text}</b>`,
+    };
+
+    // Renderers
     if (clarifyTool.renderCall) {
       const renderedCall = clarifyTool.renderCall(
         { question: "Which approach?", options: ["Option 1", "Option 2", "Option 3"] },
@@ -2455,6 +2522,16 @@ for (const name of HERDR_TOOLS) {
       ) as { children: Array<{ text: string }> };
       if (!renderedCall || !renderedCall.children) {
         fail("clarify_prompt renderCall returned invalid Container");
+      }
+
+      const renderedThemedCall = clarifyTool.renderCall(
+        { question: "Which approach?", options: ["Option 1"] },
+        { expanded: true },
+        mockTheme,
+      ) as { children: Array<{ text: string }> };
+      const callText = renderedThemedCall.children.map((c) => c.text).join("\n");
+      if (!callText.includes('<fg color="toolTitle"><b>CLARIFY</b></fg>')) {
+        fail(`renderCall theme styling failed: ${callText}`);
       }
 
       // Defensive tests for renderCall
@@ -2476,7 +2553,26 @@ for (const name of HERDR_TOOLS) {
         fail("clarify_prompt renderResult returned invalid Container");
       }
 
-      // Defensive tests for renderResult
+      const renderedSuccessResult = clarifyTool.renderResult(
+        res1,
+        { expanded: true },
+        mockTheme,
+      ) as { children: Array<{ text: string }> };
+      const successText = renderedSuccessResult.children.map((c) => c.text).join("\n");
+      if (!successText.includes('<fg color="success"><b>CLARIFY ANSWER</b></fg>')) {
+        fail(`renderResult success theme styling failed: ${successText}`);
+      }
+
+      const renderedCancelResult = clarifyTool.renderResult(
+        resCancel,
+        { expanded: true },
+        mockTheme,
+      ) as { children: Array<{ text: string }> };
+      const cancelText = renderedCancelResult.children.map((c) => c.text).join("\n");
+      if (!cancelText.includes('<fg color="warning"><b>CLARIFY ANSWER</b></fg>')) {
+        fail(`renderResult cancellation theme styling failed: ${cancelText}`);
+      }
+
       // Defensive tests for renderResult
       const rResNull = clarifyTool.renderResult(null as unknown as ToolResult, { expanded: true }, {});
       if (!rResNull) fail("renderResult(null) returned falsy");

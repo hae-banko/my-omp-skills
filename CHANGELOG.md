@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.35.0 — Fix TUI text rendering & add /clarify debug mode
+
+- **Fixed TUI text rendering bug when `/clarify` is active** — corrected `input` event hook return protocol to return `{ action: "transform", text }` and `{ action: "continue" }`. Malformed return objects previously corrupted `omp`'s TUI input controller, causing markdown, divider lines, code blocks, and ANSI colors to drop.
+- **Themed `clarify_prompt` renderers** — styled `renderCall` and `renderResult` with `theme.fg(...)` tool title/muted/success/warning colors, and updated guidelines to explicitly preserve standard Markdown formatting.
+- **Added `/clarify debug` mode & `/clarify status`** — added `/clarify debug [on|off]` subcommand to display the real prompt and system prompt modifications sent to the agent in a `CLARIFY DEBUG` card, plus `/clarify status` to inspect active modes.
+
 ## v0.34.0 — Backend harness optimizations & zero-turn knowledge auto-surfacing
 
 - **Zero-turn pitfall auto-surfacing (`before_agent_start`)** — backend automatically scans incoming prompts against `.omp/knowledge/` records, pitfalls, and index tags, injecting relevant past pitfalls directly into system context so the agent avoids past mistakes without taking an extra search turn.

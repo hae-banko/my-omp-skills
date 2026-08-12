@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.34.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.35.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -21,12 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.34.0"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.35.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.34.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.35.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
@@ -109,7 +109,7 @@ All 28 slash commands are user-invoked. The model recognizes them at session sta
 | `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
 | `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.omp/scratch/`, GitHub, GitLab), triage labels (`.omp/agents/`), domain layout. |
 | `/hindsight` | Knowledge Base & Upkeep | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) before turns settle. |
-| `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, or bare to toggle) and injects clarification guidelines. |
+| `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, `debug`, `status`, or bare to toggle) and injects clarification guidelines. |
 | `/math` | Knowledge Base & Upkeep | Explains and demos native LaTeX math rendering ($...$, $$...$$, `\begin{aligned}`). |
 | `/omp-handoff` | Knowledge Base & Upkeep | Compacts current conversation into a handoff document for another agent session. |
 | `/plugin-issue` | Knowledge Base & Upkeep | Reports a bug or feature request on this plugin's GitHub repository. |
@@ -175,11 +175,11 @@ All plugin management goes through `omp plugin`:
    ```bash
    omp plugin list
    ```
-   Should display `my-omp-skills@v0.34.0`.
+   Should display `my-omp-skills@v0.35.0`.
 
-2. **Upgrade to `v0.34.0`**:
+2. **Upgrade to `v0.35.0`**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.34.0"
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.35.0"
    ```
 
 3. **List Available Tag Versions** (requires SSH read access):

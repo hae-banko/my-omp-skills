@@ -207,6 +207,8 @@ Beyond the markdown commands, the extension entry (`src/index.ts`) wires runtime
   pitfalls, records, and index tags (`findRelevantKnowledge`). If relevant past findings match
   prompt terms (length >= 4, non-stopwords), a `<relevant-knowledge>` block is injected directly into
   `event.systemPrompt` (deduplicated to prevent double-injection).
+- **Prompt clarification & TUI rendering** (`src/clarify.ts`).
+  The `input` event hook returns `{ action: "transform", text }` for single-turn bypasses (`~`) and `{ action: "continue" }` otherwise. Returning explicit action objects prevents corrupting `omp`'s TUI input controller and losing ANSI/markdown styling. Supports `/clarify debug [on|off]` to inspect transformed prompts via a `CLARIFY DEBUG` card (`clarify-debug` custom message renderer) and `/clarify status`.
 - **Freeform keyword & tag search** (`src/knowledge.ts` / `src/knowledge-tool.ts`).
   `readKnowledge` and `knowledge_read` (`xd://knowledge_read`) support an optional `query` parameter
   that performs relevance-ranked searches (title/tag/filename matches ranked first, then body matches)

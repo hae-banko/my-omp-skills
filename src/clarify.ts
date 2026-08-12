@@ -1,6 +1,6 @@
 // Prompt clarification extension adapted from dkmnx/pi-clarify.
 //
-// Adds /clarify slash command (on/off/toggle), clarify_prompt tool with
+// Adds /clarify slash command (on/off/toggle/debug/status), clarify_prompt tool with
 // interactive TUI selection + custom text input, ~ single-turn bypass prefix,
 // and system prompt guideline injection when active.
 
@@ -8,11 +8,19 @@ import { Type } from "@sinclair/typebox";
 import { Container, Text } from "@earendil-works/pi-tui";
 import type { CommandContext, ExtensionApi, ToolResult } from "./api.ts";
 import { findKnowledgeRoot, findRelevantKnowledge } from "./knowledge.ts";
+import { toolResultCard } from "./research-format.ts";
+
+export interface ThemeHelper {
+  fg?(color: string, text: string): string;
+  bold?(text: string): string;
+}
+
 export const CLARIFY_GUIDELINES = `
 Prompt Clarification Guidelines:
 - If the user's request is ambiguous, vague, or missing critical details required to act correctly, call the \`clarify_prompt\` tool to ask for clarification before proceeding.
 - Provide a clear, concise question and a list of at least 3 plausible options/choices for the user to choose from.
 - Do NOT use \`clarify_prompt\` if the user's intent is unambiguous, or if the user prefixed their turn with \`~\` to bypass clarification.
+- Continue to format your non-clarification text responses with standard Markdown (headers, code blocks, bold/italics, dividers, bullet lists).
 `.trim();
 
 export const CLARIFY_PROMPT = `
@@ -46,6 +54,7 @@ export function stripClarifyBypassPrefix(text: string): string {
 }
 
 let enabled = false;
+let debugEnabled = false;
 let bypassNextTurn = false;
 
 export function isClarifyEnabled(): boolean {
@@ -56,8 +65,38 @@ export function setClarifyEnabled(val: boolean): void {
   enabled = val;
 }
 
+export function isClarifyDebugEnabled(): boolean {
+  return debugEnabled;
+}
+
+export function setClarifyDebugEnabled(val: boolean): void {
+  debugEnabled = val;
+}
+
 export function toggleClarifyState(args?: string, ctx?: CommandContext): boolean {
   const arg = (args ?? "").trim().toLowerCase();
+  const parts = arg.split(/\s+/);
+
+  if (parts[0] === "debug") {
+    const val = parts[1];
+    if (val === "on") {
+      debugEnabled = true;
+    } else if (val === "off") {
+      debugEnabled = false;
+    } else {
+      debugEnabled = !debugEnabled;
+    }
+    const debugStr = debugEnabled ? "enabled" : "disabled";
+    ctx?.ui?.notify?.(`Prompt clarification debug mode ${debugStr}`, "info");
+    return debugEnabled;
+  }
+
+  if (arg === "status") {
+    const statusMsg = `Prompt clarification is ${enabled ? "enabled" : "disabled"} (debug: ${debugEnabled ? "enabled" : "disabled"})`;
+    ctx?.ui?.notify?.(statusMsg, "info");
+    return enabled;
+  }
+
   if (arg === "on") {
     enabled = true;
   } else if (arg === "off") {
@@ -72,10 +111,21 @@ export function toggleClarifyState(args?: string, ctx?: CommandContext): boolean
 
 export function installClarify(pi: ExtensionApi): void {
   pi.registerCommand("clarify", {
-    description: "Toggle prompt clarification on/off (/clarify on|off)",
+    description: "Toggle prompt clarification (/clarify [on|off|debug|status])",
     handler: (args: string, ctx: CommandContext) => {
       toggleClarifyState(args, ctx);
     },
+  });
+
+  pi.registerMessageRenderer("clarify-debug", (message: unknown) => {
+    let contentStr = "";
+    if (message && typeof message === "object") {
+      if ("content" in message && typeof (message as { content: unknown }).content === "string") {
+        contentStr = (message as { content: string }).content;
+      }
+    }
+    const lines = contentStr ? contentStr.split("\n") : [];
+    return toolResultCard(lines, "CLARIFY DEBUG — Transformed Prompt Sent to Agent");
   });
 
   pi.on("input", (event: unknown) => {
@@ -86,7 +136,7 @@ export function installClarify(pi: ExtensionApi): void {
       ((event as { source: unknown }).source === "extension" ||
         (event as { source: unknown }).source === "system")
     ) {
-      return;
+      return { action: "continue" };
     }
 
     let text = "";
@@ -107,8 +157,10 @@ export function installClarify(pi: ExtensionApi): void {
       if (event && typeof event === "object" && "text" in event) {
         (event as { text: string }).text = stripped;
       }
-      return { text: stripped };
+      return { action: "transform", text: stripped };
     }
+
+    return { action: "continue" };
   });
 
   pi.on("before_agent_start", (event: unknown, ctx?: unknown) => {
@@ -131,6 +183,21 @@ export function installClarify(pi: ExtensionApi): void {
             evt.systemPrompt = sysPrompt + CLARIFY_PROMPT;
           }
         }
+      }
+
+      if (debugEnabled && enabled && !bypassNextTurn) {
+        const promptText = evt.prompt ?? evt.promptText ?? "";
+        const content = [
+          "- System Prompt Injection: ACTIVE",
+          `- Prompt Text: ${promptText}`,
+          "- Injected Guidelines: Present",
+        ].join("\n");
+        pi.sendMessage({
+          customType: "clarify-debug",
+          content,
+          display: true,
+          attribution: "user",
+        });
       }
 
       // Zero-turn pitfall / record auto-surfacing
@@ -262,7 +329,7 @@ export function installClarify(pi: ExtensionApi): void {
         details: { question, answer },
       };
     },
-    renderCall: (args: Record<string, unknown>) => {
+    renderCall: (args: Record<string, unknown>, _options?: unknown, theme?: unknown) => {
       const container = new Container();
       const safeArgs = args && typeof args === "object" ? args : {};
       const q =
@@ -270,16 +337,29 @@ export function installClarify(pi: ExtensionApi): void {
           ? safeArgs.question.trim()
           : "Clarification question";
       const rawOpts = Array.isArray(safeArgs.options) ? safeArgs.options : [];
-      container.addChild(new Text(`CLARIFY — ${q}`, 0, 0));
-      for (const item of rawOpts) {
-        const optStr = typeof item === "string" ? item : (item != null ? String(item) : "");
-        if (!optStr) continue;
-        const truncated = optStr.length > 80 ? optStr.slice(0, 77) + "..." : optStr;
-        container.addChild(new Text(`  • ${truncated}`, 0, 0));
+
+      const t = theme as ThemeHelper | undefined;
+      if (t?.fg) {
+        const title = t.bold ? t.bold("CLARIFY") : "CLARIFY";
+        container.addChild(new Text(t.fg("toolTitle", title) + t.fg("muted", ` — ${q}`), 0, 0));
+        for (const item of rawOpts) {
+          const optStr = typeof item === "string" ? item : (item != null ? String(item) : "");
+          if (!optStr) continue;
+          const truncated = optStr.length > 80 ? optStr.slice(0, 77) + "..." : optStr;
+          container.addChild(new Text(t.fg("muted", `  • ${truncated}`), 0, 0));
+        }
+      } else {
+        container.addChild(new Text(`CLARIFY — ${q}`, 0, 0));
+        for (const item of rawOpts) {
+          const optStr = typeof item === "string" ? item : (item != null ? String(item) : "");
+          if (!optStr) continue;
+          const truncated = optStr.length > 80 ? optStr.slice(0, 77) + "..." : optStr;
+          container.addChild(new Text(`  • ${truncated}`, 0, 0));
+        }
       }
       return container;
     },
-    renderResult: (result: ToolResult) => {
+    renderResult: (result: ToolResult, _options?: unknown, theme?: unknown) => {
       const container = new Container();
       const content =
         result && typeof result === "object" && Array.isArray((result as ToolResult).content)
@@ -300,7 +380,18 @@ export function installClarify(pi: ExtensionApi): void {
         .filter(Boolean)
         .join(" ");
       const text = lines || "No result text";
-      container.addChild(new Text(`CLARIFY ANSWER — ${text}`, 0, 0));
+
+      const details = result?.details as Record<string, unknown> | undefined;
+      const isCancelled = details?.cancelled === true || text.includes("skipped");
+
+      const t = theme as ThemeHelper | undefined;
+      if (t?.fg) {
+        const title = t.bold ? t.bold("CLARIFY ANSWER") : "CLARIFY ANSWER";
+        const colorTag = isCancelled ? "warning" : "success";
+        container.addChild(new Text(t.fg(colorTag, title) + t.fg("muted", ` — ${text}`), 0, 0));
+      } else {
+        container.addChild(new Text(`CLARIFY ANSWER — ${text}`, 0, 0));
+      }
       return container;
     },
   });
