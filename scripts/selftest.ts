@@ -28,6 +28,7 @@ import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
 import { z } from "zod";
 
 import extension from "../src/index.ts";
+import { __resetBootstrapForTests } from "../src/bootstrap.ts";
 // parseHerdrOutput is a PURE parser with no registered seam of its own (the
 // herdr tools themselves are the registered surface, gated below), so the
 // harness imports it directly — the one deliberate direct import left in.
@@ -272,6 +273,7 @@ function textOfMessage(message: unknown): string {
   return typeof first.text === "string" ? first.text : "";
 }
 
+__resetBootstrapForTests();
 await handlers["session_start"]({});
 const injected = asMessagesResult(await handlers["context"]({ messages: baseMessages }));
 if (!injected || injected.length !== 3) {
@@ -301,6 +303,41 @@ if (second !== undefined) fail("bootstrap: injected twice in one session");
 await handlers["agent_end"]({});
 const afterEnd = await handlers["context"]({ messages: baseMessages });
 if (afterEnd !== undefined) fail("bootstrap: injected after agent_end");
+
+// Issue #7 — subagent leak guard. After an agent_end has fired, a follow-on
+// session_start (e.g. a `task` subagent dispatched by the main loop) MUST
+// NOT re-arm the bootstrap. The main session already received its
+// bootstrap before it ended; injecting again would burn tokens in the
+// subagent transcript and pollute it with instructions the subagent will
+// never act on. session_compact must also stay disarmed (still subagent-
+// shaped; main session already injected).
+await handlers["session_start"]({});
+const subagentContext = await handlers["context"]({ messages: baseMessages });
+if (subagentContext !== undefined) {
+  fail("bootstrap: re-armed on session_start after agent_end (subagent leak)");
+}
+await handlers["session_compact"]({});
+const subagentAfterCompact = await handlers["context"]({ messages: baseMessages });
+if (subagentAfterCompact !== undefined) {
+  fail("bootstrap: re-armed on session_compact after agent_end (subagent leak)");
+}
+
+// After the test seam resets the module state, a fresh main session is
+// simulated: session_start should re-arm injection and the next context
+// event should inject the bootstrap into a transcript that doesn't yet
+// contain it.
+__resetBootstrapForTests();
+await handlers["session_start"]({});
+const postReset = asMessagesResult(await handlers["context"]({ messages: baseMessages }));
+if (!postReset || postReset.length !== 3) {
+  fail("bootstrap: post-reset session_start + context did not inject (3 messages expected)");
+} else {
+  const bootText = textOfMessage(postReset[1]);
+  if (!bootText.includes("my-omp-skills:available-commands")) {
+    fail("bootstrap: post-reset injection missing marker");
+  }
+}
+
 
 // --- Policy: append-only knowledge base ------------------------------------
 

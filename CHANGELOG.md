@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.37.0 — Resolve #7: prevent bootstrap command-list leak into subagent transcripts
+
+- **Bootstrap subagent leak fixed** — `installBootstrap` now tracks whether ANY prior `agent_end` has fired and refuses to re-arm injection for subsequent `session_start` events. This prevents the `<my-omp-skills:available-commands>` block from being injected into subagent task transcripts (wasted tokens + noisy instructions the subagent will never act on).
+- **Main session compaction re-arm preserved** — `session_compact` continues to set `injectBootstrap = true` so the bootstrap can reappear after the main session's compaction summary clears the tail.
+- **Test seam added** — exported `__resetBootstrapForTests()` so the selftest suite can isolate bootstrap state between scenarios.
+
 ## v0.36.0 — Resolve #6: /clarify completions surface & trailing-space convention
 
 - **`/clarify` completions surface extended** — autocomplete dropdown now surfaces `on`, `off`, `debug`, and `status` (matching v0.35.0's added subcommands) instead of only `on`/`off`. Header line shows live `● on` / `○ off` state when no argument is typed.

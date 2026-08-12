@@ -4,6 +4,15 @@
 // compaction summaries) is adapted from the superpowers extension, which has
 // shipped it in production. The body is injected once per session as a
 // user-role message; it is cleared on agent_end and re-armed on compaction.
+//
+// Subagent guard (issue #7): `installBootstrap` tracks whether ANY prior
+// `agent_end` has fired during this extension module's lifetime. A
+// `session_start` (or `session_compact`) that arrives after the main session
+// has already ended is almost certainly a subagent (or a follow-on) — the
+// main session already received its bootstrap, so we MUST NOT re-arm
+// injection. Without this guard, the bootstrap block was being injected into
+// every subagent's transcript, wasting tokens and noise the subagent never
+// acts on.
 
 import type { ContextEvent, ContextEventResult, ExtensionApi } from "./api.ts";
 
@@ -14,17 +23,43 @@ export interface BootstrapCommand {
   description: string;
 }
 
+// Module-scoped: tracks whether any agent_end has fired during this
+// extension's process lifetime. Read by session_start and session_compact to
+// decide whether re-arming injection is safe (main session) or a leak
+// (subagent).
+let hasSeenAgentEnd = false;
+
+/**
+ * Test seam — zeroes the module-scoped bootstrap state so the selftest can
+ * isolate scenarios (first-session / subagent / post-compact) without
+ * bleeding flags across runs. Not exported for production callers.
+ */
+export function __resetBootstrapForTests(): void {
+  hasSeenAgentEnd = false;
+}
+
 export function installBootstrap(pi: ExtensionApi, commands: BootstrapCommand[]): void {
   let injectBootstrap = true;
 
   pi.on("session_start", () => {
+    // If a prior session has already ended in this extension lifetime, this
+    // session_start is almost certainly a subagent (or follow-on), and the
+    // main session already received its bootstrap. Skip re-arming to prevent
+    // the bootstrap from leaking into the subagent transcript.
+    if (hasSeenAgentEnd) return;
     injectBootstrap = true;
   });
   pi.on("session_compact", () => {
+    // Compaction re-arms for the main session (the summary that just landed
+    // in the tail clears the bootstrap). After an agent_end, any compaction
+    // is subagent-shaped and must NOT re-arm — the main session already
+    // received its bootstrap before it ended.
+    if (hasSeenAgentEnd) return;
     injectBootstrap = true;
   });
   pi.on("agent_end", () => {
     injectBootstrap = false;
+    hasSeenAgentEnd = true;
   });
 
   pi.on("context", (event) => {
