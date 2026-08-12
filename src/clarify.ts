@@ -21,25 +21,28 @@ export const CLARIFY_PROMPT = `
 ${CLARIFY_GUIDELINES}
 `;
 
+const VAGUE_PATTERNS = [
+  /^(\s*please\s*)?(fix|do|help|make|change|update|check|optimize|refactor|clean)(\s+it|\s+this|\s+that|\s+the\s+code|\s+everything|\s+stuff|\s+better|\s+it\s+better)?\s*\??$/i,
+  /^(what|how|why)\??$/i,
+  /^(please\s+)?(help|fix|do|go|start)$/i,
+];
+
 export function isVagueInput(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return true;
-  if (trimmed.length < 15) return true;
-  const vaguePatterns = [
-    /^(fix|do|help|make|change|update|check|run|start|build|test|clean)(\s+it|\s+this|\s+that)?$/i,
-    /^(what|how|why)\??$/i,
-    /^(please\s+)?(help|fix|do|go|start)$/i,
-  ];
-  return vaguePatterns.some((pattern) => pattern.test(trimmed));
+  if (trimmed.startsWith("/")) return false;
+  if (trimmed.length === 1) return true;
+  if (/^[?.!…:;,\-\_\*\#\$\@\%\^\&\(\)]+$/.test(trimmed)) return true;
+  return VAGUE_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
 export function shouldBypassClarify(text: string): boolean {
-  return text.trimStart().startsWith("~");
+  return /^~+/.test(text.trimStart());
 }
 
 export function stripClarifyBypassPrefix(text: string): string {
   if (!shouldBypassClarify(text)) return text;
-  return text.trimStart().replace(/^~\s*/, "");
+  return text.trimStart().replace(/^~+\s*/, "");
 }
 
 let enabled = false;
@@ -76,6 +79,16 @@ export function installClarify(pi: ExtensionApi): void {
   });
 
   pi.on("input", (event: unknown) => {
+    if (
+      event &&
+      typeof event === "object" &&
+      "source" in event &&
+      ((event as { source: unknown }).source === "extension" ||
+        (event as { source: unknown }).source === "system")
+    ) {
+      return;
+    }
+
     let text = "";
     if (typeof event === "string") {
       text = event;
@@ -99,10 +112,26 @@ export function installClarify(pi: ExtensionApi): void {
   });
 
   pi.on("before_agent_start", (event: unknown) => {
-    if (event && typeof event === "object" && "systemPrompt" in event) {
-      const evt = event as { systemPrompt: string };
+    if (event && typeof event === "object") {
+      const evt = event as {
+        systemPrompt?: string;
+        systemPromptOptions?: { selectedTools?: string[] };
+      };
+
+      const selectedTools = evt.systemPromptOptions?.selectedTools;
+      if (Array.isArray(selectedTools) && !selectedTools.includes("clarify_prompt")) {
+        bypassNextTurn = false;
+        return;
+      }
+
       if (enabled && !bypassNextTurn) {
-        evt.systemPrompt = (evt.systemPrompt ?? "") + CLARIFY_PROMPT;
+        const sysPrompt = evt.systemPrompt ?? "";
+        if (
+          !sysPrompt.includes(CLARIFY_GUIDELINES) &&
+          !sysPrompt.includes("## Prompt Clarification Active")
+        ) {
+          evt.systemPrompt = sysPrompt + CLARIFY_PROMPT;
+        }
       }
     }
     bypassNextTurn = false;
@@ -115,15 +144,27 @@ export function installClarify(pi: ExtensionApi): void {
       "Ask the user a clarifying question with multiple choice options when the request is ambiguous or vague.",
     parameters: Type.Object({
       question: Type.String(),
-      options: Type.Array(Type.String(), { minItems: 3 }),
+      options: Type.Array(Type.String(), { minItems: 1 }),
     }),
-    execute: async (_toolCallId, rawParams, _signal, _onUpdate, ctx) => {
-      const params = rawParams as { question: string; options: string[] };
-      const question = params.question ?? "Please clarify:";
-      const options = Array.isArray(params.options) ? params.options : [];
-      const choices = [...options, "Your answer..."];
+    execute: async (_toolCallId, rawParams, signal, _onUpdate, ctx) => {
+      if (signal?.aborted) {
+        return {
+          content: [{ type: "text", text: "Clarification skipped by user." }],
+          details: { cancelled: true },
+        };
+      }
 
-      const toolCtx = ctx as {
+      const params = (rawParams && typeof rawParams === "object" ? rawParams : {}) as {
+        question?: string;
+        options?: string[];
+      };
+      const question =
+        typeof params.question === "string" && params.question.trim()
+          ? params.question.trim()
+          : "Please clarify:";
+
+      const toolCtx = (ctx && typeof ctx === "object" ? ctx : {}) as {
+        hasUI?: boolean;
         ui?: {
           select?: (title: string, options: string[]) => Promise<string | undefined>;
           input?: (title: string, placeholder?: string) => Promise<string | undefined>;
@@ -131,13 +172,44 @@ export function installClarify(pi: ExtensionApi): void {
         abort?: () => void;
       };
 
+      if (toolCtx.hasUI === false || !toolCtx.ui?.select) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Non-interactive session: proceeding with best interpretation for: " + question,
+            },
+          ],
+          details: { nonInteractive: true },
+        };
+      }
+
+      const customChoice = "Your answer...";
+      const rawOpts = Array.isArray(params.options)
+        ? params.options.filter((o): o is string => typeof o === "string")
+        : [];
+      const uniqueOpts = Array.from(new Set(rawOpts.filter((o) => o !== customChoice)));
+
+      let padIdx = 1;
+      while (uniqueOpts.length < 3) {
+        const label = `Option ${padIdx}`;
+        if (!uniqueOpts.includes(label)) {
+          uniqueOpts.push(label);
+        }
+        padIdx++;
+      }
+
+      const choices = [...uniqueOpts, customChoice];
+
       let selected: string | undefined;
-      if (toolCtx?.ui?.select) {
+      try {
         selected = await toolCtx.ui.select(question, choices);
+      } catch {
+        // Handle UI interaction failure gracefully
       }
 
       if (!selected) {
-        toolCtx?.abort?.();
+        toolCtx.abort?.();
         return {
           content: [{ type: "text", text: "Clarification skipped by user." }],
           details: { cancelled: true },
@@ -145,19 +217,23 @@ export function installClarify(pi: ExtensionApi): void {
       }
 
       let answer = selected;
-      if (selected === "Your answer...") {
+      if (selected === customChoice) {
         let customAnswer: string | undefined;
-        if (toolCtx?.ui?.input) {
-          customAnswer = await toolCtx.ui.input("Enter your answer:");
+        if (toolCtx.ui?.input) {
+          try {
+            customAnswer = await toolCtx.ui.input("Enter your answer:");
+          } catch {
+            // Handle UI interaction failure gracefully
+          }
         }
-        if (!customAnswer) {
-          toolCtx?.abort?.();
+        if (!customAnswer || !customAnswer.trim()) {
+          toolCtx.abort?.();
           return {
             content: [{ type: "text", text: "Clarification skipped by user." }],
             details: { cancelled: true },
           };
         }
-        answer = customAnswer;
+        answer = customAnswer.trim();
       }
 
       return {
@@ -167,20 +243,43 @@ export function installClarify(pi: ExtensionApi): void {
     },
     renderCall: (args: Record<string, unknown>) => {
       const container = new Container();
-      const q = typeof args.question === "string" ? args.question : "Clarification question";
-      const opts = Array.isArray(args.options) ? args.options : [];
+      const safeArgs = args && typeof args === "object" ? args : {};
+      const q =
+        typeof safeArgs.question === "string" && safeArgs.question.trim()
+          ? safeArgs.question.trim()
+          : "Clarification question";
+      const rawOpts = Array.isArray(safeArgs.options) ? safeArgs.options : [];
       container.addChild(new Text(`CLARIFY — ${q}`, 0, 0));
-      for (const opt of opts) {
-        container.addChild(new Text(`  • ${String(opt)}`, 0, 0));
+      for (const item of rawOpts) {
+        const optStr = typeof item === "string" ? item : (item != null ? String(item) : "");
+        if (!optStr) continue;
+        const truncated = optStr.length > 80 ? optStr.slice(0, 77) + "..." : optStr;
+        container.addChild(new Text(`  • ${truncated}`, 0, 0));
       }
       return container;
     },
     renderResult: (result: ToolResult) => {
       const container = new Container();
-      const lines = (result.content ?? [])
-        .map((block) => (block.type === "text" ? block.text : ""))
+      const content =
+        result && typeof result === "object" && Array.isArray((result as ToolResult).content)
+          ? (result as ToolResult).content
+          : [];
+      const lines = content
+        .map((block: { type?: string; text?: string }) => {
+          if (
+            block &&
+            typeof block === "object" &&
+            block.type === "text" &&
+            typeof block.text === "string"
+          ) {
+            return block.text;
+          }
+          return "";
+        })
+        .filter(Boolean)
         .join(" ");
-      container.addChild(new Text(`CLARIFY ANSWER — ${lines}`, 0, 0));
+      const text = lines || "No result text";
+      container.addChild(new Text(`CLARIFY ANSWER — ${text}`, 0, 0));
       return container;
     },
   });

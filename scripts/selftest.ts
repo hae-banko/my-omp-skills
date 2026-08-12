@@ -32,6 +32,7 @@ import extension from "../src/index.ts";
 // herdr tools themselves are the registered surface, gated below), so the
 // harness imports it directly — the one deliberate direct import left in.
 import { parseHerdrOutput } from "../src/herdr-tools.ts";
+import type { ToolResult } from "../src/api.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 import {
   CLARIFY_PROMPT,
@@ -83,7 +84,7 @@ interface RegisteredTool {
     params: Record<string, unknown>,
     signal: AbortSignal | undefined,
     onUpdate: unknown,
-    ctx: { cwd: string; ui?: unknown; abort?: () => void },
+    ctx: { cwd: string; hasUI?: boolean; ui?: unknown; abort?: () => void },
   ): Promise<{ content: Array<{ type: string; text: string }>; details?: unknown }>;
   renderCall?: (
     args: Record<string, unknown>,
@@ -2142,28 +2143,30 @@ for (const name of HERDR_TOOLS) {
 // --- Prompt Clarification Unit Tests ---
 {
   // 1. isVagueInput
-  if (!isVagueInput("")) fail("isVagueInput('') should be true");
-  if (!isVagueInput("fix it")) fail("isVagueInput('fix it') should be true");
-  if (!isVagueInput("do this")) fail("isVagueInput('do this') should be true");
-  if (!isVagueInput("help")) fail("isVagueInput('help') should be true");
-  if (isVagueInput("Refactor authentication module in src/auth.ts to support OAuth2 tokens")) {
-    fail("isVagueInput should be false for detailed request");
+  const falseVague = ["git status", "npm test", "/math", "cargo check", "ls -la", "fix typo in README"];
+  for (const str of falseVague) {
+    if (isVagueInput(str)) fail(`isVagueInput('${str}') should be false`);
+  }
+
+  const trueVague = ["", "a", "???", "fix it", "do this", "make it better", "optimize this"];
+  for (const str of trueVague) {
+    if (!isVagueInput(str)) fail(`isVagueInput('${str}') should be true`);
   }
 
   // 2. shouldBypassClarify
   if (!shouldBypassClarify("~ fix the bug")) fail("shouldBypassClarify('~ fix the bug') should be true");
-  if (!shouldBypassClarify("  ~do this")) fail("shouldBypassClarify('  ~do this') should be true");
+  if (!shouldBypassClarify("  ~~do this")) fail("shouldBypassClarify('  ~~do this') should be true");
   if (shouldBypassClarify("fix the bug")) fail("shouldBypassClarify('fix the bug') should be false");
 
   // 3. stripClarifyBypassPrefix
   if (stripClarifyBypassPrefix("~ fix the bug") !== "fix the bug") {
     fail(`stripClarifyBypassPrefix mismatch: ${stripClarifyBypassPrefix("~ fix the bug")}`);
   }
-  if (stripClarifyBypassPrefix("~fix the bug") !== "fix the bug") {
-    fail(`stripClarifyBypassPrefix mismatch: ${stripClarifyBypassPrefix("~fix the bug")}`);
+  if (stripClarifyBypassPrefix("~~fix the bug") !== "fix the bug") {
+    fail(`stripClarifyBypassPrefix mismatch for ~~: ${stripClarifyBypassPrefix("~~fix the bug")}`);
   }
-  if (stripClarifyBypassPrefix("  ~ fix the bug") !== "fix the bug") {
-    fail(`stripClarifyBypassPrefix mismatch: ${stripClarifyBypassPrefix("  ~ fix the bug")}`);
+  if (stripClarifyBypassPrefix("  ~~~ fix the bug") !== "fix the bug") {
+    fail(`stripClarifyBypassPrefix mismatch for ~~~: ${stripClarifyBypassPrefix("  ~~~ fix the bug")}`);
   }
   if (stripClarifyBypassPrefix("fix the bug") !== "fix the bug") {
     fail(`stripClarifyBypassPrefix mismatch for non-prefixed: ${stripClarifyBypassPrefix("fix the bug")}`);
@@ -2189,9 +2192,17 @@ for (const name of HERDR_TOOLS) {
   registered["clarify"].handler("", testCtx);
   if (!isClarifyEnabled()) fail("bare /clarify failed to toggle to enabled");
 
-  // Input hook & before_agent_start hook test
-  const inputEvent = { text: "~ fix the bug" };
+  // Input hook & source check
   const inputFn = handlers["input"];
+  const extensionInputEvent = { source: "extension", text: "~ fix the bug" };
+  if (inputFn) {
+    const resExt = inputFn(extensionInputEvent);
+    if (resExt !== undefined || extensionInputEvent.text !== "~ fix the bug") {
+      fail("input hook did not ignore event with source='extension'");
+    }
+  }
+
+  const inputEvent = { text: "~ fix the bug" };
   const inputResult = inputFn ? (inputFn(inputEvent) as { text?: string } | undefined) : undefined;
   if (inputEvent.text !== "fix the bug" || inputResult?.text !== "fix the bug") {
     fail(`input hook did not strip ~ prefix: event.text=${inputEvent.text}, result=${inputResult?.text}`);
@@ -2207,9 +2218,34 @@ for (const name of HERDR_TOOLS) {
 
   // System prompt injection when enabled & not bypassed: SHOULD inject
   const startEventActive = { systemPrompt: "BASE_PROMPT" };
-  if (beforeStartFn) beforeStartFn(startEventActive);
-  if (!startEventActive.systemPrompt.includes("Prompt Clarification Active")) {
-    fail("systemPrompt missing clarification prompt when active");
+  if (beforeStartFn) {
+    beforeStartFn(startEventActive);
+    // Deduplication check: call twice, should not double-append
+    beforeStartFn(startEventActive);
+  }
+  const injectCount = (startEventActive.systemPrompt.match(/Prompt Clarification Active/g) || []).length;
+  if (injectCount !== 1) {
+    fail(`systemPrompt deduplication failed: expected 1 injection, got ${injectCount}`);
+  }
+
+  // selectedTools filtering check
+  setClarifyEnabled(true);
+  const startEventFiltered = {
+    systemPrompt: "BASE_PROMPT",
+    systemPromptOptions: { selectedTools: ["read"] },
+  };
+  if (beforeStartFn) beforeStartFn(startEventFiltered);
+  if (startEventFiltered.systemPrompt.includes("Prompt Clarification Active")) {
+    fail("systemPrompt injected prompt clarification despite selectedTools excluding clarify_prompt");
+  }
+
+  const startEventIncluded = {
+    systemPrompt: "BASE_PROMPT",
+    systemPromptOptions: { selectedTools: ["clarify_prompt", "read"] },
+  };
+  if (beforeStartFn) beforeStartFn(startEventIncluded);
+  if (!startEventIncluded.systemPrompt.includes("Prompt Clarification Active")) {
+    fail("systemPrompt missing prompt clarification when selectedTools includes clarify_prompt");
   }
 
   // 5. clarify_prompt tool execution and renderers
@@ -2217,12 +2253,53 @@ for (const name of HERDR_TOOLS) {
   if (!clarifyTool) {
     fail("clarify_prompt tool not registered");
   } else {
+    // Non-interactive fallback check
+    const resNonInteractive = await clarifyTool.execute(
+      "call_non_interactive",
+      { question: "Which option?", options: ["Opt 1"] },
+      undefined,
+      undefined,
+      { cwd: process.cwd(), hasUI: false },
+    );
+    if (
+      !(resNonInteractive.details as Record<string, unknown> | undefined)?.nonInteractive ||
+      !resNonInteractive.content[0]?.text.includes("Non-interactive session")
+    ) {
+      fail(`clarify_prompt non-interactive fallback failed: ${JSON.stringify(resNonInteractive)}`);
+    }
+
+    // Option padding check (passing 1 option pads to 3+ choices plus custom option)
+    let optionsSeenBySelect: string[] = [];
+    const mockPaddingCtx = {
+      cwd: process.cwd(),
+      hasUI: true,
+      ui: {
+        select: async (_q: string, opts: string[]) => {
+          optionsSeenBySelect = opts;
+          return opts[0];
+        },
+      },
+    };
+    await clarifyTool.execute(
+      "call_pad",
+      { question: "Choose:", options: ["Single Option"] },
+      undefined,
+      undefined,
+      mockPaddingCtx,
+    );
+    if (optionsSeenBySelect.length < 4) {
+      fail(
+        `clarify_prompt option padding failed: expected at least 4 choices (3 options + custom), got ${optionsSeenBySelect.length}`,
+      );
+    }
+
     // Select option 1
     let selectedOption: string | undefined = "Option 1";
     let inputAnswer: string | undefined = undefined;
 
     const mockToolCtx = {
       cwd: process.cwd(),
+      hasUI: true,
       ui: {
         select: async (_q: string, _opts: string[]) => selectedOption,
         input: async (_t: string) => inputAnswer,
@@ -2255,7 +2332,7 @@ for (const name of HERDR_TOOLS) {
       fail(`clarify_prompt execute custom answer mismatch: ${res2.content[0]?.text}`);
     }
 
-    // Cancellation
+    // Cancellation via select
     selectedOption = undefined;
     let aborted = false;
     const resCancel = await clarifyTool.execute(
@@ -2269,6 +2346,18 @@ for (const name of HERDR_TOOLS) {
       fail(`clarify_prompt cancellation failed: aborted=${aborted}, text=${resCancel.content[0]?.text}`);
     }
 
+    // Aborted signal check
+    const resAbortedSignal = await clarifyTool.execute(
+      "call_signal",
+      { question: "Which approach?", options: ["Option 1"] },
+      { aborted: true } as unknown as AbortSignal,
+      undefined,
+      mockToolCtx,
+    );
+    if (!(resAbortedSignal.details as Record<string, unknown> | undefined)?.cancelled) {
+      fail("clarify_prompt aborted signal check failed");
+    }
+
     // Renderers
     if (clarifyTool.renderCall) {
       const renderedCall = clarifyTool.renderCall(
@@ -2279,7 +2368,16 @@ for (const name of HERDR_TOOLS) {
       if (!renderedCall || !renderedCall.children) {
         fail("clarify_prompt renderCall returned invalid Container");
       }
+
+      // Defensive tests for renderCall
+      const rCallNull = clarifyTool.renderCall(null as unknown as Record<string, unknown>, { expanded: true }, {});
+      if (!rCallNull) fail("renderCall(null) returned falsy");
+      const rCallEmpty = clarifyTool.renderCall({}, { expanded: true }, {});
+      if (!rCallEmpty) fail("renderCall({}) returned falsy");
+      const rCallInvalid = clarifyTool.renderCall({ question: 123, options: "not-an-array" }, { expanded: true }, {});
+      if (!rCallInvalid) fail("renderCall(invalid) returned falsy");
     }
+
     if (clarifyTool.renderResult) {
       const renderedResult = clarifyTool.renderResult(
         res1,
@@ -2289,6 +2387,15 @@ for (const name of HERDR_TOOLS) {
       if (!renderedResult || !renderedResult.children) {
         fail("clarify_prompt renderResult returned invalid Container");
       }
+
+      // Defensive tests for renderResult
+      // Defensive tests for renderResult
+      const rResNull = clarifyTool.renderResult(null as unknown as ToolResult, { expanded: true }, {});
+      if (!rResNull) fail("renderResult(null) returned falsy");
+      const rResEmpty = clarifyTool.renderResult({} as ToolResult, { expanded: true }, {});
+      if (!rResEmpty) fail("renderResult({}) returned falsy");
+      const rResMissingText = clarifyTool.renderResult({ content: [{ type: "other" }] } as unknown as ToolResult, { expanded: true }, {});
+      if (!rResMissingText) fail("renderResult(missing text) returned falsy");
     }
   }
 

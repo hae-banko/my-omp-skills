@@ -3,6 +3,13 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.8 — Harden /clarify heuristics & tool execution
+
+- **Refined vagueness detection heuristics** — eliminated false-positive vague input detections on valid short commands (`git status`, `npm test`, `/math`, `cargo check`, `ls -la`) while preserving structural triggers (`fix it`, `do this`, `make it better`, `optimize this`). Slash commands starting with `/` are explicitly excluded from vagueness checks.
+- **Hardened event hooks** — `input` hook filters out `extension`/`system` sources and handles multi-tilde bypass prefixes (`~~`). `before_agent_start` checks `selectedTools` options and deduplicates prompt injections to prevent duplicate guideline blocks.
+- **Hardened `clarify_prompt` tool & renderers** — widened parameter schema to `minItems: 1` to prevent schema validation errors, added non-interactive session fallback (`hasUI: false`), added automatic option padding (expands 1-2 options to 3+ choices), handled `AbortSignal` cancellation, and added defensive renderer guards against null/empty edge cases.
+- **Expanded test suite** — added test coverage in `scripts/selftest.ts` for non-vague short commands, multi-tilde bypasses, event source filtering, deduplication, `selectedTools` scoping, option padding, and non-interactive fallback.
+
 ## v0.32.7 — Add /clarify command & clarify_prompt tool
 
 - Ported `/clarify` prompt clarification extension from `dkmnx/pi-clarify`: adds `/clarify` slash command (`on`/`off`/toggle), `clarify_prompt` tool with interactive TUI selection + custom text input, `~` single-turn bypass prefix, and system prompt guideline injection when active.

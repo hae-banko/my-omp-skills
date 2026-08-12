@@ -67,7 +67,7 @@ export interface ToolDefinition {
     params: unknown,
     signal: AbortSignal | undefined,
     onUpdate: unknown,
-    ctx: { cwd: string },
+    ctx: { cwd: string; hasUI?: boolean; ui?: unknown; abort?: (() => void) | undefined },
   ): Promise<ToolResult>;
   renderCall?(
     args: Record<string, unknown>,
