@@ -40,7 +40,7 @@ Run the setup command once per repository to configure issue tracking, triage la
 /omp-setup
 ```
 
-It defaults to a local `.scratch/` issue tracker (GitHub and GitLab issue tracking are also supported). `/omp-setup` is safe and idempotent.
+It defaults to a local `.omp/scratch/` issue tracker (legacy `.scratch/` supported; GitHub and GitLab issue tracking are also supported). `/omp-setup` is safe and idempotent.
 
 ### 3. Take Your First Win
 
@@ -107,7 +107,7 @@ All 28 slash commands are user-invoked. The model recognizes them at session sta
 | `/pitfall` | Knowledge Base & Upkeep | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades. |
 | `/routinize` | Knowledge Base & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`. |
 | `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
-| `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.scratch/`, GitHub, GitLab), triage labels, domain layout. |
+| `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.omp/scratch/`, GitHub, GitLab), triage labels (`.omp/agents/`), domain layout. |
 | `/hindsight` | Knowledge Base & Upkeep | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) before turns settle. |
 | `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, or bare to toggle) and injects clarification guidelines. |
 | `/math` | Knowledge Base & Upkeep | Explains and demos native LaTeX math rendering ($...$, $$...$$, `\begin{aligned}`). |

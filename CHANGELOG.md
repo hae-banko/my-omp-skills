@@ -1,7 +1,11 @@
 # Changelog
 
 
-All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
+## v0.33.0 — Self-contained .omp/ metadata & scratch directory
+
+- **Self-contained agent setup (`.omp/agents/`)** — `/omp-setup` now writes metadata files (`issue-tracker.md`, `triage-labels.md`, `domain.md`) to `.omp/agents/` instead of `docs/agents/`, keeping repository documentation clean and agent-specific files contained under `.omp/`. Legacy `docs/agents/` remains supported as a fallback.
+- **Self-contained local issue tracker (`.omp/scratch/`)** — default local markdown tracker directory moved from `.scratch/` at repo root to `.omp/scratch/`. Locators, `/to-tickets`, `/triage`, `/ask-me`, and `code-review` updated to read `.omp/scratch/` first with `.scratch/` as fallback.
+- **Self-contained ADR fallback (`.omp/adr/`)** — `domain-modeling` skill and `/grill-with-docs` now default to `.omp/adr/` when the project does not maintain a root `docs/adr/` directory.
 
 ## v0.32.9 — User-facing README refresh & onboarding overhaul
 

@@ -1,5 +1,7 @@
 # Triage Labels
 
+This file lives at `.omp/agents/triage-labels.md` (legacy `docs/agents/triage-labels.md` supported as fallback).
+
 The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |

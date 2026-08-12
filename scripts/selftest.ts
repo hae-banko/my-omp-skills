@@ -1010,7 +1010,6 @@ if (!renderers["ticket-breakdown"]) {
   const ticketPayload: TicketBreakdownPayload = {
     feature: "auth-flow",
     ticket_count: 2,
-    tracker_path: ".scratch/auth-flow/issues/",
     ready_status: "ready-for-agent",
     tickets: [
       { id: "01", title: "DB Schema", blocked_by: [] },
@@ -1024,7 +1023,7 @@ if (!renderers["ticket-breakdown"]) {
   }
   const texts = collectLines(card).join("\n");
   if (!texts.includes("TICKET BREAKDOWN")) fail("ticket-breakdown: output missing header");
-  if (!texts.includes(".scratch/auth-flow/issues/")) fail("ticket-breakdown: output missing tracker path");
+  if (!texts.includes(".omp/scratch/auth-flow/issues/")) fail("ticket-breakdown: output missing tracker path");
   if (!texts.includes("Ticket Count: 2")) fail("ticket-breakdown: output missing ticket count");
   if (!texts.includes("ready-for-agent")) fail("ticket-breakdown: output missing ready status");
   if (!texts.includes("Ticket 01 -> Ticket 02")) {
@@ -1681,13 +1680,15 @@ for (const name of HERDR_TOOLS) {
   mkdirSync(join(fixtureRoot, ".omp", "references", "ref-c"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-02_deep-demo"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "other-slug"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "scratch", "specs"), { recursive: true });
   mkdirSync(join(fixtureRoot, ".scratch", "specs"), { recursive: true });
   mkdirSync(join(fixtureRoot, "docs", "specs"), { recursive: true });
-  writeFileSync(join(fixtureRoot, ".scratch", "specs", "spec-a.md"), "# Spec A");
-  writeFileSync(join(fixtureRoot, "docs", "specs", "spec-b.md"), "# Spec B");
+  writeFileSync(join(fixtureRoot, ".omp", "scratch", "specs", "spec-a.md"), "# Spec A");
+  writeFileSync(join(fixtureRoot, ".scratch", "specs", "spec-b.md"), "# Spec B");
+  writeFileSync(join(fixtureRoot, "docs", "specs", "spec-c.md"), "# Spec C");
   // /to-spec Finding 4.1 fixture: a feature dir whose spec.md is a *directory*
   // (not a file). The completion must NOT add it as a suggestion.
-  mkdirSync(join(fixtureRoot, ".scratch", "spec-c", "spec.md", "nested"), { recursive: true });
+  mkdirSync(join(fixtureRoot, ".omp", "scratch", "spec-d", "spec.md", "nested"), { recursive: true });
   const prevCwd = process.cwd();
   process.chdir(fixtureRoot);
   try {
@@ -1851,11 +1852,11 @@ for (const name of HERDR_TOOLS) {
 
     // 7. /to-tickets
     const toTicketsEmpty = registered["to-tickets"].getArgumentCompletions?.("") ?? null;
-    if (!toTicketsEmpty || toTicketsEmpty.length !== 2) {
-      fail("to-tickets: expected spec markdown files");
+    if (!toTicketsEmpty || toTicketsEmpty.length !== 3) {
+      fail(`to-tickets: expected 3 spec markdown files, got ${toTicketsEmpty?.length}`);
     } else {
       const values = toTicketsEmpty.map((c) => c.value).sort().join(",");
-      if (values !== ".scratch/specs/spec-a.md,docs/specs/spec-b.md") {
+      if (values !== ".omp/scratch/specs/spec-a.md,.scratch/specs/spec-b.md,docs/specs/spec-c.md") {
         fail(`to-tickets: unexpected spec file completion values: ${values}`);
       }
     }
@@ -1894,7 +1895,7 @@ for (const name of HERDR_TOOLS) {
       fail("implement: expected ticket/spec markdown files for empty prefix");
     } else {
       const labels = implementEmpty.map((c) => c.label);
-      if (!labels.includes(".scratch/specs/spec-a.md") || !labels.includes("docs/specs/spec-b.md")) {
+      if (!labels.includes(".omp/scratch/specs/spec-a.md") || !labels.includes(".scratch/specs/spec-b.md") || !labels.includes("docs/specs/spec-c.md")) {
         fail(`implement: missing expected markdown files (got: ${labels.join(",")})`);
       }
     }
@@ -1905,12 +1906,12 @@ for (const name of HERDR_TOOLS) {
       fail("to-spec: expected spec markdown files for empty prefix");
     } else {
       const values = toSpecEmpty.map((c) => c.value).sort().join(",");
-      if (values !== ".scratch/specs/spec-a.md,docs/specs/spec-b.md") {
+      if (values !== ".omp/scratch/specs/spec-a.md,.scratch/specs/spec-b.md,docs/specs/spec-c.md") {
         fail(`to-spec: unexpected spec file completion values: ${values}`);
       }
-      // Finding 4.1: a directory named spec.md (fixture .scratch/spec-c/spec.md/)
+      // Finding 4.1: a directory named spec.md (fixture .omp/scratch/spec-d/spec.md/)
       // must NOT appear in completions.
-      if (values.includes("spec-c")) {
+      if (values.includes("spec-d")) {
         fail(`to-spec: directory named spec.md should be excluded (got: ${values})`);
       }
     }
@@ -1961,7 +1962,7 @@ for (const name of HERDR_TOOLS) {
       fail("grill-me: expected spec filenames / feature names for empty prefix");
     } else {
       const labels = grillMeEmpty.map((c) => c.label);
-      if (!labels.includes(".scratch/specs/spec-a.md") || !labels.includes("docs/specs/spec-b.md")) {
+      if (!labels.includes(".omp/scratch/specs/spec-a.md") || !labels.includes(".scratch/specs/spec-b.md") || !labels.includes("docs/specs/spec-c.md")) {
         fail(`grill-me: missing expected spec file completions (got: ${labels.join(",")})`);
       }
     }
@@ -1971,7 +1972,7 @@ for (const name of HERDR_TOOLS) {
       fail("grill-with-docs: expected spec filenames / feature names for empty prefix");
     } else {
       const labels = grillDocsEmpty.map((c) => c.label);
-      if (!labels.includes(".scratch/specs/spec-a.md") || !labels.includes("docs/specs/spec-b.md")) {
+      if (!labels.includes(".omp/scratch/specs/spec-a.md") || !labels.includes(".scratch/specs/spec-b.md") || !labels.includes("docs/specs/spec-c.md")) {
         fail(`grill-with-docs: missing expected spec file completions (got: ${labels.join(",")})`);
       }
     }

@@ -246,7 +246,7 @@ startup runs extraction.
 - `/omp-setup` must run once per target repo before the tracker-dependent
   commands (`/to-spec`, `/to-tickets`, `/triage`, `/wayfinder`, `code-review`)
   work.
-  It writes `docs/agents/issue-tracker.md`, `triage-labels.md`, `domain.md`
+  It writes `.omp/agents/issue-tracker.md`, `triage-labels.md`, `domain.md` (legacy `docs/agents/` supported as fallback)
   and an `## Agent skills` block into the target repo's `AGENTS.md`/`CLAUDE.md`.
 
 ## Attribution

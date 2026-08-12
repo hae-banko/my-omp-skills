@@ -3,7 +3,7 @@ Surface architectural friction and propose **deepening opportunities** — refac
 This command is _informed_ by the project's domain model and built on a shared design vocabulary:
 
 - Run the `codebase-design` skill for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion — don't drift into "component," "service," "API," or "boundary."
-- The domain language in `CONTEXT.md` gives names to good seams; ADRs in `docs/adr/` record decisions this command should not re-litigate.
+- The domain language in `CONTEXT.md` gives names to good seams; ADRs in `.omp/adr/` (or legacy `docs/adr/`) record decisions this command should not re-litigate.
 
 ## Process
 
@@ -14,7 +14,7 @@ This command is _informed_ by the project's domain model and built on a shared d
 - If the user named a direction — a module, a subsystem, a pain point — take it, and skip the inference below.
 - Otherwise, walk back a good stretch of the commit history (`git log --oneline`) to find the codebase's hot spots — the files and areas that keep coming up — and let those paths pull your attention first. If the changes are scattered with no clear hot spot, widen the net.
 
-Read the project's domain glossary (`CONTEXT.md`) and any ADRs in the area you're touching first.
+Read the project's domain glossary (`CONTEXT.md` or `.omp/agents/domain.md` / legacy `docs/agents/domain.md`) and any ADRs in `.omp/adr/` (or legacy `docs/adr/`) in the area you're touching first.
 
 Then use an Explore-type subagent to walk the codebase. Don't follow rigid heuristics — explore organically and note where you experience friction:
 

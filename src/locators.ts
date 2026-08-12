@@ -93,25 +93,30 @@ export function listSpecFiles(root: string): string[] {
       // ignore missing dirs
     }
   };
-  for (const dir of [join(root, ".scratch", "specs"), join(root, "docs", "specs")]) {
+  for (const dir of [
+    join(root, ".omp", "scratch", "specs"),
+    join(root, ".scratch", "specs"),
+    join(root, "docs", "specs"),
+  ]) {
     collect(dir);
   }
-  const scratchDir = join(root, ".scratch");
-  if (existsSync(scratchDir)) {
-    try {
-      for (const entry of readdirSync(scratchDir, { withFileTypes: true })) {
-        if (entry.isDirectory() && entry.name !== "specs" && !entry.name.startsWith(".")) {
-          const specFile = join(scratchDir, entry.name, "spec.md");
-          if (existsSync(specFile) && statSync(specFile).isFile()) {
-            files.push(relative(root, specFile));
+  for (const scratchDir of [join(root, ".omp", "scratch"), join(root, ".scratch")]) {
+    if (existsSync(scratchDir)) {
+      try {
+        for (const entry of readdirSync(scratchDir, { withFileTypes: true })) {
+          if (entry.isDirectory() && entry.name !== "specs" && !entry.name.startsWith(".")) {
+            const specFile = join(scratchDir, entry.name, "spec.md");
+            if (existsSync(specFile) && statSync(specFile).isFile()) {
+              files.push(relative(root, specFile));
+            }
           }
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
   }
-  return files.sort();
+  return Array.from(new Set(files)).sort();
 }
 
 /**
@@ -135,6 +140,7 @@ export function listScratchMarkdown(root: string, extraRoots: string[] = []): st
       // ignore missing dirs
     }
   };
+  collect(join(root, ".omp", "scratch"));
   collect(join(root, ".scratch"));
   for (const extra of extraRoots) collect(extra);
   return Array.from(new Set(files)).sort();
@@ -252,6 +258,7 @@ export function listFeatureSpecs(root: string): FeatureSpecSurface {
       // ignore
     }
   };
+  scan(join(root, ".omp", "scratch"), join(".omp", "scratch"));
   scan(join(root, ".scratch"), ".scratch");
   scan(join(root, "docs"), "docs");
   return {

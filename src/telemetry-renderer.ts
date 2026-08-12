@@ -182,7 +182,7 @@ export function renderTicketBreakdownCard(
   const trackerPath =
     typeof rawTrackerPath === "string"
       ? rawTrackerPath
-      : `.scratch/${feature}/issues/`;
+      : `.omp/scratch/${feature}/issues/`;
 
   const rawTickets = Array.isArray(p.tickets) ? p.tickets : [];
   const tickets = rawTickets.filter((t): t is TicketItemSpec => Boolean(t && typeof t === "object"));

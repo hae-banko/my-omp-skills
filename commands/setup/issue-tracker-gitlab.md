@@ -1,5 +1,7 @@
 # Issue tracker: GitLab
 
+This file lives at `.omp/agents/issue-tracker.md` (legacy `docs/agents/issue-tracker.md` supported as fallback).
+
 Issues and PRDs for this repo live as GitLab issues. Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.
 
 ## Conventions

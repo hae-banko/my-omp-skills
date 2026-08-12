@@ -199,41 +199,46 @@ function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
 }
 
 function getTriageStatusPayload(root: string): TriageStatusPayload {
-  const scratchDir = join(root, ".scratch");
+  const scratchDirs = [join(root, ".omp", "scratch"), join(root, ".scratch")];
   let unlabeled = 0;
   let needsTriage = 0;
   let agentReady = 0;
 
-  if (existsSync(scratchDir)) {
-    const mdFiles: string[] = [];
-    const collect = (dir: string) => {
-      try {
-        const entries = readdirSync(dir, { withFileTypes: true });
-        for (const ent of entries) {
-          const full = join(dir, ent.name);
-          if (ent.isDirectory() && !ent.name.startsWith(".")) {
-            collect(full);
-          } else if (ent.isFile() && ent.name.endsWith(".md")) {
-            mdFiles.push(full);
-          }
+  const mdFiles: string[] = [];
+  const collect = (dir: string) => {
+    try {
+      const entries = readdirSync(dir, { withFileTypes: true });
+      for (const ent of entries) {
+        const full = join(dir, ent.name);
+        if (ent.isDirectory() && !ent.name.startsWith(".")) {
+          collect(full);
+        } else if (ent.isFile() && ent.name.endsWith(".md")) {
+          mdFiles.push(full);
         }
-      } catch {}
-    };
-    collect(scratchDir);
+      }
+    } catch {}
+  };
 
-    for (const file of mdFiles) {
-      try {
-        const content = readFileSync(file, "utf8");
-        const lower = content.toLowerCase();
-        if (lower.includes("needs-triage") || lower.includes("needs_triage")) {
-          needsTriage++;
-        } else if (lower.includes("agent-ready") || lower.includes("agent_ready")) {
-          agentReady++;
-        } else {
-          unlabeled++;
-        }
-      } catch {}
+  for (const scratchDir of scratchDirs) {
+    if (existsSync(scratchDir)) {
+      collect(scratchDir);
     }
+  }
+
+  const uniqueFiles = Array.from(new Set(mdFiles));
+
+  for (const file of uniqueFiles) {
+    try {
+      const content = readFileSync(file, "utf8");
+      const lower = content.toLowerCase();
+      if (lower.includes("needs-triage") || lower.includes("needs_triage")) {
+        needsTriage++;
+      } else if (lower.includes("agent-ready") || lower.includes("agent_ready")) {
+        agentReady++;
+      } else {
+        unlabeled++;
+      }
+    } catch {}
   }
 
   const totalItems = unlabeled + needsTriage + agentReady;
@@ -808,7 +813,7 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "omp-setup",
-    description: "Configure this repo for the workflow commands — issue tracker (local .scratch by default), triage label vocabulary, and domain doc layout. Run once per repo.",
+    description: "Configure this repo for the workflow commands — issue tracker (local .omp/scratch by default), triage label vocabulary (.omp/agents/), and domain doc layout. Run once per repo.",
     bodyPath: "commands/setup/command.md",
     companions: [
       "commands/setup/issue-tracker-local.md",
@@ -821,7 +826,7 @@ const COMMANDS: CommandSpec[] = [
       if (argumentPrefix.includes(" ")) return null;
       const lower = argumentPrefix.toLowerCase();
       const targets = [
-        { value: "local", label: "local", description: "Configure local Markdown issue tracker (.scratch/)" },
+        { value: "local", label: "local", description: "Configure local Markdown issue tracker (.omp/scratch/)" },
         { value: "github", label: "github", description: "Configure GitHub Issues integration" },
         { value: "gitlab", label: "gitlab", description: "Configure GitLab Issues integration" },
         { value: "labels", label: "labels", description: "Configure triage label vocabulary" },

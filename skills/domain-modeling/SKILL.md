@@ -14,8 +14,8 @@ Most repos have a single context:
 ```
 /
 ├── CONTEXT.md
-├── docs/
-│   └── adr/
+├── .omp/
+│   └── adr/                          ← system-wide decisions (default; or docs/adr/)
 │       ├── 0001-event-sourced-orders.md
 │       └── 0002-postgres-for-write-model.md
 └── src/
@@ -26,8 +26,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 ```
 /
 ├── CONTEXT-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
+├── .omp/adr/                         ← system-wide decisions (or legacy docs/adr/)
 ├── src/
 │   ├── ordering/
 │   │   ├── CONTEXT.md
@@ -37,7 +36,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 │       └── docs/adr/
 ```
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If `docs/adr/` already exists in the repo, use it; otherwise default to creating `.omp/adr/` when the first ADR is needed.
 
 ## During the session
 

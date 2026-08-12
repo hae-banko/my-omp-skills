@@ -16,8 +16,8 @@ Look at the current repo to understand its starting state. Read whatever exists;
 - `AGENTS.md` and `CLAUDE.md` at the repo root — does either exist? Is there already an `## Agent skills` section in either?
 - `CONTEXT.md` and `CONTEXT-MAP.md` at the repo root
 - `docs/adr/` and any `src/*/docs/adr/` directories
-- `docs/agents/` — does this command's prior output already exist?
-- `.scratch/` — sign that a local-markdown issue tracker convention is already in use
+- `.omp/agents/` (or legacy `docs/agents/`) — does this command's prior output already exist?
+- `.omp/scratch/` (or legacy `.scratch/`) — sign that a local-markdown issue tracker convention is already in use
 - Monorepo signals — a `pnpm-workspace.yaml`, a `workspaces` field in `package.json`, or a populated `packages/*` with its own `src/`. Present only in a genuinely large multi-package repo; their absence means single-context, which is almost every repo.
 
 ### 2. Present findings and ask
@@ -28,16 +28,16 @@ Lead each section with the recommended answer so the user can accept it in a wor
 
 **Section A — Issue tracker.**
 
-> Explainer: The "issue tracker" is where issues live for this repo. Commands like `/to-tickets`, `/triage`, and `/to-spec` read from and write to it — they need to know whether to call `gh issue create`, write a markdown file under `.scratch/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
+> Explainer: The "issue tracker" is where issues live for this repo. Commands like `/to-tickets`, `/triage`, and `/to-spec` read from and write to it — they need to know whether to call `gh issue create`, write a markdown file under `.omp/scratch/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
 
-Default posture: **local markdown**. If the repo already uses `.scratch/`, propose that. Offer:
+Default posture: **local markdown**. If the repo already uses `.omp/scratch/` (or legacy `.scratch/`), propose that. Offer:
 
-- **Local markdown** *(recommended)* — issues live as files under `.scratch/<feature>/` in this repo (good for solo projects or repos without a remote)
+- **Local markdown** *(recommended)* — issues live as files under `.omp/scratch/<feature>/` in this repo (good for solo projects or repos without a remote; legacy `.scratch/` supported as fallback)
 - **GitHub** — issues live in the repo's GitHub Issues (uses the `gh` CLI)
 - **GitLab** — issues live in the repo's GitLab Issues (uses the [`glab`](https://gitlab.com/gitlab-org/cli) CLI)
 - **Other** (Jira, Linear, etc.) — ask the user to describe the workflow in one paragraph; the command will record it as freeform prose
 
-Record the choice in `docs/agents/issue-tracker.md`. The GitHub and GitLab templates carry a "PRs as a request surface" flag, defaulted **off** — leave it off and don't raise it; a user who wants external PRs in the triage queue can flip the flag in the file later.
+Record the choice in `.omp/agents/issue-tracker.md` (legacy `docs/agents/issue-tracker.md` supported as fallback). The GitHub and GitLab templates carry a "PRs as a request surface" flag, defaulted **off** — leave it off and don't raise it; a user who wants external PRs in the triage queue can flip the flag in the file later.
 
 **Section B — Triage label vocabulary.**
 
@@ -56,7 +56,7 @@ Offer **multi-context** — a root `CONTEXT-MAP.md` pointing to per-context `CON
 Show the user a draft of:
 
 - The `## Agent skills` block to add to whichever of `CLAUDE.md` / `AGENTS.md` is being edited (see step 4 for selection rules)
-- The contents of `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, and `docs/agents/triage-labels.md`
+- The contents of `.omp/agents/issue-tracker.md`, `.omp/agents/domain.md`, and `.omp/agents/triage-labels.md` (legacy `docs/agents/` supported as fallback)
 
 Let them edit before writing.
 
@@ -79,15 +79,15 @@ The block:
 
 ### Issue tracker
 
-[one-line summary of where issues are tracked]. See `docs/agents/issue-tracker.md`.
+[one-line summary of where issues are tracked]. See `.omp/agents/issue-tracker.md` (legacy `docs/agents/issue-tracker.md` supported as fallback).
 
 ### Triage labels
 
-[one-line summary of the label vocabulary]. See `docs/agents/triage-labels.md`.
+[one-line summary of the label vocabulary]. See `.omp/agents/triage-labels.md` (legacy `docs/agents/triage-labels.md` supported as fallback).
 
 ### Domain docs
 
-[one-line summary of layout — "single-context" or "multi-context"]. See `docs/agents/domain.md`.
+[one-line summary of layout — "single-context" or "multi-context"]. See `.omp/agents/domain.md` (legacy `docs/agents/domain.md` supported as fallback).
 ```
 
 Then write the docs files using the seed templates in this command's companion files as a starting point:
@@ -98,8 +98,8 @@ Then write the docs files using the seed templates in this command's companion f
 - `triage-labels.md` — label mapping
 - `domain.md` — domain doc consumer rules + layout
 
-For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description.
+For "other" issue trackers, write `.omp/agents/issue-tracker.md` (or legacy `docs/agents/issue-tracker.md`) from scratch using the user's description.
 
 ### 5. Done
 
-Tell the user the setup is complete and which workflow commands will now read from these files. Mention they can edit `docs/agents/*.md` directly later — re-running this command is only necessary if they want to switch issue trackers or restart from scratch.
+Tell the user the setup is complete and which workflow commands will now read from these files. Mention they can edit `.omp/agents/*.md` (or legacy `docs/agents/*.md`) directly later — re-running this command is only necessary if they want to switch issue trackers or restart from scratch.
