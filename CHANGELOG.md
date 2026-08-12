@@ -3,6 +3,10 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.5 — Add show-me skill
+
+- Ported `show-me` model-invoked skill from humanlayer: visual explanations using pseudocode sketches, call trees, component hierarchies, shallow file trees, Mermaid diagrams (rendered as ASCII in oh-my-pi TUI), targeted diffs, and focused HTML artifacts.
+
 ## v0.32.4 — `/teach` lessons stored under `.omp/lessons/`
 
 - **`/teach` output relocated under `.omp/`** — lessons are saved to `.omp/lessons/` and shared lesson components to `.omp/assets/` instead of `./lessons/` and `./assets/` in the working directory. The teaching workspace's output stays out of the repo root (`.omp/` is the gitignored agent-local dir); `MISSION.md`, `RESOURCES.md`, `NOTES.md`, `learning-records/`, and `reference/` remain where they were.

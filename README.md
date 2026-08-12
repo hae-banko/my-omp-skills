@@ -5,10 +5,10 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-26-orange" alt="26 slash commands" />
-  <img src="https://img.shields.io/badge/skills-12-teal" alt="12 model-invoked skills" />
+  <img src="https://img.shields.io/badge/skills-13-teal" alt="13 model-invoked skills" />
 </p>
 
-**my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness, for developers who want their AI pair programmer to work with discipline instead of vibes: **plan, build, audit, research, remember** — deterministic workflow on top of the omp harness. It adds 26 user-invoked slash commands and 12 model-invoked skills, plus a persistent local knowledge base, so the same rigor applies across every session and every repo.
+**my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness, for developers who want their AI pair programmer to work with discipline instead of vibes: **plan, build, audit, research, remember** — deterministic workflow on top of the omp harness. It adds 26 user-invoked slash commands and 13 model-invoked skills, plus a persistent local knowledge base, so the same rigor applies across every session and every repo.
 
 ## What You Get
 
@@ -91,7 +91,7 @@ All 26 commands are user-invoked slash commands. The model knows them at session
 
 ## Model-Invoked Skills
 
-The 12 skills are model-invoked: omp loads a skill automatically when the context matches. Exception: `using-git-worktrees` is user-invoked only.
+The 13 skills are model-invoked: omp loads a skill automatically when the context matches. Exception: `using-git-worktrees` is user-invoked only.
 
 | Skill | Description | Trigger Condition |
 | --- | --- | --- |
@@ -107,6 +107,7 @@ The 12 skills are model-invoked: omp loads a skill automatically when the contex
 | `using-references` | Consults cloned reference corpus before reconstructing external behavior from memory. | Reimplementing algorithms (ODE solvers, dense ML) with an available reference. |
 | `using-herdr` | Operates herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent` tools or CLI). | The user mentions herdr or asks to control workspaces, panes, or sibling agents. |
 | `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/` convention). | **User-invoked only**: explicitly requested by user. |
+| `show-me` | Visual explanations via code sketches, call trees, file layouts, Mermaid, diffs, or HTML artifacts. | Explaining structure, control flow, UI hierarchy, architecture, or visual concepts. |
 
 ## Configuration
 
