@@ -69,6 +69,11 @@ export interface ToolDefinition {
     onUpdate: unknown,
     ctx: { cwd: string },
   ): Promise<ToolResult>;
+  renderCall?(
+    args: Record<string, unknown>,
+    options: { expanded: boolean },
+    theme: unknown,
+  ): unknown;
   renderResult?(
     result: ToolResult,
     options: { expanded: boolean },

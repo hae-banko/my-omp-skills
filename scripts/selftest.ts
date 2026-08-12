@@ -33,6 +33,14 @@ import extension from "../src/index.ts";
 // harness imports it directly — the one deliberate direct import left in.
 import { parseHerdrOutput } from "../src/herdr-tools.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
+import {
+  CLARIFY_PROMPT,
+  isClarifyEnabled,
+  isVagueInput,
+  setClarifyEnabled,
+  shouldBypassClarify,
+  stripClarifyBypassPrefix,
+} from "../src/clarify.ts";
 import type {
   ResearchReviewPayload,
   ResearchWaveProgressPayload,
@@ -75,8 +83,13 @@ interface RegisteredTool {
     params: Record<string, unknown>,
     signal: AbortSignal | undefined,
     onUpdate: unknown,
-    ctx: { cwd: string },
+    ctx: { cwd: string; ui?: unknown; abort?: () => void },
   ): Promise<{ content: Array<{ type: string; text: string }>; details?: unknown }>;
+  renderCall?: (
+    args: Record<string, unknown>,
+    options: { expanded: boolean },
+    theme: unknown,
+  ) => unknown;
   renderResult?: (
     result: { content: Array<{ type: string; text: string }>; details?: unknown },
     options: { expanded: boolean },
@@ -90,6 +103,7 @@ const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   "grill-me": {},
   "grill-with-docs": {},
   hindsight: { silent: true },
+  clarify: { silent: true },
   math: {},
   audit: { companions: 1 },
   triage: { companions: 2 },
@@ -2125,9 +2139,165 @@ for (const name of HERDR_TOOLS) {
     rmSync(refFixture, { recursive: true, force: true });
   }
 }
+// --- Prompt Clarification Unit Tests ---
+{
+  // 1. isVagueInput
+  if (!isVagueInput("")) fail("isVagueInput('') should be true");
+  if (!isVagueInput("fix it")) fail("isVagueInput('fix it') should be true");
+  if (!isVagueInput("do this")) fail("isVagueInput('do this') should be true");
+  if (!isVagueInput("help")) fail("isVagueInput('help') should be true");
+  if (isVagueInput("Refactor authentication module in src/auth.ts to support OAuth2 tokens")) {
+    fail("isVagueInput should be false for detailed request");
+  }
+
+  // 2. shouldBypassClarify
+  if (!shouldBypassClarify("~ fix the bug")) fail("shouldBypassClarify('~ fix the bug') should be true");
+  if (!shouldBypassClarify("  ~do this")) fail("shouldBypassClarify('  ~do this') should be true");
+  if (shouldBypassClarify("fix the bug")) fail("shouldBypassClarify('fix the bug') should be false");
+
+  // 3. stripClarifyBypassPrefix
+  if (stripClarifyBypassPrefix("~ fix the bug") !== "fix the bug") {
+    fail(`stripClarifyBypassPrefix mismatch: ${stripClarifyBypassPrefix("~ fix the bug")}`);
+  }
+  if (stripClarifyBypassPrefix("~fix the bug") !== "fix the bug") {
+    fail(`stripClarifyBypassPrefix mismatch: ${stripClarifyBypassPrefix("~fix the bug")}`);
+  }
+  if (stripClarifyBypassPrefix("  ~ fix the bug") !== "fix the bug") {
+    fail(`stripClarifyBypassPrefix mismatch: ${stripClarifyBypassPrefix("  ~ fix the bug")}`);
+  }
+  if (stripClarifyBypassPrefix("fix the bug") !== "fix the bug") {
+    fail(`stripClarifyBypassPrefix mismatch for non-prefixed: ${stripClarifyBypassPrefix("fix the bug")}`);
+  }
+
+  // 4. State & System Prompt Injection
+  setClarifyEnabled(false);
+  const notifyMsgs: string[] = [];
+  const testCtx = { ui: { notify: (m: string) => notifyMsgs.push(m) } };
+
+  // Toggle on
+  registered["clarify"].handler("on", testCtx);
+  if (!isClarifyEnabled()) fail("/clarify on failed to enable clarification");
+  if (!notifyMsgs.some((m) => m.includes("enabled"))) fail("/clarify on missing notify enabled");
+
+  // Toggle off
+  notifyMsgs.length = 0;
+  registered["clarify"].handler("off", testCtx);
+  if (isClarifyEnabled()) fail("/clarify off failed to disable clarification");
+  if (!notifyMsgs.some((m) => m.includes("disabled"))) fail("/clarify off missing notify disabled");
+
+  // Toggle (bare)
+  registered["clarify"].handler("", testCtx);
+  if (!isClarifyEnabled()) fail("bare /clarify failed to toggle to enabled");
+
+  // Input hook & before_agent_start hook test
+  const inputEvent = { text: "~ fix the bug" };
+  const inputFn = handlers["input"];
+  const inputResult = inputFn ? (inputFn(inputEvent) as { text?: string } | undefined) : undefined;
+  if (inputEvent.text !== "fix the bug" || inputResult?.text !== "fix the bug") {
+    fail(`input hook did not strip ~ prefix: event.text=${inputEvent.text}, result=${inputResult?.text}`);
+  }
+
+  // System prompt injection when bypassed: should NOT inject
+  const startEventBypassed = { systemPrompt: "BASE_PROMPT" };
+  const beforeStartFn = handlers["before_agent_start"];
+  if (beforeStartFn) beforeStartFn(startEventBypassed);
+  if (startEventBypassed.systemPrompt.includes("Prompt Clarification Active")) {
+    fail("systemPrompt injected clarification prompt even when turn was bypassed");
+  }
+
+  // System prompt injection when enabled & not bypassed: SHOULD inject
+  const startEventActive = { systemPrompt: "BASE_PROMPT" };
+  if (beforeStartFn) beforeStartFn(startEventActive);
+  if (!startEventActive.systemPrompt.includes("Prompt Clarification Active")) {
+    fail("systemPrompt missing clarification prompt when active");
+  }
+
+  // 5. clarify_prompt tool execution and renderers
+  const clarifyTool = tools.find((t) => t.name === "clarify_prompt");
+  if (!clarifyTool) {
+    fail("clarify_prompt tool not registered");
+  } else {
+    // Select option 1
+    let selectedOption: string | undefined = "Option 1";
+    let inputAnswer: string | undefined = undefined;
+
+    const mockToolCtx = {
+      cwd: process.cwd(),
+      ui: {
+        select: async (_q: string, _opts: string[]) => selectedOption,
+        input: async (_t: string) => inputAnswer,
+      },
+      abort: () => {},
+    };
+
+    const res1 = await clarifyTool.execute(
+      "call_1",
+      { question: "Which approach?", options: ["Option 1", "Option 2", "Option 3"] },
+      undefined,
+      undefined,
+      mockToolCtx,
+    );
+    if (!res1.content[0]?.text.includes("Option 1")) {
+      fail(`clarify_prompt execute result mismatch: ${res1.content[0]?.text}`);
+    }
+
+    // Select custom answer
+    selectedOption = "Your answer...";
+    inputAnswer = "Custom response";
+    const res2 = await clarifyTool.execute(
+      "call_2",
+      { question: "Which approach?", options: ["Option 1", "Option 2", "Option 3"] },
+      undefined,
+      undefined,
+      mockToolCtx,
+    );
+    if (!res2.content[0]?.text.includes("Custom response")) {
+      fail(`clarify_prompt execute custom answer mismatch: ${res2.content[0]?.text}`);
+    }
+
+    // Cancellation
+    selectedOption = undefined;
+    let aborted = false;
+    const resCancel = await clarifyTool.execute(
+      "call_3",
+      { question: "Which approach?", options: ["Option 1", "Option 2", "Option 3"] },
+      undefined,
+      undefined,
+      { ...mockToolCtx, abort: () => { aborted = true; } },
+    );
+    if (!aborted || !resCancel.content[0]?.text.includes("skipped")) {
+      fail(`clarify_prompt cancellation failed: aborted=${aborted}, text=${resCancel.content[0]?.text}`);
+    }
+
+    // Renderers
+    if (clarifyTool.renderCall) {
+      const renderedCall = clarifyTool.renderCall(
+        { question: "Which approach?", options: ["Option 1", "Option 2", "Option 3"] },
+        { expanded: true },
+        {},
+      ) as { children: Array<{ text: string }> };
+      if (!renderedCall || !renderedCall.children) {
+        fail("clarify_prompt renderCall returned invalid Container");
+      }
+    }
+    if (clarifyTool.renderResult) {
+      const renderedResult = clarifyTool.renderResult(
+        res1,
+        { expanded: true },
+        {},
+      ) as { children: Array<{ text: string }> };
+      if (!renderedResult || !renderedResult.children) {
+        fail("clarify_prompt renderResult returned invalid Container");
+      }
+    }
+  }
+
+  // Reset clarify state back to disabled
+  setClarifyEnabled(false);
+}
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — commands, bootstrap, policy, knowledge_read, renderers, and hindsight behave correctly.");
+console.log("\nOK — commands, bootstrap, policy, knowledge_read, renderers, hindsight, and clarify behave correctly.");

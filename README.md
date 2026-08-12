@@ -1,14 +1,14 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.32.3-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.32.7-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-26-orange" alt="26 slash commands" />
+  <img src="https://img.shields.io/badge/commands-27-orange" alt="27 slash commands" />
   <img src="https://img.shields.io/badge/skills-13-teal" alt="13 model-invoked skills" />
 </p>
 
-**my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness, for developers who want their AI pair programmer to work with discipline instead of vibes: **plan, build, audit, research, remember** — deterministic workflow on top of the omp harness. It adds 26 user-invoked slash commands and 13 model-invoked skills, plus a persistent local knowledge base, so the same rigor applies across every session and every repo.
+**my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness, for developers who want their AI pair programmer to work with discipline instead of vibes: **plan, build, audit, research, remember** — deterministic workflow on top of the omp harness. It adds 27 user-invoked slash commands and 13 model-invoked skills, plus a persistent local knowledge base, so the same rigor applies across every session and every repo.
 
 ## What You Get
 
@@ -53,7 +53,7 @@ You need [oh-my-pi](https://github.com/can1357/oh-my-pi) installed. After instal
 
 ## Command Directory
 
-All 26 commands are user-invoked slash commands. The model knows them at session start and will suggest the right command when appropriate.
+All 27 commands are user-invoked slash commands. The model knows them at session start and will suggest the right command when appropriate.
 
 | Command | Description | Workflow Phase |
 | --- | --- | --- |
@@ -83,6 +83,7 @@ All 26 commands are user-invoked slash commands. The model knows them at session
 | `/reference` | Local, deterministic reference corpus manager — `add <url>` / `update <name>` / `remove <name>` / `list` run git directly with zero agent turns | Knowledge & Upkeep |
 | `/omp-setup` | Configures repo setup: issue tracker (local `.scratch/`, GitHub, GitLab), triage labels, domain layout | Knowledge & Upkeep |
 | `/hindsight` | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) | Knowledge & Upkeep |
+| `/clarify` | Toggles prompt clarification mode (`on`, `off`, or bare to toggle) and injects clarification guidelines | Knowledge & Upkeep |
 | `/math` | Explains and demos native LaTeX math rendering ($…$, $$…$$, `\begin{aligned}`) | Knowledge & Upkeep |
 | `/omp-handoff` | Compacts current conversation into a handoff document for another agent session | Knowledge & Upkeep |
 | `/plugin-issue` | Reports a bug or feature request on this plugin's GitHub repository | Knowledge & Upkeep |

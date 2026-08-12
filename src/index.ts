@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
+import { installClarify, toggleClarifyState } from "./clarify.ts";
 import { installHerdrTools } from "./herdr-tools.ts";
 import {
   installHindsight,
@@ -1191,6 +1192,22 @@ const COMMANDS: CommandSpec[] = [
     bodyPath: "commands/writing-great-skills/command.md",
     companions: ["commands/writing-great-skills/GLOSSARY.md"],
   },
+  {
+    name: "clarify",
+    description: "Toggle prompt clarification on/off (/clarify on|off)",
+    bodyPath: "commands/clarify.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const lower = argumentPrefix.toLowerCase();
+      const options = [
+        { value: "on", label: "on", description: "Enable prompt clarification" },
+        { value: "off", label: "off", description: "Disable prompt clarification" },
+      ];
+      return options.filter((opt) => opt.value.startsWith(lower));
+    },
+    handler: (_pi) => async (args: string, ctx: CommandContext) => {
+      toggleClarifyState(args, ctx);
+    },
+  },
 ];
 
 function loadBody(rel: string): string {
@@ -1256,6 +1273,7 @@ export default function (pi: ExtensionApi): void {
   );
   installPolicy(pi);
   installKnowledgeTool(pi);
+  installClarify(pi);
   installHindsight(pi);
   installHerdrTools(pi);
   installRoutinesTool(pi);
