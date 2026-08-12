@@ -11,8 +11,11 @@ When enabled, the assistant is instructed to ask clarifying questions using the 
 - `/clarify off`: Disable prompt clarification mode.
 - `/clarify debug`: Toggle clarification debug mode on or off.
 - `/clarify debug on`: Enable clarification debug mode.
-- `/clarify debug off`: Disable clarification debug mode.
 - `/clarify status`: Show current clarification and debug mode status.
+
+## TUI Completion Surface
+
+When the cursor is in the argument position of `/clarify`, the TUI shows a live header (the current on/off and debug state) followed by the four subcommands above as autocomplete items. Selecting one advances the cursor past a trailing space, ready for any further argument. The header is a read-only hint — picking it does not change the input.
 
 ## Single-Turn Bypass (`~` Prefix)
 

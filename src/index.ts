@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { installBootstrap } from "./bootstrap.ts";
-import { installClarify, toggleClarifyState } from "./clarify.ts";
+import { installClarify, isClarifyDebugEnabled, isClarifyEnabled, toggleClarifyState } from "./clarify.ts";
 import { installHerdrTools } from "./herdr-tools.ts";
 import {
   installHindsight,
@@ -1199,15 +1199,40 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "clarify",
-    description: "Toggle prompt clarification on/off (/clarify on|off)",
+    description: "Toggle prompt clarification on/off (/clarify on|off|debug|status)",
     bodyPath: "commands/clarify.md",
+    // TUI options: typing "/clarify" surfaces the live state as a dim
+    // header before the subcommands, then "on"/"off"/"debug"/"status" with
+    // the state in their descriptions. The header has an empty value so it
+    // doesn't replace the input when selected — it's a read-only hint,
+    // matching the rest of the surfaces that show the state once. Values
+    // carry a trailing space so tab-completion advances the cursor past it,
+    // ready for the next argument (mirrors /hindsight, /routinize run, etc.).
     getArgumentCompletions: (argumentPrefix: string) => {
+      if (argumentPrefix.includes(" ")) return null;
       const lower = argumentPrefix.toLowerCase();
+      const on = isClarifyEnabled();
+      const debug = isClarifyDebugEnabled();
+      const state = on ? "on" : "off";
+      const debugState = debug ? "on" : "off";
+      const stateIcon = on ? "●" : "○";
+      const header = {
+        value: "",
+        label: `${stateIcon}  Clarify is currently ${state} (debug: ${debugState})`,
+        description: on
+          ? "vague prompts are clarified before they reach the agent"
+          : "turns settle without a clarification step",
+      };
       const options = [
-        { value: "on", label: "on", description: "Enable prompt clarification" },
-        { value: "off", label: "off", description: "Disable prompt clarification" },
+        { value: "on ", label: "on", description: `Enable prompt clarification (currently ${state})` },
+        { value: "off ", label: "off", description: `Disable prompt clarification (currently ${state})` },
+        { value: "debug ", label: "debug", description: `Toggle prompt clarification debug mode (currently ${debugState})` },
+        { value: "status ", label: "status", description: `Show current clarification (${state}) and debug mode (${debugState}) status` },
       ];
-      return options.filter((opt) => opt.value.startsWith(lower));
+      const matches = options.filter((o) => o.label.startsWith(lower));
+      // Only show the header when no subcommand is typed yet — once the
+      // user starts narrowing, the header is noise.
+      return lower === "" ? [header, ...matches] : matches.length > 0 ? matches : null;
     },
     handler: (_pi) => async (args: string, ctx: CommandContext) => {
       toggleClarifyState(args, ctx);

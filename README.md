@@ -109,7 +109,7 @@ All 28 slash commands are user-invoked. The model recognizes them at session sta
 | `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
 | `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.omp/scratch/`, GitHub, GitLab), triage labels (`.omp/agents/`), domain layout. |
 | `/hindsight` | Knowledge Base & Upkeep | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) before turns settle. |
-| `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, `debug`, `status`, or bare to toggle) and injects clarification guidelines. |
+| `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, `debug [on|off]`, `status`, or bare to toggle) and injects clarification guidelines. |
 | `/math` | Knowledge Base & Upkeep | Explains and demos native LaTeX math rendering ($...$, $$...$$, `\begin{aligned}`). |
 | `/omp-handoff` | Knowledge Base & Upkeep | Compacts current conversation into a handoff document for another agent session. |
 | `/plugin-issue` | Knowledge Base & Upkeep | Reports a bug or feature request on this plugin's GitHub repository. |

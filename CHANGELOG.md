@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.36.0 — Resolve #6: /clarify completions surface & trailing-space convention
+
+- **`/clarify` completions surface extended** — autocomplete dropdown now surfaces `on`, `off`, `debug`, and `status` (matching v0.35.0's added subcommands) instead of only `on`/`off`. Header line shows live `● on` / `○ off` state when no argument is typed.
+- **Trailing-space convention applied** — `on`, `off`, `debug`, and `status` completion items now end with a trailing space (`value: "on "`, etc.), matching the convention used by `/hindsight`, `/routinize run`, and `/wayfinder resolve`. Tab-completion advances the cursor past the space so users can immediately type the next argument.
+
 ## v0.35.0 — Fix TUI text rendering & add /clarify debug mode
 
 - **Fixed TUI text rendering bug when `/clarify` is active** — corrected `input` event hook return protocol to return `{ action: "transform", text }` and `{ action: "continue" }`. Malformed return objects previously corrupted `omp`'s TUI input controller, causing markdown, divider lines, code blocks, and ANSI colors to drop.

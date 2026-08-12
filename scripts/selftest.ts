@@ -2268,6 +2268,72 @@ for (const name of HERDR_TOOLS) {
   if (isClarifyDebugEnabled()) fail("setClarifyDebugEnabled(false) failed");
   setClarifyDebugEnabled(true);
   if (!isClarifyDebugEnabled()) fail("setClarifyDebugEnabled(true) failed");
+  // Completion surface (Issue #6): header + on/off/debug/status with trailing
+  // spaces, header only when no argument is typed, prefix filtering on label.
+  setClarifyEnabled(false);
+  setClarifyDebugEnabled(false);
+  const clarifyEmpty = registered["clarify"].getArgumentCompletions?.("") ?? null;
+  if (!clarifyEmpty) {
+    fail("clarify: expected completions for empty prefix");
+  } else {
+    if (clarifyEmpty.length !== 5) {
+      fail(`clarify: expected 5 entries (1 header + 4 options) for empty prefix, got ${clarifyEmpty.length}`);
+    }
+    const expectedLabels = ["on", "off", "debug", "status"].sort().join(",");
+    const actualLabels = clarifyEmpty.slice(1).map((c) => c.label).sort().join(",");
+    if (actualLabels !== expectedLabels) {
+      fail(`clarify: unexpected option labels: ${actualLabels}`);
+    }
+    // Header state indicator mirrors the live state (currently off).
+    const header = clarifyEmpty[0];
+    if (header.value !== "") fail("clarify: header should have empty value");
+    if (!header.label.includes("○") || !header.label.toLowerCase().includes("off")) {
+      fail(`clarify: header state indicator should reflect off state, got: ${header.label}`);
+    }
+    // Trailing-space convention on every option value.
+    for (const opt of clarifyEmpty.slice(1)) {
+      if (opt.value !== `${opt.label} `) {
+        fail(`clarify: option value should be "${opt.label} " (trailing space), got: "${opt.value}"`);
+      }
+    }
+  }
+  // Prefix filter "d" matches label.startsWith('d') — only debug qualifies;
+  // status starts with 's', so it's filtered out (matches /hindsight).
+  const clarifyD = registered["clarify"].getArgumentCompletions?.("d") ?? null;
+  if (!clarifyD || clarifyD.length !== 1 || clarifyD[0].label !== "debug") {
+    fail(`clarify: expected 1 match 'debug' for 'd', got ${JSON.stringify(clarifyD?.map((c) => c.label))}`);
+  } else {
+    if (!clarifyD[0].value.endsWith(" ")) {
+      fail("clarify: 'debug' option must carry trailing space in value");
+    }
+    if (clarifyD[0].value === "") {
+      fail("clarify: prefix 'd' must NOT include the header (empty value)");
+    }
+  }
+  // Prefix filter "s" matches label.startsWith('s') — only status qualifies.
+  const clarifyS = registered["clarify"].getArgumentCompletions?.("s") ?? null;
+  if (!clarifyS || clarifyS.length !== 1 || clarifyS[0].label !== "status") {
+    fail(`clarify: expected 1 match 'status' for 's', got ${JSON.stringify(clarifyS?.map((c) => c.label))}`);
+  }
+  // Past the subcommand: return null (subcommands take no further argument).
+  if (registered["clarify"].getArgumentCompletions?.("debug ") !== null) {
+    fail("clarify: completions offered past 'debug ' (subcommands take no further argument)");
+  }
+  if (registered["clarify"].getArgumentCompletions?.("on ") !== null) {
+    fail("clarify: completions offered past 'on ' (subcommands take no further argument)");
+  }
+  // No match for a nonsense prefix.
+  if (registered["clarify"].getArgumentCompletions?.("xyz") !== null) {
+    fail("clarify: completions offered for unknown prefix 'xyz'");
+  }
+  // Header tracks live state: enable, header should show ● on.
+  setClarifyEnabled(true);
+  const clarifyEnabled = registered["clarify"].getArgumentCompletions?.("") ?? null;
+  if (!clarifyEnabled || !clarifyEnabled[0]?.label.includes("●") || !clarifyEnabled[0]?.label.toLowerCase().includes("on")) {
+    fail(`clarify: header state indicator should reflect on state, got: ${clarifyEnabled?.[0]?.label}`);
+  }
+  // Restore the baseline state for the rest of the tests.
+  setClarifyEnabled(false);
   setClarifyDebugEnabled(false);
 
   const notifyMsgs: string[] = [];
