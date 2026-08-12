@@ -3,6 +3,10 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.6 — Add design-control-loop skill
+
+- Ported `design-control-loop` model-invoked skill from humanlayer: cybernetic codebase maintenance framework (set point, sensor, controller, actuator, disturbances, dampeners) with companion reference templates for CI workflow design, agent runners, memory files, and iteration helpers.
+
 ## v0.32.5 — Add show-me skill
 
 - Ported `show-me` model-invoked skill from humanlayer: visual explanations using pseudocode sketches, call trees, component hierarchies, shallow file trees, Mermaid diagrams (rendered as ASCII in oh-my-pi TUI), targeted diffs, and focused HTML artifacts.

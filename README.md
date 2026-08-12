@@ -91,7 +91,7 @@ All 26 commands are user-invoked slash commands. The model knows them at session
 
 ## Model-Invoked Skills
 
-The 13 skills are model-invoked: omp loads a skill automatically when the context matches. Exception: `using-git-worktrees` is user-invoked only.
+The 14 skills are model-invoked: omp loads a skill automatically when the context matches. Exception: `using-git-worktrees` is user-invoked only.
 
 | Skill | Description | Trigger Condition |
 | --- | --- | --- |
@@ -108,6 +108,7 @@ The 13 skills are model-invoked: omp loads a skill automatically when the contex
 | `using-herdr` | Operates herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent` tools or CLI). | The user mentions herdr or asks to control workspaces, panes, or sibling agents. |
 | `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/` convention). | **User-invoked only**: explicitly requested by user. |
 | `show-me` | Visual explanations via code sketches, call trees, file layouts, Mermaid, diffs, or HTML artifacts. | Explaining structure, control flow, UI hierarchy, architecture, or visual concepts. |
+| `design-control-loop` | Designs agentic control loops (sensor, controller, actuator, disturbances) for codebase maintenance & automated CI runs. | Designing scheduled or automated codebase feedback loops, automated PR workflows, or quality gates. |
 
 ## Configuration
 
