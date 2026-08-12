@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.32.9-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.34.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -21,14 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.9"
-```
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.34.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.32.9"
-```
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.34.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
@@ -77,9 +75,11 @@ Execute deep, multi-pass research projects with background agents:
 Build long-term repository memory and eliminate guesswork:
 - **/record**: Permanently saves durable engineering lessons, audits, and decisions into `.omp/knowledge/`.
 - **/pitfall**: Captures runtime mistakes and debugging discoveries mid-task before context fades.
+- **Zero-turn pitfall auto-surfacing (`before_agent_start`)**: Automatically matches prompt keywords against `.omp/knowledge/` pitfalls and records, injecting relevant findings directly into system context.
+- **Freeform keyword search (`xd://knowledge_read`)**: Added `query` parameter to `readKnowledge` and `knowledge_read` tool schema for relevance-ranked keyword and tag search across records, pitfalls, audits, and research projects.
+- **Frontier ticket locator (`findFrontierTicket`)**: Deterministically identifies the earliest unblocked open ticket under `.omp/scratch/` / `.scratch/`.
 - **/hindsight**: Toggles a settle-time reflection pass that prompts the model to simplify design choices before completing a turn.
 - **/clarify**: Interactively resolves prompt ambiguity with structured TUI choices when user instructions are vague.
-
 ---
 
 ## Command Directory (28 Commands)
@@ -175,11 +175,11 @@ All plugin management goes through `omp plugin`:
    ```bash
    omp plugin list
    ```
-   Should display `my-omp-skills@v0.32.9`.
+   Should display `my-omp-skills@v0.34.0`.
 
-2. **Upgrade to `v0.32.9`**:
+2. **Upgrade to `v0.34.0`**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.9"
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.34.0"
    ```
 
 3. **List Available Tag Versions** (requires SSH read access):

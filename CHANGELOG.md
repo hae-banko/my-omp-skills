@@ -1,8 +1,12 @@
 # Changelog
 
+## v0.34.0 — Backend harness optimizations & zero-turn knowledge auto-surfacing
+
+- **Zero-turn pitfall auto-surfacing (`before_agent_start`)** — backend automatically scans incoming prompts against `.omp/knowledge/` records, pitfalls, and index tags, injecting relevant past pitfalls directly into system context so the agent avoids past mistakes without taking an extra search turn.
+- **Freeform keyword & tag search (`xd://knowledge_read`)** — added `query` parameter to `readKnowledge` and `knowledge_read` tool schema, allowing fast keyword and tag searches across records, pitfalls, audits, and research projects.
+- **Deterministic frontier ticket locator (`findFrontierTicket`)** — added `findFrontierTicket` to `src/locators.ts`, enabling backend locators and ticket workflows to deterministically identify the next open, unblocked ticket under `.omp/scratch/`.
 
 ## v0.33.0 — Self-contained .omp/ metadata & scratch directory
-
 - **Self-contained agent setup (`.omp/agents/`)** — `/omp-setup` now writes metadata files (`issue-tracker.md`, `triage-labels.md`, `domain.md`) to `.omp/agents/` instead of `docs/agents/`, keeping repository documentation clean and agent-specific files contained under `.omp/`. Legacy `docs/agents/` remains supported as a fallback.
 - **Self-contained local issue tracker (`.omp/scratch/`)** — default local markdown tracker directory moved from `.scratch/` at repo root to `.omp/scratch/`. Locators, `/to-tickets`, `/triage`, `/ask-me`, and `code-review` updated to read `.omp/scratch/` first with `.scratch/` as fallback.
 - **Self-contained ADR fallback (`.omp/adr/`)** — `domain-modeling` skill and `/grill-with-docs` now default to `.omp/adr/` when the project does not maintain a root `docs/adr/` directory.

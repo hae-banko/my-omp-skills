@@ -197,12 +197,23 @@ rules, and they apply to every entry:
 
 ## Runtime behaviors (v0.5.0+)
 
-Beyond the markdown commands, the extension entry (`src/index.ts`) wires three
-runtime behaviors:
+Beyond the markdown commands, the extension entry (`src/index.ts`) wires runtime behaviors:
 
 - **Bootstrap** (`src/bootstrap.ts`). At session start and after compaction,
   the model receives a one-time message listing every command. Re-injected
   only on restart/compaction; cleared on `agent_end` (superpowers pattern).
+- **Zero-turn knowledge auto-surfacing** (`src/clarify.ts` / `src/knowledge.ts`).
+  In `before_agent_start`, incoming user prompts are automatically scanned against `.omp/knowledge/`
+  pitfalls, records, and index tags (`findRelevantKnowledge`). If relevant past findings match
+  prompt terms (length >= 4, non-stopwords), a `<relevant-knowledge>` block is injected directly into
+  `event.systemPrompt` (deduplicated to prevent double-injection).
+- **Freeform keyword & tag search** (`src/knowledge.ts` / `src/knowledge-tool.ts`).
+  `readKnowledge` and `knowledge_read` (`xd://knowledge_read`) support an optional `query` parameter
+  that performs relevance-ranked searches (title/tag/filename matches ranked first, then body matches)
+  across records, pitfalls, audits, and research projects.
+- **Deterministic frontier ticket locator** (`src/locators.ts`).
+  `findFrontierTicket` scans `.omp/scratch/<feature>/issues/*.md` (and `.scratch/`), parsing `Status:`
+  and `Blocked by:` dependencies to deterministically identify the earliest unblocked open ticket.
 - **Knowledge-base policy** (`src/policy.ts`, a `tool_call` guard). `edit` on
   any path under `.omp/knowledge/records/`, `.omp/knowledge/pitfalls/`, or
   `INDEX.md` is blocked; `write` over an *existing* file in those stores is
@@ -216,7 +227,6 @@ runtime behaviors:
   `use-record.md`, `use-pitfall.md`, `use-research.md` are always-apply
   rulebook rules keeping the right slash command in front of the model
   mid-conversation.
-
 ## Memory backend
 
 When `memory.backend: local` is enabled in `~/.omp/agent/config.yml`, omp's

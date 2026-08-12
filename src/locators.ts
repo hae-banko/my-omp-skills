@@ -268,3 +268,158 @@ export function listFeatureSpecs(root: string): FeatureSpecSurface {
     files: Array.from(files).sort((a, b) => a.localeCompare(b)),
   };
 }
+
+export interface FrontierTicket {
+  feature: string;
+  file: string;
+  title: string;
+  blockedBy: string[];
+}
+
+interface ParsedTicket {
+  feature: string;
+  relPath: string;
+  filename: string;
+  slug: string;
+  title: string;
+  status: string;
+  blockedBy: string[];
+  isResolved: boolean;
+}
+
+export function findFrontierTicket(root: string): FrontierTicket | null {
+  const scratchBases = [
+    { abs: join(root, ".omp", "scratch"), rel: join(".omp", "scratch") },
+    { abs: join(root, ".scratch"), rel: ".scratch" },
+  ];
+
+  const allTickets: ParsedTicket[] = [];
+
+  for (const { abs: scratchAbs, rel: scratchRel } of scratchBases) {
+    if (!existsSync(scratchAbs) || !statSync(scratchAbs).isDirectory()) continue;
+    try {
+      const featEntries = readdirSync(scratchAbs, { withFileTypes: true });
+      for (const featEnt of featEntries) {
+        if (!featEnt.isDirectory() || featEnt.name.startsWith(".")) continue;
+        const feature = featEnt.name;
+        const issuesDir = join(scratchAbs, feature, "issues");
+        if (!existsSync(issuesDir) || !statSync(issuesDir).isDirectory()) continue;
+
+        const issueFiles = readdirSync(issuesDir, { withFileTypes: true });
+        for (const fileEnt of issueFiles) {
+          if (!fileEnt.isFile() || !fileEnt.name.endsWith(".md")) continue;
+          const filename = fileEnt.name;
+          const filePath = join(issuesDir, filename);
+          const relPath = join(scratchRel, feature, "issues", filename);
+
+          let body = "";
+          try {
+            body = readFileSync(filePath, "utf8");
+          } catch {
+            continue;
+          }
+
+          const titleMatch = body.match(/^(?:title|Title):\s*["']?([^"'\r\n]+)["']?/m);
+          const headerMatch = body.match(/^#\s+(.+)$/m);
+          const title =
+            titleMatch?.[1]?.trim() ??
+            headerMatch?.[1]?.trim() ??
+            filename.replace(/\.md$/, "");
+
+          const statusMatch = body.match(/^(?:status|Status):\s*["']?([^"'\r\n]+)["']?/m);
+          const status = (statusMatch?.[1]?.trim() ?? "open").toLowerCase();
+
+          const isResolved =
+            status === "resolved" ||
+            status === "done" ||
+            status === "closed" ||
+            status === "completed";
+
+          const blockedBy: string[] = [];
+          const arrayMatch = body.match(/^(?:blocked_by|blockedBy|Blocked by|Blocked-By):\s*\[(.*?)\]/m);
+          if (arrayMatch) {
+            const rawItems = arrayMatch[1].split(",");
+            for (const item of rawItems) {
+              const cleaned = item.trim().replace(/^["']|["']$/g, "");
+              if (cleaned.length > 0) blockedBy.push(cleaned);
+            }
+          } else {
+            const lineMatch = body.match(/^(?:blocked_by|blockedBy|Blocked by|Blocked-By):\s*(.+)$/m);
+            if (lineMatch) {
+              const rawItems = lineMatch[1].split(",");
+              for (const item of rawItems) {
+                const cleaned = item.trim().replace(/^["']|["']$/g, "");
+                if (cleaned.length > 0 && cleaned !== "[]" && cleaned !== "none") {
+                  blockedBy.push(cleaned);
+                }
+              }
+            }
+          }
+
+          const slug = filename.replace(/\.md$/, "");
+          allTickets.push({
+            feature,
+            relPath,
+            filename,
+            slug,
+            title,
+            status,
+            blockedBy,
+            isResolved,
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (allTickets.length === 0) return null;
+
+  const isBlockerResolved = (blockerStr: string, currentFeature: string): boolean => {
+    const bLower = blockerStr.toLowerCase().replace(/\.md$/, "");
+    const matches = allTickets.filter((t) => {
+      if (t.feature !== currentFeature) return false;
+      const tSlug = t.slug.toLowerCase();
+      const tFile = t.filename.toLowerCase();
+      const tTitle = t.title.toLowerCase();
+      return (
+        tSlug === bLower ||
+        tSlug.startsWith(bLower) ||
+        bLower.startsWith(tSlug) ||
+        tFile === bLower ||
+        tTitle.includes(bLower)
+      );
+    });
+
+    if (matches.length === 0) {
+      return true;
+    }
+    return matches.every((m) => m.isResolved);
+  };
+
+  allTickets.sort((a, b) => a.filename.localeCompare(b.filename));
+
+  for (const t of allTickets) {
+    if (t.isResolved) continue;
+    const isOpenStatus =
+      t.status === "open" ||
+      t.status === "ready-for-agent" ||
+      t.status === "unclaimed" ||
+      !t.status;
+
+    if (!isOpenStatus) continue;
+
+    const unblocked = t.blockedBy.every((b) => isBlockerResolved(b, t.feature));
+    if (unblocked) {
+      return {
+        feature: t.feature,
+        file: t.relPath,
+        title: t.title,
+        blockedBy: t.blockedBy,
+      };
+    }
+  }
+
+  return null;
+}

@@ -30,6 +30,7 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
       slug: zod.string().optional(),
       limit: zod.number().int().min(1).max(50).optional(),
       full: zod.boolean().optional(),
+      query: zod.string().optional(),
     }),
     execute: async (_toolCallId, rawParams, _signal, _onUpdate, ctx) => {
       // The runtime validates params against the zod schema above before
@@ -52,6 +53,7 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
         slug: params.slug,
         limit: params.limit,
         full: params.full,
+        query: params.query,
       });
       return { content: [{ type: "text", text: result.text }], details: result.details };
     },

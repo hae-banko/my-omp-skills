@@ -13,6 +13,131 @@ export interface KnowledgeQuery {
   slug?: string;
   limit?: number;
   full?: boolean;
+  query?: string;
+}
+
+export interface RelevantKnowledgeItem {
+  title: string;
+  path: string;
+  snippet: string;
+  kind: "pitfall" | "record" | "index";
+}
+
+const STOP_WORDS = new Set([
+  "this", "that", "with", "from", "have", "here", "some", "what", "when", "where", "which",
+  "will", "would", "could", "should", "about", "there", "their", "them", "then", "than",
+  "also", "into", "only", "other", "such", "these", "they", "thing", "think", "time",
+  "very", "your", "just", "more", "make", "like", "know", "take", "head", "need",
+  "used", "using", "user", "path", "file", "files", "code", "done", "work", "mode",
+  "test", "tests", "run", "runs", "type", "types", "call", "calls", "tool", "tools",
+  "turn", "agent", "prompt", "please", "help", "want", "look", "find", "check"
+]);
+
+export function findRelevantKnowledge(
+  root: string,
+  promptText: string,
+  limit = 3,
+): RelevantKnowledgeItem[] {
+  const rawTokens = promptText.toLowerCase().match(/\b[a-z0-9_-]+\b/g) ?? [];
+  const terms = Array.from(
+    new Set(
+      rawTokens.filter((t) => t.length >= 4 && !STOP_WORDS.has(t)),
+    ),
+  );
+  if (terms.length === 0) return [];
+
+  const base = join(root, ".omp", "knowledge");
+  const items: Array<RelevantKnowledgeItem & { score: number }> = [];
+  const seenPaths = new Set<string>();
+
+  const parseMd = (body: string, defaultTitle: string) => {
+    const titleMatch = body.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+    const title = titleMatch?.[1]?.trim() ?? firstLine(body) ?? defaultTitle;
+    const tagsMatch = body.match(/^tags:\s*\[?(.*?)\]?$/m);
+    const tags = tagsMatch?.[1]
+      ? tagsMatch[1].split(",").map((s) => s.trim().toLowerCase())
+      : [];
+    return { title, tags, body };
+  };
+
+  for (const kind of ["pitfall", "record"] as const) {
+    const dirName = kind === "pitfall" ? "pitfalls" : "records";
+    const dir = join(base, dirName);
+    const files = listMarkdownFiles(dir);
+    for (const f of files) {
+      const filePath = join(dir, f);
+      if (seenPaths.has(filePath)) continue;
+      if (!existsSync(filePath) || !statSync(filePath).isFile()) continue;
+      const body = readFileSync(filePath, "utf8");
+      const { title, tags } = parseMd(body, f.replace(/\.md$/, ""));
+      const relPath = `.omp/knowledge/${dirName}/${f}`;
+
+      let score = 0;
+      const titleLower = title.toLowerCase();
+      const fileLower = f.toLowerCase();
+      const bodyLower = body.toLowerCase();
+      const firstL = firstLine(body);
+
+      for (const term of terms) {
+        if (titleLower.includes(term) || fileLower.includes(term) || tags.some((t) => t.includes(term))) {
+          score += 10;
+        } else if (firstL.toLowerCase().includes(term)) {
+          score += 5;
+        } else if (bodyLower.includes(term)) {
+          score += 2;
+        }
+      }
+
+      if (score > 0) {
+        seenPaths.add(filePath);
+        items.push({
+          title,
+          path: relPath,
+          snippet: firstL || title,
+          kind,
+          score,
+        });
+      }
+    }
+  }
+
+  const indexPath = join(base, "INDEX.md");
+  if (existsSync(indexPath) && statSync(indexPath).isFile()) {
+    const indexBody = readFileSync(indexPath, "utf8");
+    const lines = indexBody.split("\n").filter((l) => l.trim().length > 0);
+    for (const line of lines) {
+      const lineLower = line.toLowerCase();
+      let score = 0;
+      for (const term of terms) {
+        if (lineLower.includes(term)) {
+          score += 3;
+        }
+      }
+      if (score > 0) {
+        const pathMatch = line.match(/\.omp\/knowledge\/(pitfalls|records)\/[^\s)]+/);
+        const refPath = pathMatch ? pathMatch[0] : ".omp/knowledge/INDEX.md";
+        if (!seenPaths.has(refPath)) {
+          seenPaths.add(refPath);
+          const kind = refPath.includes("/pitfalls/") ? "pitfall" : refPath.includes("/records/") ? "record" : "index";
+          items.push({
+            title: line.replace(/^-\s*/, "").slice(0, 80),
+            path: refPath,
+            snippet: line.replace(/^-\s*/, "").slice(0, 100),
+            kind,
+            score,
+          });
+        }
+      }
+    }
+  }
+
+  items.sort((a, b) => b.score - a.score);
+  return items.slice(0, limit).map(({ title, path, snippet, kind }) => ({
+    title,
+    path,
+    snippet,
+    kind,
+  }));
 }
 
 export interface KnowledgeReadResult {
@@ -76,6 +201,133 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
   const type = query.type;
   const limit = query.limit ?? 10;
 
+  if (query.query && query.query.trim().length > 0) {
+    const searchStr = query.query.trim().toLowerCase();
+    const matches: Array<{
+      kind: string;
+      title: string;
+      path: string;
+      snippet: string;
+      score: number;
+    }> = [];
+
+    const searchFile = (kind: string, title: string, path: string, body: string, filename: string) => {
+      const titleMatch = body.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+      const resolvedTitle = titleMatch?.[1]?.trim() ?? title ?? firstLine(body) ?? filename;
+      const tagsMatch = body.match(/^tags:\s*\[?(.*?)\]?$/m);
+      const tags = tagsMatch?.[1]
+        ? tagsMatch[1].split(",").map((s) => s.trim().toLowerCase())
+        : [];
+
+      const titleLower = resolvedTitle.toLowerCase();
+      const fileLower = filename.toLowerCase();
+      const bodyLower = body.toLowerCase();
+
+      let score = 0;
+      if (titleLower.includes(searchStr) || fileLower.includes(searchStr) || tags.some((t) => t.includes(searchStr))) {
+        score = 2;
+      } else if (bodyLower.includes(searchStr)) {
+        score = 1;
+      }
+
+      if (score > 0) {
+        let snippet = firstLine(body);
+        const matchIdx = bodyLower.indexOf(searchStr);
+        if (matchIdx !== -1) {
+          const start = Math.max(0, matchIdx - 30);
+          const end = Math.min(body.length, matchIdx + searchStr.length + 50);
+          snippet = body.slice(start, end).replace(/[\r\n]+/g, " ").trim();
+        }
+        matches.push({
+          kind,
+          title: resolvedTitle,
+          path,
+          snippet: snippet.slice(0, 120),
+          score,
+        });
+      }
+    };
+
+    for (const typeKey of ["records", "pitfalls"] as const) {
+      const dir = join(base, typeKey);
+      for (const f of listMarkdownFiles(dir)) {
+        const filePath = join(dir, f);
+        if (!existsSync(filePath) || !statSync(filePath).isFile()) continue;
+        const body = readFileSync(filePath, "utf8");
+        searchFile(typeKey, f.replace(/\.md$/, ""), filePath, body, f);
+      }
+    }
+
+    const researchDir = join(base, "research");
+    if (existsSync(researchDir) && statSync(researchDir).isDirectory()) {
+      try {
+        const projDirs = readdirSync(researchDir, { withFileTypes: true });
+        for (const pEnt of projDirs) {
+          if (pEnt.name.startsWith(".")) continue;
+          const pPath = join(researchDir, pEnt.name);
+          if (pEnt.isDirectory()) {
+            for (const subF of listMarkdownFiles(pPath)) {
+              const subPath = join(pPath, subF);
+              if (existsSync(subPath) && statSync(subPath).isFile()) {
+                const body = readFileSync(subPath, "utf8");
+                searchFile("research", `${pEnt.name}/${subF}`, subPath, body, subF);
+              }
+            }
+          } else if (pEnt.isFile() && pEnt.name.endsWith(".md")) {
+            const body = readFileSync(pPath, "utf8");
+            searchFile("research", pEnt.name, pPath, body, pEnt.name);
+          }
+        }
+      } catch {}
+    }
+
+    const auditsDir = join(root, ".omp", "audits");
+    if (existsSync(auditsDir) && statSync(auditsDir).isDirectory()) {
+      try {
+        const auditDirs = readdirSync(auditsDir, { withFileTypes: true });
+        for (const aEnt of auditDirs) {
+          if (aEnt.name.startsWith(".")) continue;
+          const aPath = join(auditsDir, aEnt.name);
+          if (aEnt.isDirectory()) {
+            for (const subF of listMarkdownFiles(aPath)) {
+              const subPath = join(aPath, subF);
+              if (existsSync(subPath) && statSync(subPath).isFile()) {
+                const body = readFileSync(subPath, "utf8");
+                searchFile("audits", `${aEnt.name}/${subF}`, subPath, body, subF);
+              }
+            }
+            const subtopicsDir = join(aPath, "subtopics");
+            if (existsSync(subtopicsDir) && statSync(subtopicsDir).isDirectory()) {
+              for (const subF of listMarkdownFiles(subtopicsDir)) {
+                const subPath = join(subtopicsDir, subF);
+                if (existsSync(subPath) && statSync(subPath).isFile()) {
+                  const body = readFileSync(subPath, "utf8");
+                  searchFile("audits", `${aEnt.name}/subtopics/${subF}`, subPath, body, subF);
+                }
+              }
+            }
+          } else if (aEnt.isFile() && aEnt.name.endsWith(".md")) {
+            const body = readFileSync(aPath, "utf8");
+            searchFile("audits", aEnt.name, aPath, body, aEnt.name);
+          }
+        }
+      } catch {}
+    }
+
+    matches.sort((a, b) => b.score - a.score);
+    const picked = matches.slice(0, limit);
+    const textLines = picked.map((m) => `- [${m.kind.toUpperCase()}] ${m.title} (${m.path}) — ${m.snippet}`);
+    return {
+      found: true,
+      text: textLines.join("\n") || `No knowledge entries found matching "${query.query}".`,
+      details: {
+        found: true,
+        type,
+        count: picked.length,
+        paths: picked.map((m) => m.path),
+      },
+    };
+  }
   if (type === "index") {
     const indexPath = join(base, "INDEX.md");
     if (!existsSync(indexPath) || !statSync(indexPath).isFile()) {

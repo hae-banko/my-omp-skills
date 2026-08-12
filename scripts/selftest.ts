@@ -34,6 +34,8 @@ import extension from "../src/index.ts";
 import { parseHerdrOutput } from "../src/herdr-tools.ts";
 import type { ToolResult } from "../src/api.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
+import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
+import { findFrontierTicket } from "../src/locators.ts";
 import {
   CLARIFY_PROMPT,
   isClarifyEnabled,
@@ -313,8 +315,25 @@ writeFileSync(
   "---\ntitle: DTCM\n---\nfound it",
 );
 writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "pitfalls", "2026-08-01_dma.md"),
+  "---\ntitle: DMA DTCM Transfer Bug\ntags: [dma, dtcm]\n---\nGPDMA cannot access DTCM memory buffers on STM32.",
+);
+writeFileSync(
   join(fixtureRoot, ".omp", "knowledge", "INDEX.md"),
-  "- 2026-08-03 DTCM — .omp/knowledge/records/2026-08-03_dtcm.md\n",
+  "- 2026-08-03 DTCM — .omp/knowledge/records/2026-08-03_dtcm.md\n- 2026-08-01 DMA — .omp/knowledge/pitfalls/2026-08-01_dma.md\n",
+);
+mkdirSync(join(fixtureRoot, ".scratch", "my-feature", "issues"), { recursive: true });
+writeFileSync(
+  join(fixtureRoot, ".scratch", "my-feature", "issues", "001-setup.md"),
+  "---\ntitle: Setup database schema\nstatus: resolved\n---\nDone setting up database schema.",
+);
+writeFileSync(
+  join(fixtureRoot, ".scratch", "my-feature", "issues", "002-api.md"),
+  "---\ntitle: Implement REST API endpoints\nstatus: open\nblocked_by: [001-setup]\n---\nImplement REST API.",
+);
+writeFileSync(
+  join(fixtureRoot, ".scratch", "my-feature", "issues", "003-ui.md"),
+  "---\ntitle: Build Web UI\nstatus: open\nblocked_by: [002-api]\n---\nBuild frontend UI components.",
 );
 writeFileSync(
   join(fixtureRoot, ".omp", "audits", "demo-audit", "report.md"),
@@ -491,8 +510,76 @@ if (!knowledgeTool) {
     null,
   );
   if (!(rendered instanceof TuiContainer)) fail("tool: renderResult did not produce a component");
-}
 
+  // --- v0.34.0 Optimizations Coverage ---
+
+  // 1. readKnowledge with query: "dma"
+  const dmaDirect = readKnowledge(fixtureRoot, { type: "index", query: "dma" });
+  if (!dmaDirect.found || !dmaDirect.text.includes("DMA DTCM Transfer Bug")) {
+    fail("readKnowledge: query parameter failed to match title/tags for dma");
+  }
+
+  const dmaToolRes = await knowledgeTool.execute(
+    "t_q1",
+    { type: "index", query: "dma" },
+    undefined,
+    undefined,
+    { cwd: fixtureRoot },
+  );
+  const dmaToolText = dmaToolRes.content.map((b) => b.text).join("");
+  if (!dmaToolText.includes("DMA DTCM Transfer Bug")) {
+    fail("knowledge_read tool: query parameter failed to return dma match");
+  }
+
+  // 2. findRelevantKnowledge
+  const rel = findRelevantKnowledge(fixtureRoot, "Fix the dma dtcm buffer issue on stm32");
+  if (rel.length === 0 || !rel.some((r) => r.title.includes("DMA DTCM Transfer Bug"))) {
+    fail("findRelevantKnowledge: failed to extract terms and match pitfall file");
+  }
+
+  // 3. before_agent_start auto-surfacing
+  const beforeFn = handlers["before_agent_start"];
+  if (!beforeFn) {
+    fail("before_agent_start: handler not registered");
+  } else {
+    const evt: { prompt: string; systemPrompt: string } = {
+      prompt: "I am seeing a dma dtcm transfer issue",
+      systemPrompt: "Base prompt.",
+    };
+    await beforeFn(evt, { cwd: fixtureRoot });
+    if (!evt.systemPrompt.includes("<relevant-knowledge>")) {
+      fail("before_agent_start: failed to auto-surface relevant knowledge block");
+    }
+    if (!evt.systemPrompt.includes("DMA DTCM Transfer Bug")) {
+      fail("before_agent_start: auto-surfaced knowledge missing matched title");
+    }
+    // Deduplication check
+    const lenBefore = evt.systemPrompt.length;
+    await beforeFn(evt, { cwd: fixtureRoot });
+    if (evt.systemPrompt.length !== lenBefore) {
+      fail("before_agent_start: double-injected relevant-knowledge block on second turn");
+    }
+  }
+
+  // 4. findFrontierTicket
+  const frontier = findFrontierTicket(fixtureRoot);
+  if (!frontier) {
+    fail("findFrontierTicket: failed to locate frontier ticket");
+  } else {
+    if (frontier.feature !== "my-feature") {
+      fail(`findFrontierTicket: expected feature 'my-feature', got '${frontier.feature}'`);
+    }
+    if (!frontier.file.includes("002-api.md")) {
+      fail(`findFrontierTicket: expected 002-api.md, got '${frontier.file}'`);
+    }
+    if (frontier.title !== "Implement REST API endpoints") {
+      fail(`findFrontierTicket: expected title 'Implement REST API endpoints', got '${frontier.title}'`);
+    }
+    if (!frontier.blockedBy.includes("001-setup")) {
+      fail("findFrontierTicket: expected blockedBy to contain '001-setup'");
+    }
+  }
+}
 if (!renderers["knowledge-record"] || !renderers["knowledge-pitfall"]) {
   fail("renderers: knowledge-record/pitfall not registered");
 } else {

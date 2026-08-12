@@ -7,7 +7,7 @@
 import { Type } from "@sinclair/typebox";
 import { Container, Text } from "@earendil-works/pi-tui";
 import type { CommandContext, ExtensionApi, ToolResult } from "./api.ts";
-
+import { findKnowledgeRoot, findRelevantKnowledge } from "./knowledge.ts";
 export const CLARIFY_GUIDELINES = `
 Prompt Clarification Guidelines:
 - If the user's request is ambiguous, vague, or missing critical details required to act correctly, call the \`clarify_prompt\` tool to ask for clarification before proceeding.
@@ -111,26 +111,47 @@ export function installClarify(pi: ExtensionApi): void {
     }
   });
 
-  pi.on("before_agent_start", (event: unknown) => {
+  pi.on("before_agent_start", (event: unknown, ctx?: unknown) => {
     if (event && typeof event === "object") {
       const evt = event as {
+        prompt?: string;
+        promptText?: string;
         systemPrompt?: string;
         systemPromptOptions?: { selectedTools?: string[] };
       };
 
       const selectedTools = evt.systemPromptOptions?.selectedTools;
-      if (Array.isArray(selectedTools) && !selectedTools.includes("clarify_prompt")) {
-        bypassNextTurn = false;
-        return;
+      if (!Array.isArray(selectedTools) || selectedTools.includes("clarify_prompt")) {
+        if (enabled && !bypassNextTurn) {
+          const sysPrompt = evt.systemPrompt ?? "";
+          if (
+            !sysPrompt.includes(CLARIFY_GUIDELINES) &&
+            !sysPrompt.includes("## Prompt Clarification Active")
+          ) {
+            evt.systemPrompt = sysPrompt + CLARIFY_PROMPT;
+          }
+        }
       }
 
-      if (enabled && !bypassNextTurn) {
-        const sysPrompt = evt.systemPrompt ?? "";
-        if (
-          !sysPrompt.includes(CLARIFY_GUIDELINES) &&
-          !sysPrompt.includes("## Prompt Clarification Active")
-        ) {
-          evt.systemPrompt = sysPrompt + CLARIFY_PROMPT;
+      // Zero-turn pitfall / record auto-surfacing
+      const promptText = evt.prompt ?? evt.promptText ?? "";
+      const cwd =
+        ctx && typeof ctx === "object" && "cwd" in ctx && typeof ctx.cwd === "string"
+          ? ctx.cwd
+          : process.cwd();
+      if (promptText) {
+        const root = findKnowledgeRoot(cwd) ?? cwd;
+        const matches = findRelevantKnowledge(root, promptText);
+        if (matches.length > 0) {
+          const sysPrompt = evt.systemPrompt ?? "";
+          if (!sysPrompt.includes("<relevant-knowledge>")) {
+            const lines = matches.map(
+              (m) => `- [${m.kind.toUpperCase()}] ${m.title} (${m.path}) — ${m.snippet}`,
+            );
+            evt.systemPrompt =
+              (evt.systemPrompt ?? "") +
+              `\n<relevant-knowledge>\nThe following repository knowledge matches terms in your prompt:\n${lines.join("\n")}\n</relevant-knowledge>`;
+          }
         }
       }
     }
