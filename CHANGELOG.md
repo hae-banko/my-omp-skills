@@ -3,6 +3,12 @@
 
 All user-visible changes to my-omp-skills. Releases are tagged `vX.Y.Z`;
 
+## v0.32.9 — User-facing README refresh & onboarding overhaul
+
+- **Onboarding overhaul** — rewritten README.md with a 30-second Quick Onboarding guide, categorized "Workflows in Action" breakdown, and clear value proposition ("discipline over vibes").
+- **Up-to-date documentation tables** — updated Command Directory (28 commands, including `/clarify`) and Model-Invoked Skills table (14 skills, including `show-me` and `design-control-loop`).
+- **Badges & version alignment** — aligned badges, install commands, and troubleshooting examples with `v0.32.9`.
+
 ## v0.32.8 — Harden /clarify heuristics & tool execution
 
 - **Refined vagueness detection heuristics** — eliminated false-positive vague input detections on valid short commands (`git status`, `npm test`, `/math`, `cargo check`, `ls -la`) while preserving structural triggers (`fix it`, `do this`, `make it better`, `optimize this`). Slash commands starting with `/` are explicitly excluded from vagueness checks.

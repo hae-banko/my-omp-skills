@@ -1,98 +1,126 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.32.7-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.32.9-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-27-orange" alt="27 slash commands" />
-  <img src="https://img.shields.io/badge/skills-13-teal" alt="13 model-invoked skills" />
+  <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
+  <img src="https://img.shields.io/badge/skills-14-teal" alt="14 model-invoked skills" />
 </p>
 
-**my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness, for developers who want their AI pair programmer to work with discipline instead of vibes: **plan, build, audit, research, remember** — deterministic workflow on top of the omp harness. It adds 27 user-invoked slash commands and 13 model-invoked skills, plus a persistent local knowledge base, so the same rigor applies across every session and every repo.
+> Turn your AI pair programmer into a disciplined senior engineer.
 
-## What You Get
+Stop vibe coding without structure or context persistence. **my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness designed for developers who demand engineering discipline: **plan, spec, build, audit, research, and remember**. It turns loose LLM conversation into structured, test-first, research-backed engineering workflows that persist across sessions and repositories. It equips your agent with 28 user-invoked slash commands, 14 model-invoked skills, custom TUI component renderers, and an append-only knowledge base.
 
-Each family is a set of commands that do one job for you — pick the ones you need.
+---
 
-| Family | What it does for you |
-| --- | --- |
-| **Plan & Decide** | Sharpen ideas before you build. `/grill-me` interviews you one question at a time until a plan has no loose ends; `/wayfinder` maps a multi-session project into decision tickets you resolve one at a time; `/improve-codebase-architecture` scans your codebase for deepening opportunities and grills the one you pick; `/ask-me` routes you to the right command. |
-| **Ship & Build** | Turn conversation into tracked work. `/to-spec` synthesizes the discussion into a spec; `/to-tickets` breaks it into dependency-aware tickets on your issue tracker; `/implement` builds them test-first and code-reviews before committing; `/triage` moves issues and PRs into agent-ready briefs. |
-| **Audit** | `/audit` produces an independent, evidence-backed critique of a codebase area, architecture, or proposal — stored in `.omp/audits/` with versioned revisions so conclusions can be revisited, not rewritten. |
-| **Deep Research** | The `/research` family runs multi-agent investigations for you: draft an outline, launch parallel background agents in OODA waves, and get a summary-first report with a table of contents and a deduped sources appendix. |
-| **Knowledge base** | Memory that persists across sessions. `/record` saves lessons and findings, `/pitfall` captures mistakes mid-task before context fades — both stored append-only in `.omp/knowledge/`, and the model reads them back automatically when relevant. |
-| **Hindsight reflection** | `/hindsight on` adds a hidden reflection pass after turns that did real work: the model reconsiders design-level choices before the turn settles — no extra typing for you. |
-| **Native LaTeX math** | Mathematical formulas render natively in the omp TUI (`$...$`, `$$...$$`, `\begin{aligned}`), always on, no configuration. Run `/math` for a demo. |
+## Quick Onboarding (30 Seconds)
 
-## Quick Install
+### 1. Install Plugin
 
-This is a **private repository**, so installs go over SSH (or git+https with a PAT). You need an **SSH key with read access** to `hae-banko/my-omp-skills` on each machine you install on — either `~/.ssh/id_ed25519` listed in your GitHub account, or available through `ssh-agent`.
+This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.3"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.9"
 ```
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.32.3"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.32.9"
 ```
 
-**Alternative — git+https with a PAT** (only on machines where SSH is unavailable): embed a personal access token with `repo` scope in the URL, or configure a credential helper that supplies it. Without a token, git+https to a private repo returns `Repository not found`.
+> **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
-You need [oh-my-pi](https://github.com/can1357/oh-my-pi) installed. After installing, **exit and re-enter `omp`** — commands, skills, rules, and tools are discovered at session start.
+### 2. Initialize Your Repository
 
-## First Run
+Run the setup command once per repository to configure issue tracking, triage label vocabulary, and domain doc layouts:
 
-1. **Run `/omp-setup` once per repository.** It configures the issue tracker (local `.scratch/` by default; GitHub/GitLab supported), triage label vocabulary, and domain document layout. It is safe and idempotent — no need to re-run after plugin updates.
-2. **Try a 60-second starter:**
-   - `/grill-me` — stress-test a plan you're about to build.
-   - `/record` — save a lesson you just learned.
-   - `/research` — kick off a structured investigation of a question.
-3. **Turn on hindsight:** `/hindsight on` enables a hidden settle-time reflection pass after turns that did real work (see [Configuration](#configuration)).
+```bash
+/omp-setup
+```
 
-## Command Directory
+It defaults to a local `.scratch/` issue tracker (GitHub and GitLab issue tracking are also supported). `/omp-setup` is safe and idempotent.
 
-All 27 commands are user-invoked slash commands. The model knows them at session start and will suggest the right command when appropriate.
+### 3. Take Your First Win
 
-| Command | Description | Workflow Phase |
+Start experiencing disciplined AI pair programming right away:
+
+- **/ask-me**: Interactive command router — describe what you want to do and `/ask-me` suggests the exact workflow command to execute.
+- **/grill-me**: Stress-test your design or implementation plan before writing a single line of code.
+- **/clarify on**: Turn on prompt clarification so the agent interactively clarifies vague or ambiguous instructions before acting.
+
+---
+
+## Workflows in Action
+
+### 1. Plan & Stress-Test Before Coding
+Before jumping into implementation, turn ambiguous ideas into airtight execution plans:
+- **/grill-me**: Runs a relentless, single-question interview loop to uncover edge cases, missing dependencies, and architectural oversights.
+- **/wayfinder**: Maps multi-session epics into dependency-linked decision tickets on your tracker, allowing you to resolve them step by step.
+- **/improve-codebase-architecture**: Scans your repository for deepening opportunities, renders an interactive HTML report, and grills you on your selected refactoring target.
+
+### 2. Spec, Break Down, and Ship
+Transform high-level requirements into shipped, code-reviewed code:
+- **/to-spec**: Synthesizes existing conversation context into a structured, trackable specification.
+- **/to-tickets**: Decomposes a spec or plan into tracer-bullet tickets with explicit blocking dependencies.
+- **/implement**: Executes ticketed work driven by TDD (test-driven development) at pre-agreed seams and finishes with automated two-axis code review before committing.
+- **/triage**: Filters and processes incoming issues/PRs through specialized triage roles to produce agent-ready briefs.
+
+### 3. Deep Multi-Agent Research
+Execute deep, multi-pass research projects with background agents:
+- **/research**: Phase 1 — Drafts a structured research outline and field framework, producing living status cards and interactive HTML dashboards.
+- **/research-deep**: Phase 2 — Spawns parallel background research agents operating in OODA waves to gather evidence into validated JSON outputs.
+- **/research-report**: Phase 3 — Compiles JSON outputs into a summary-first markdown report complete with table of contents, execution provenance, and a deduplicated sources appendix.
+
+### 4. Persistent Memory & Interactive Clarification
+Build long-term repository memory and eliminate guesswork:
+- **/record**: Permanently saves durable engineering lessons, audits, and decisions into `.omp/knowledge/`.
+- **/pitfall**: Captures runtime mistakes and debugging discoveries mid-task before context fades.
+- **/hindsight**: Toggles a settle-time reflection pass that prompts the model to simplify design choices before completing a turn.
+- **/clarify**: Interactively resolves prompt ambiguity with structured TUI choices when user instructions are vague.
+
+---
+
+## Command Directory (28 Commands)
+
+All 28 slash commands are user-invoked. The model recognizes them at session start and will suggest them when appropriate.
+
+| Command | Category | Description |
 | --- | --- | --- |
-| **Plan & Decide** | | |
-| `/ask-me` | Router over this package; suggests the command or flow that fits your situation | Plan & Decide |
-| `/grill-me` | Relentless one-question-at-a-time interview to sharpen a plan or design before building | Plan & Decide |
-| `/grill-with-docs` | Interactive grilling session that also records domain docs (glossary, ADRs) as decisions resolve | Plan & Decide |
-| `/wayfinder` | Maps multi-session projects into decision tickets on the tracker, resolved one at a time | Plan & Decide |
-| `/improve-codebase-architecture` | Scans codebase for deepening opportunities, presents an HTML report, then grills the chosen target | Plan & Decide |
-| **Ship & Build** | | |
-| `/to-spec` | Synthesizes current conversation context into a formal spec published to the configured tracker | Ship & Build |
-| `/to-tickets` | Breaks a spec or plan into tracer-bullet tickets with explicit blocking edges on the tracker | Ship & Build |
-| `/implement` | Builds work described by tickets/specs, driving TDD at pre-agreed seams and closing with code-review | Ship & Build |
-| `/triage` | Moves issues and PRs through triage roles into agent-ready briefs (`--unlabeled`, `--needs-triage`) | Ship & Build |
-| **Audit & Inspect** | | |
-| `/audit` | Independent audit of a codebase area/architecture written to `.omp/audits/<slug>/` with SemVer lineage | Audit & Inspect |
-| **Deep Research** | | |
-| `/research` | Phase 1: Drafts research outline, field framework, `research.md`, and emits `ResearchReviewCard`. Subcommands: `1`/`2`/`3`, `dashboard`, `review`, `add-items`, `add-fields`, `status`, `run`, `help`, `envcheck`, `off` (`--full`/`--compact` flags on review/dashboard) | Deep Research |
-| `/research-add-items` | Adds research items to existing `outline.yaml` and updates living `research.md` | Deep Research |
-| `/research-add-fields` | Adds field framework definitions to existing `fields.yaml` and updates living `research.md` | Deep Research |
-| `/research-deep` | Phase 2: Researches outline items with parallel agents in OODA waves into validated JSON (`small`/`medium`/`high`) | Deep Research |
-| `/research-report` | Phase 3: Converts research JSON results into a summary-first markdown report with TOC & `_attempts` provenance, plus a `summary.md` digest | Deep Research |
-| **Knowledge Base & Upkeep** | | |
-| `/record` | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`) | Knowledge & Upkeep |
-| `/pitfall` | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades | Knowledge & Upkeep |
-| `/routinize` | Converts repeated ad-hoc work into parameterized scripts (`scripts/routines/manifest.json`) & `run_routine` tool | Knowledge & Upkeep |
-| `/reference` | Local, deterministic reference corpus manager — `add <url>` / `update <name>` / `remove <name>` / `list` run git directly with zero agent turns | Knowledge & Upkeep |
-| `/omp-setup` | Configures repo setup: issue tracker (local `.scratch/`, GitHub, GitLab), triage labels, domain layout | Knowledge & Upkeep |
-| `/hindsight` | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) | Knowledge & Upkeep |
-| `/clarify` | Toggles prompt clarification mode (`on`, `off`, or bare to toggle) and injects clarification guidelines | Knowledge & Upkeep |
-| `/math` | Explains and demos native LaTeX math rendering ($…$, $$…$$, `\begin{aligned}`) | Knowledge & Upkeep |
-| `/omp-handoff` | Compacts current conversation into a handoff document for another agent session | Knowledge & Upkeep |
-| `/plugin-issue` | Reports a bug or feature request on this plugin's GitHub repository | Knowledge & Upkeep |
-| `/teach` | Teaches a skill or concept over multiple sessions using current directory as a stateful workspace | Knowledge & Upkeep |
-| `/writing-great-skills` | Reference for skill writing vocabulary, constraints, and principles | Knowledge & Upkeep |
+| `/ask-me` | Plan & Decide | Router over this package; suggests the exact command or workflow for your task. |
+| `/grill-me` | Plan & Decide | Relentless one-question-at-a-time interview to sharpen a plan or design before building. |
+| `/grill-with-docs` | Plan & Decide | Interactive grilling session that also records domain docs (ADRs, glossary) as decisions resolve. |
+| `/wayfinder` | Plan & Decide | Maps multi-session projects into decision tickets on the tracker, resolved one at a time. |
+| `/improve-codebase-architecture` | Plan & Decide | Scans codebase for deepening opportunities, presents an HTML report, then grills the chosen target. |
+| `/to-spec` | Ship & Build | Synthesizes current conversation context into a formal spec published to the configured tracker. |
+| `/to-tickets` | Ship & Build | Breaks a spec or plan into tracer-bullet tickets with explicit blocking edges on the tracker. |
+| `/implement` | Ship & Build | Builds work described by tickets/specs, driving TDD at pre-agreed seams and closing with code-review. |
+| `/triage` | Ship & Build | Moves issues and PRs through triage roles into agent-ready briefs (`--unlabeled`, `--needs-triage`). |
+| `/audit` | Audit & Inspect | Independent audit of a codebase area or architecture under `.omp/audits/<slug>/` with SemVer lineage. |
+| `/research` | Deep Research | Phase 1 of deep research: generates research outline, field framework, review cards, and HTML dashboards. |
+| `/research-add-items` | Deep Research | Adds research items to an existing `outline.yaml` and updates living `research.md`. |
+| `/research-add-fields` | Deep Research | Adds field framework definitions to an existing `fields.yaml` and updates living `research.md`. |
+| `/research-deep` | Deep Research | Phase 2 of deep research: researches outline items with parallel background agents in OODA waves. |
+| `/research-report` | Deep Research | Phase 3 of deep research: converts deep-research JSON results into a summary-first markdown report with TOC. |
+| `/record` | Knowledge Base & Upkeep | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`). |
+| `/pitfall` | Knowledge Base & Upkeep | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades. |
+| `/routinize` | Knowledge Base & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`. |
+| `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
+| `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.scratch/`, GitHub, GitLab), triage labels, domain layout. |
+| `/hindsight` | Knowledge Base & Upkeep | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) before turns settle. |
+| `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, or bare to toggle) and injects clarification guidelines. |
+| `/math` | Knowledge Base & Upkeep | Explains and demos native LaTeX math rendering ($...$, $$...$$, `\begin{aligned}`). |
+| `/omp-handoff` | Knowledge Base & Upkeep | Compacts current conversation into a handoff document for another agent session. |
+| `/plugin-issue` | Knowledge Base & Upkeep | Reports a bug or feature request on this plugin's GitHub repository. |
+| `/teach` | Knowledge Base & Upkeep | Teaches a skill or concept over multiple sessions using current directory as a stateful workspace. |
+| `/writing-great-skills` | Knowledge Base & Upkeep | Reference for skill writing vocabulary, constraints, and principles. |
 
-## Model-Invoked Skills
+---
 
-The 14 skills are model-invoked: omp loads a skill automatically when the context matches. Exception: `using-git-worktrees` is user-invoked only.
+## Model-Invoked Skills (14 Skills)
+
+The 14 skills are model-invoked: omp loads a skill automatically when conversation or codebase context matches (exception: `using-git-worktrees` is user-invoked).
 
 | Skill | Description | Trigger Condition |
 | --- | --- | --- |
@@ -109,13 +137,15 @@ The 14 skills are model-invoked: omp loads a skill automatically when the contex
 | `using-herdr` | Operates herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent` tools or CLI). | The user mentions herdr or asks to control workspaces, panes, or sibling agents. |
 | `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/` convention). | **User-invoked only**: explicitly requested by user. |
 | `show-me` | Visual explanations via code sketches, call trees, file layouts, Mermaid, diffs, or HTML artifacts. | Explaining structure, control flow, UI hierarchy, architecture, or visual concepts. |
-| `design-control-loop` | Designs agentic control loops (sensor, controller, actuator, disturbances) for codebase maintenance & automated CI runs. | Designing scheduled or automated codebase feedback loops, automated PR workflows, or quality gates. |
+| `design-control-loop` | Cybernetic control loop design (sensor, controller, actuator, disturbances) for codebase maintenance & CI workflows. | Designing scheduled or automated codebase feedback loops, automated PR workflows, or quality gates. |
 
-## Configuration
+---
 
-### Hindsight
+## Configuration & Customization
 
-`/hindsight` is off by default; `/hindsight on` enables the settle-time reflection pass. Configure it via `~/.omp/hindsight.json` — all fields are optional: `nudge` is the reflection prompt, `leadIn` prefixes the hidden pass, `name` labels the configuration, and `onMessage`/`offMessage` are the receipt texts (set to `""` to suppress).
+### Hindsight Reflection
+
+`/hindsight` is off by default; `/hindsight on` enables the settle-time reflection pass. Configure options via `~/.omp/hindsight.json`:
 
 ```json
 {
@@ -127,37 +157,56 @@ The 14 skills are model-invoked: omp loads a skill automatically when the contex
 }
 ```
 
-### Math
+### Native LaTeX Math
 
-Native LaTeX math rendering is always on in the omp TUI — no configuration. `/math` explains the supported syntax.
+Native LaTeX math rendering is always active in the omp TUI — no toggle or configuration needed:
+- **Inline math**: `$E = mc^2$`
+- **Display math**: `$$\frac{d}{dx}\left( \int_{a}^{x} f(t)\,dt \right) = f(x)$$` or multi-line `\begin{aligned} ... \end{aligned}` blocks.
+
+Run `/math` in any omp session for a live demo.
+
+---
 
 ## Updating & Troubleshooting
 
 All plugin management goes through `omp plugin`:
 
-1. **View installed plugins**: `omp plugin list` shows `my-omp-skills@v0.32.3`.
-2. **Upgrade to a new release**: re-run the SSH install command with the newest tag:
+1. **View Installed Plugins**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#<new-tag>"
+   omp plugin list
    ```
-3. **List available versions** (requires SSH access to the private repo):
+   Should display `my-omp-skills@v0.32.9`.
+
+2. **Upgrade to `v0.32.9`**:
+   ```bash
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.32.9"
+   ```
+
+3. **List Available Tag Versions** (requires SSH read access):
    ```bash
    git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags
    ```
-   Every tag push auto-creates a GitHub Release from the matching CHANGELOG section (`.github/workflows/release.yml`); a guard fails the run if `package.json`'s version doesn't match the tag.
-4. **Fix cached mirror mismatches**: if Bun's cache predates a new tag:
+
+4. **Clear & Fix Stale Mirror Cache**:
+   If Bun or `omp` caches predate a tag update:
    ```bash
    git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
    ```
-5. **Uninstall**: `omp plugin uninstall my-omp-skills`.
 
-For maintainers: architecture notes live in [AGENTS.md](AGENTS.md), release history in [CHANGELOG.md](CHANGELOG.md).
+5. **Uninstall**:
+   ```bash
+   omp plugin uninstall my-omp-skills
+   ```
+
+---
 
 ## License & Attribution
 
-[MIT](LICENSE) · [hae-banko/my-omp-skills](https://github.com/hae-banko/my-omp-skills)
+Distributed under the [MIT License](LICENSE).
 
-Adapted from three open-source suites (all MIT licensed):
+Adapted from open-source suites (all MIT licensed):
 - [mattpocock/skills](https://github.com/mattpocock/skills) — Base command and skill structure.
 - [obra/superpowers](https://github.com/obra/superpowers) — Source of `using-git-worktrees` skill.
 - [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) — Source of the `/research` command family.
+- [humanlayer/skills](https://github.com/humanlayer/humanlayer) — Source of `show-me` and `design-control-loop` skills.
+- [dkmnx/pi-clarify](https://github.com/dkmnx/pi-clarify) — Source of `/clarify` prompt clarification command and tool.
