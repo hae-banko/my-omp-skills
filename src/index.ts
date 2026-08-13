@@ -38,6 +38,7 @@ import {
 } from "./locators.ts";
 import { installPolicy } from "./policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./references.ts";
+import { installKbGuardStatus } from "./kb-guard-status.ts";
 import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
 import { installRoutinesTool } from "./routines.ts";
 import {
@@ -1297,11 +1298,14 @@ async function runDefaultHandler(args: {
 }
 
 export default function (pi: ExtensionApi): void {
-  installBootstrap(
-    pi,
-    COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),
-  );
+  // installBootstrap MUST register last for `session_start`/`agent_end`/
+  // `session_compact`/`context` because the selftest mock stores handlers
+  // in a single slot per event (last writer wins). Bootstrap's handlers
+  // are the ones tested via `handlers[...]` directly; running it last
+  // preserves its behavior under the test mock. In production the omp
+  // runtime fans out registrations, so this ordering is harmless.
   installPolicy(pi);
+  installKbGuardStatus(pi);
   installKnowledgeTool(pi);
   installClarify(pi);
   installHindsight(pi);
@@ -1317,6 +1321,10 @@ export default function (pi: ExtensionApi): void {
   installTicketBreakdownRenderer(pi);
   installTriageStatusRenderer(pi);
   installReferenceResultRenderer(pi);
+  installBootstrap(
+    pi,
+    COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),
+  );
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));

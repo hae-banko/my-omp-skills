@@ -6,6 +6,7 @@
 export interface CommandContext {
   ui?: {
     notify?(message: string, level?: string): void;
+    setStatus?(key: string, text: string | undefined): void;
   };
 }
 

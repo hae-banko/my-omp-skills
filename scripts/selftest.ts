@@ -7,6 +7,8 @@
 //    context → dedup → agent_end clears it), after leading compaction summaries.
 // 3. The tool_call policy blocks rewrites of the append-only knowledge base
 //    while letting new files, research working files, and INDEX.md appends pass.
+// 4. The kb-guard-status widget surfaces block count via setStatus and
+//    shadows/un-shadows the status bar based on .omp/knowledge presence.
 //
 // Run: bun run scripts/selftest.ts
 
@@ -33,7 +35,18 @@ import { __resetBootstrapForTests } from "../src/bootstrap.ts";
 // herdr tools themselves are the registered surface, gated below), so the
 // harness imports it directly — the one deliberate direct import left in.
 import { parseHerdrOutput } from "../src/herdr-tools.ts";
-import type { ToolResult } from "../src/api.ts";
+import type { ExtensionApi, ToolResult } from "../src/api.ts";
+import {
+  __setStatusFnForTests,
+  formatStatusText,
+  getBlockCount,
+  getBlockDetails,
+  installKbGuardStatus,
+  recordBlock,
+  resetSession,
+  STATUS_KEY,
+  type KbBlockDetail,
+} from "../src/kb-guard-status.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
 import { findFrontierTicket } from "../src/locators.ts";
@@ -339,6 +352,140 @@ if (!postReset || postReset.length !== 3) {
 }
 
 
+// --- kb-guard-status widget ------------------------------------------------
+resetSession();
+if (getBlockCount() !== 0) fail(`kb-guard-status: post-reset count=${getBlockCount()}, expected 0`);
+if (getBlockDetails().length !== 0) fail(`kb-guard-status: post-reset details=${getBlockDetails().length}, expected 0`);
+
+recordBlock("edit", ".omp/knowledge/records/foo.md", "knowledge");
+if (getBlockCount() !== 1) fail(`kb-guard-status: count after 1 recordBlock=${getBlockCount()}, expected 1`);
+const d1 = getBlockDetails();
+if (d1.length !== 1) fail(`kb-guard-status: details after 1 recordBlock=${d1.length}, expected 1`);
+else {
+  const blk = d1[0] as KbBlockDetail;
+  if (blk.tool !== "edit" || blk.path !== ".omp/knowledge/records/foo.md" || blk.reason !== "knowledge") {
+    fail(`kb-guard-status: detail shape wrong: ${JSON.stringify(blk)}`);
+  }
+  if (typeof blk.ts !== "number" || blk.ts <= 0) fail(`kb-guard-status: detail ts not numeric: ${blk.ts}`);
+}
+
+recordBlock("write", ".omp/knowledge/INDEX.md", "knowledge");
+recordBlock("bash", "<bash>", "audit");
+if (getBlockCount() !== 3) fail(`kb-guard-status: count after 3 recordBlock=${getBlockCount()}, expected 3`);
+if (getBlockDetails().length !== 3) fail(`kb-guard-status: details after 3 recordBlock=${getBlockDetails().length}, expected 3`);
+
+// 10 recordBlocks: count is uncapped, detail ring retains last 8.
+for (let i = 0; i < 7; i += 1) recordBlock("edit", `.omp/knowledge/records/extra${i}.md`, "knowledge");
+if (getBlockCount() !== 10) fail(`kb-guard-status: count after 10 recordBlock=${getBlockCount()}, expected 10`);
+const finalDetails = getBlockDetails();
+if (finalDetails.length !== 8) fail(`kb-guard-status: details cap=8, observed length=${finalDetails.length}`);
+// FIFO ring keeps the most recent 8. Push order: foo, INDEX, bash, extra0..extra6.
+// Oldest retained = bash (3rd push, index 2). Newest retained = extra6 (10th push).
+const oldestRetained = finalDetails[0] as KbBlockDetail;
+const newestRetained = finalDetails[finalDetails.length - 1] as KbBlockDetail;
+if (oldestRetained.tool !== "bash" || oldestRetained.path !== "<bash>") {
+  fail(`kb-guard-status: ring buffer oldest should be '<bash>', observed=${JSON.stringify(oldestRetained)}`);
+}
+if (newestRetained.path !== ".omp/knowledge/records/extra6.md") {
+  fail(`kb-guard-status: ring buffer newest should be extra6.md, observed=${newestRetained.path}`);
+}
+
+resetSession();
+if (getBlockCount() !== 0) fail(`kb-guard-status: resetSession count=${getBlockCount()}, expected 0`);
+if (getBlockDetails().length !== 0) fail(`kb-guard-status: resetSession details=${getBlockDetails().length}, expected 0`);
+
+if (formatStatusText(null) !== undefined) {
+  fail("kb-guard-status: formatStatusText(null) returned non-undefined");
+}
+const noKbDir = mkdtempSync(join(tmpdir(), "my-omp-kb-status-"));
+if (formatStatusText(noKbDir) !== undefined) {
+  fail("kb-guard-status: formatStatusText(dir-without-kb) returned non-undefined");
+}
+rmSync(noKbDir, { recursive: true, force: true });
+
+const kbDir = mkdtempSync(join(tmpdir(), "my-omp-kb-status-"));
+mkdirSync(join(kbDir, ".omp", "knowledge"), { recursive: true });
+resetSession();
+const t0 = formatStatusText(kbDir);
+if (t0 !== "KB append-only · 0 blocks") {
+  fail(`kb-guard-status: formatStatusText(kbDir) with 0 blocks = ${JSON.stringify(t0)}`);
+}
+recordBlock("edit", "x", "knowledge");
+recordBlock("edit", "y", "knowledge");
+const t2 = formatStatusText(kbDir);
+if (t2 !== "KB append-only · 2 blocks") {
+  fail(`kb-guard-status: formatStatusText(kbDir) with 2 blocks = ${JSON.stringify(t2)}`);
+}
+resetSession();
+recordBlock("edit", "z", "knowledge");
+const t1 = formatStatusText(kbDir);
+if (t1 !== "KB append-only · 1 block") {
+  fail(`kb-guard-status: formatStatusText(kbDir) with 1 block = ${JSON.stringify(t1)}`);
+}
+// Keep kbDir alive — subscription tests below reuse it for the .omp/knowledge subdir.
+
+// installKbGuardStatus: registers session_start (caches cwd, resetSession,
+// render) and agent_end (re-render). Fresh mock so the shared
+// handlers["session_start"] slot used by bootstrap tests above doesn't
+// shadow these assertions.
+const kbGuardStatusCalls: Array<[string, string | undefined]> = [];
+const kbMockHandlers: Record<string, (event: unknown) => unknown> = {};
+const kbMock = {
+  registerCommand(): void {},
+  sendUserMessage: async (): Promise<void> => {},
+  sendMessage(): void {},
+  registerTool(): void {},
+  registerMessageRenderer(): void {},
+  zod: z,
+  on(event: string, handler: (event: unknown) => unknown): void {
+    kbMockHandlers[event] = handler;
+  },
+};
+const captureSetStatus = (key: string, text: string | undefined): void => {
+  kbGuardStatusCalls.push([key, text]);
+};
+__setStatusFnForTests(captureSetStatus);
+installKbGuardStatus(kbMock as unknown as ExtensionApi);
+if (STATUS_KEY !== "kb-guardrail") {
+  fail(`kb-guard-status: STATUS_KEY=${STATUS_KEY}, expected 'kb-guardrail'`);
+}
+resetSession();
+kbGuardStatusCalls.length = 0;
+
+const startHandler = kbMockHandlers["session_start"];
+const endHandler = kbMockHandlers["agent_end"];
+if (typeof startHandler !== "function" || typeof endHandler !== "function") {
+  fail("kb-guard-status: installKbGuardStatus did not register session_start/agent_end");
+} else {
+  // session_start with dir lacking .omp/knowledge → setStatus(undefined).
+  const kbnoneDir = mkdtempSync(join(tmpdir(), "my-omp-kb-status-"));
+  startHandler({ cwd: kbnoneDir });
+  const lastNoKb = kbGuardStatusCalls[kbGuardStatusCalls.length - 1] as [string, string | undefined] | undefined;
+  if (!lastNoKb) fail("kb-guard-status: session_start did not trigger setStatus");
+  else if (lastNoKb[0] !== STATUS_KEY) fail(`kb-guard-status: setStatus key=${lastNoKb[0]}, expected ${STATUS_KEY}`);
+  else if (lastNoKb[1] !== undefined) {
+    fail(`kb-guard-status: setStatus on dir-without-kb = ${JSON.stringify(lastNoKb[1])}, expected undefined`);
+  }
+  rmSync(kbnoneDir, { recursive: true, force: true });
+
+  // session_start with kbDir → KB present → setStatus renders text.
+  startHandler({ cwd: kbDir });
+  const lastKb = kbGuardStatusCalls[kbGuardStatusCalls.length - 1] as [string, string | undefined] | undefined;
+  if (!lastKb) fail("kb-guard-status: session_start with KB did not trigger setStatus");
+  else if (lastKb[1] !== "KB append-only · 0 blocks") {
+    fail(`kb-guard-status: setStatus on KB dir = ${JSON.stringify(lastKb[1])}`);
+  }
+
+  // agent_end triggers re-render so late recordBlock() hits the bar.
+  const callsBeforeEnd = kbGuardStatusCalls.length;
+  endHandler({});
+  if (kbGuardStatusCalls.length <= callsBeforeEnd) {
+    fail("kb-guard-status: agent_end did not re-render");
+  }
+}
+__setStatusFnForTests(undefined);
+rmSync(kbDir, { recursive: true, force: true });
+
 // --- Policy: append-only knowledge base ------------------------------------
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), "my-omp-skills-test-"));
@@ -441,6 +588,11 @@ for (const [label, toolName, input, expectBlock] of cases) {
   if (blocked !== expectBlock) {
     fail(`policy: ${label} → blocked=${blocked}, expected ${expectBlock}`);
   }
+}
+// Integration: policy.ts blocks record into the kb-guard-status counter.
+const expectedBlocks = cases.filter((c) => c[3] === true).length;
+if (getBlockCount() !== expectedBlocks) {
+  fail(`policy: kb-guard-status count=${getBlockCount()}, expected ${expectedBlocks} from policy cases`);
 }
 
 // --- knowledge_read tool + renderers + receipts -----------------------------
@@ -2694,4 +2846,4 @@ if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — commands, bootstrap, policy, knowledge_read, renderers, hindsight, and clarify behave correctly.");
+console.log("\nOK — commands, bootstrap, kb-guard-status, policy, knowledge_read, renderers, hindsight, and clarify behave correctly.");

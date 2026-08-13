@@ -3,10 +3,13 @@
 // is the AGENTS.md convention made a runtime invariant. Research project
 // working files (outline.yaml, fields.yaml) stay editable; they are
 // human-in-the-loop work products, not durable records.
+//
+// Block counter is surfaced via the kb-guard-status widget; do not remove the recordBlock() calls.
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 import type { ExtensionApi, ToolCallEvent, ToolCallEventResult } from "./api.ts";
+import { recordBlock } from "./kb-guard-status.ts";
 
 const KB_REASON =
   "Blocked: the knowledge base is append-only — records, pitfalls, and INDEX.md are never edited in place. " +
@@ -121,6 +124,26 @@ function getPathList(input: Record<string, unknown>): string[] {
   }
   return Array.from(new Set(res));
 }
+
+/**
+ * First path in `input` that `isProtectedPath(cwd, ...)` accepts (optionally
+ * narrowed by `filter`). Returns `undefined` when no candidate matches.
+ * Used by `installPolicy` to capture the exact path that triggered a block
+ * so the kb-guard-status widget can surface it for future audit-card
+ * rendering.
+ */
+function matchedPath(
+  cwd: string,
+  input: Record<string, unknown>,
+  filter?: (p: string) => boolean,
+): string | undefined {
+  for (const p of getPathList(input)) {
+    if (filter && !filter(p)) continue;
+    if (isProtectedPath(cwd, p)) return p;
+  }
+  return undefined;
+}
+
 
 function isControlledAuditUpdate(
   cwd: string,
@@ -240,31 +263,35 @@ export function installPolicy(pi: ExtensionApi): void {
     const e = event as ToolCallEvent;
 
     if (e.toolName === "edit") {
-      const paths = getPathList(e.input);
-      for (const p of paths) {
-        if (isProtectedPath(cwd, p)) {
-          if (isAuditSubpath(cwd, p)) {
-            if (!isControlledAuditUpdate(cwd, e.input, "edit")) {
-              return { block: true, reason: AUDIT_REASON };
-            }
-          } else {
-            return { block: true, reason: KB_REASON };
+      const protectedMatch = matchedPath(cwd, e.input);
+      if (protectedMatch !== undefined) {
+        if (isAuditSubpath(cwd, protectedMatch)) {
+          if (!isControlledAuditUpdate(cwd, e.input, "edit")) {
+            recordBlock(e.toolName, protectedMatch, "audit");
+            return { block: true, reason: AUDIT_REASON };
           }
+        } else {
+          recordBlock(e.toolName, protectedMatch, "knowledge");
+          return { block: true, reason: KB_REASON };
         }
       }
     }
 
     if (e.toolName === "write") {
-      const paths = getPathList(e.input);
-      for (const p of paths) {
-        if (isProtectedPath(cwd, p) && existsSync(resolve(cwd, p))) {
-          if (isAuditSubpath(cwd, p)) {
-            if (!isControlledAuditUpdate(cwd, e.input, "write")) {
-              return { block: true, reason: AUDIT_REASON };
-            }
-          } else {
-            return { block: true, reason: KB_REASON };
+      const protectedMatch = matchedPath(
+        cwd,
+        e.input,
+        (p) => isProtectedPath(cwd, p) && existsSync(resolve(cwd, p)),
+      );
+      if (protectedMatch !== undefined) {
+        if (isAuditSubpath(cwd, protectedMatch)) {
+          if (!isControlledAuditUpdate(cwd, e.input, "write")) {
+            recordBlock(e.toolName, protectedMatch, "audit");
+            return { block: true, reason: AUDIT_REASON };
           }
+        } else {
+          recordBlock(e.toolName, protectedMatch, "knowledge");
+          return { block: true, reason: KB_REASON };
         }
       }
     }
@@ -272,7 +299,9 @@ export function installPolicy(pi: ExtensionApi): void {
     if (e.toolName === "bash") {
       const command = typeof e.input.command === "string" ? e.input.command : "";
       if (refersToProtected(command) && isDestructiveShell(command)) {
-        if (command.includes(".omp/audits")) {
+        const reason: "knowledge" | "audit" = command.includes(".omp/audits") ? "audit" : "knowledge";
+        recordBlock(e.toolName, "<bash>", reason);
+        if (reason === "audit") {
           return { block: true, reason: AUDIT_REASON };
         }
         return { block: true, reason: KB_REASON };

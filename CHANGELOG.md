@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.38.0 — Surface KB guardrail state in the status bar
+
+- **KB guardrail status widget** — `installKbGuardStatus` registers a status-bar entry (`"KB append-only · N blocks"`) on `session_start` whenever the working tree contains `.omp/knowledge/`. It is purely passive: surfaces block count, no model coordination, no event spam. Cleared automatically when KB is absent.
+- **Block telemetry** — `policy.ts` now calls `recordBlock` on every blocked edit/write/bash; the widget reflects the cumulative session block count. Last 8 blocks retained in memory for future audit-card rendering (not yet exposed).
+- **Zero LLM overhead** — status updates happen via `ui.setStatus` (footer) which is render-only; no input messages, no tool calls, no model coordination.
+
 ## v0.37.0 — Resolve #7: prevent bootstrap command-list leak into subagent transcripts
 
 - **Bootstrap subagent leak fixed** — `installBootstrap` now tracks whether ANY prior `agent_end` has fired and refuses to re-arm injection for subsequent `session_start` events. This prevents the `<my-omp-skills:available-commands>` block from being injected into subagent task transcripts (wasted tokens + noisy instructions the subagent will never act on).
