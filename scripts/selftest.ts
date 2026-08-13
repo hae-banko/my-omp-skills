@@ -2067,13 +2067,15 @@ for (const name of HERDR_TOOLS) {
   try {
     // 1. /reference
     const refSub = registered["reference"].getArgumentCompletions?.("") ?? null;
-    if (!refSub || refSub.length !== 4) {
-      fail("reference: expected 4 subcommands for empty prefix");
+    if (!refSub || refSub.length !== 5 || refSub[0].value !== "") {
+      fail("reference: expected header line (value '') + 4 subcommands for empty prefix");
     } else {
-      const labels = refSub.map((c) => c.label).sort().join(",");
+      if (!refSub[0].label.includes("● References:")) {
+        fail(`reference: expected live status header, got: ${refSub[0].label}`);
+      }
+      const labels = refSub.slice(1).map((c) => c.label).sort().join(",");
       if (labels !== "add,list,remove,update") fail(`reference: unexpected subcommand labels: ${labels}`);
     }
-
     const refUpdate = registered["reference"].getArgumentCompletions?.("update ") ?? null;
     if (!refUpdate || refUpdate.length !== 2) {
       fail("reference: expected 2 reference names for 'update '");
@@ -2104,6 +2106,8 @@ for (const name of HERDR_TOOLS) {
     const auditEmpty = registered["audit"].getArgumentCompletions?.("") ?? null;
     if (
       !auditEmpty ||
+      auditEmpty[0].value !== "" ||
+      !auditEmpty[0].label.includes("● Audits:") ||
       !auditEmpty.some((c) => c.label === "demo-audit") ||
       !auditEmpty.some((c) => c.label === "complex-audit") ||
       !auditEmpty.some((c) => c.label === "--recent") ||
@@ -2112,7 +2116,7 @@ for (const name of HERDR_TOOLS) {
       !auditEmpty.some((c) => c.label === "view") ||
       !auditEmpty.some((c) => c.label === "subtopics")
     ) {
-      fail("audit: expected demo-audit, complex-audit, subcommands (status, list, view, subtopics), and --recent completions for empty prefix");
+      fail("audit: expected header (value '') + demo-audit, complex-audit, subcommands (status, list, view, subtopics), and --recent completions for empty prefix");
     }
     const auditFlags = registered["audit"].getArgumentCompletions?.("--") ?? null;
     if (!auditFlags || auditFlags.length !== 2 || !auditFlags.some((c) => c.label === "--recent") || !auditFlags.some((c) => c.label === "--version")) {
@@ -2126,9 +2130,12 @@ for (const name of HERDR_TOOLS) {
 
     // 1c. /research
     const researchEmpty = registered["research"].getArgumentCompletions?.("") ?? null;
-    if (!researchEmpty || researchEmpty.length < 10) {
-      fail(`research: expected subcommands and project slugs for empty prefix, got ${researchEmpty?.length}`);
+    if (!researchEmpty || researchEmpty.length < 10 || researchEmpty[0].value !== "") {
+      fail(`research: expected header (value '') + subcommands and project slugs for empty prefix, got ${researchEmpty?.length}`);
     } else {
+      if (!researchEmpty[0].label.includes("● Active research:") && !researchEmpty[0].label.includes("○ No research projects")) {
+        fail(`research: expected live status header, got: ${researchEmpty[0].label}`);
+      }
       const labels = researchEmpty.map((c) => c.label);
       for (const sub of ["1", "2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run", "off"]) {
         if (!labels.includes(sub)) {
@@ -2236,10 +2243,13 @@ for (const name of HERDR_TOOLS) {
 
     // 8. /routinize
     const routinizeEmpty = registered["routinize"].getArgumentCompletions?.("") ?? null;
-    if (!routinizeEmpty || routinizeEmpty.length !== 3) {
-      fail("routinize: expected 3 subcommands (scan, run, list) for empty prefix");
+    if (!routinizeEmpty || routinizeEmpty.length !== 4 || routinizeEmpty[0].value !== "") {
+      fail("routinize: expected header line (value '') + 3 subcommands (scan, run, list) for empty prefix");
     } else {
-      const labels = routinizeEmpty.map((c) => c.label).sort().join(",");
+      if (!routinizeEmpty[0].label.includes("● Routines:") && !routinizeEmpty[0].label.includes("○ No routines")) {
+        fail(`routinize: expected live status header, got: ${routinizeEmpty[0].label}`);
+      }
+      const labels = routinizeEmpty.slice(1).map((c) => c.label).sort().join(",");
       if (labels !== "list,run,scan") fail(`routinize: unexpected subcommand labels: ${labels}`);
     }
 
@@ -2290,18 +2300,40 @@ for (const name of HERDR_TOOLS) {
     }
 
     // 11. /wayfinder
-    const wayfinderEmpty = registered["wayfinder"].getArgumentCompletions?.("") ?? null;
-    if (!wayfinderEmpty || wayfinderEmpty.length !== 4) {
-      fail("wayfinder: expected 4 subcommands (status, map, list, resolve) for empty prefix");
+    // In fixtureRoot, an active ticket exists (my-feature / Implement REST API endpoints)
+    const wayfinderWithTicket = registered["wayfinder"].getArgumentCompletions?.("") ?? null;
+    if (!wayfinderWithTicket || wayfinderWithTicket.length !== 5 || wayfinderWithTicket[0].value !== "") {
+      fail("wayfinder: expected header line (value '') + 4 subcommands when ticket exists");
     } else {
-      const labels = wayfinderEmpty.map((c) => c.label).sort().join(",");
+      if (!wayfinderWithTicket[0].label.includes("● Active frontier: my-feature / Implement REST API endpoints")) {
+        fail(`wayfinder: expected active frontier header, got: ${wayfinderWithTicket[0].label}`);
+      }
+      const labels = wayfinderWithTicket.slice(1).map((c) => c.label).sort().join(",");
       if (labels !== "list,map,resolve,status") {
         fail(`wayfinder: unexpected subcommand labels: ${labels}`);
       }
     }
-    const wayfinderRes = registered["wayfinder"].getArgumentCompletions?.("res") ?? null;
-    if (!wayfinderRes || wayfinderRes.length !== 1 || wayfinderRes[0].label !== "resolve") {
-      fail("wayfinder: expected resolve completion for 'res'");
+
+    const wayfinderS = registered["wayfinder"].getArgumentCompletions?.("s") ?? null;
+    if (!wayfinderS || wayfinderS.length !== 1 || wayfinderS[0].label !== "status" || wayfinderS[0].value !== "status") {
+      fail("wayfinder: expected 'status' completion without header for prefix 's'");
+    }
+
+    // Verify wayfinder header when no ticket exists
+    const emptyDir = mkdtempSync(join(tmpdir(), "omp-wayfinder-empty-"));
+    try {
+      process.chdir(emptyDir);
+      const wayfinderNoTicket = registered["wayfinder"].getArgumentCompletions?.("") ?? null;
+      if (!wayfinderNoTicket || wayfinderNoTicket.length !== 5 || wayfinderNoTicket[0].value !== "") {
+        fail("wayfinder: expected header (value '') + 4 subcommands when no ticket exists");
+      } else {
+        if (!wayfinderNoTicket[0].label.includes("○ No active frontier ticket")) {
+          fail(`wayfinder: expected '○ No active frontier ticket' header, got: ${wayfinderNoTicket[0].label}`);
+        }
+      }
+    } finally {
+      process.chdir(fixtureRoot);
+      rmSync(emptyDir, { recursive: true, force: true });
     }
 
     // 12. /omp-setup

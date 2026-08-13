@@ -27,6 +27,7 @@ import {
 } from "./hindsight.ts";
 import { installKnowledgeTool } from "./knowledge-tool.ts";
 import {
+  findFrontierTicket,
   listAuditSlugs,
   listFeatureSpecs,
   listReferences,
@@ -526,6 +527,32 @@ const COMMANDS: CommandSpec[] = [
         const matches = subcommands.filter(
           (sc) => sc.label.toLowerCase().startsWith(lower) || sc.value.toLowerCase().startsWith(lower),
         );
+        if (argumentPrefix === "") {
+          const root = findRepoRoot();
+          const { slug, notFound, payload } = readProject(root, "");
+          const header = !notFound
+            ? (() => {
+                const status = payload.status ?? "DRAFT";
+                const m = payload.global_metrics ?? {};
+                return {
+                  value: "",
+                  label: "● Active research: " + slug + " (" + status + ")",
+                  description:
+                    "Phase " +
+                    (payload.current_phase ?? 1) +
+                    " · items " +
+                    (m.completed_items ?? 0) +
+                    "/" +
+                    (m.total_items ?? 0),
+                };
+              })()
+            : {
+                value: "",
+                label: "○ No research projects in .omp/knowledge/research/",
+                description: "Use /research <topic> to start phase 1",
+              };
+          return [header, ...matches];
+        }
         return matches.length > 0 ? matches : null;
       }
 
@@ -676,7 +703,8 @@ const COMMANDS: CommandSpec[] = [
       });
     },
     getArgumentCompletions: (argumentPrefix: string) => {
-      const slugs = listAuditSlugs(findRepoRoot());
+      const root = findRepoRoot();
+      const audits = listAuditSlugs(root);
       const lower = argumentPrefix.toLowerCase();
       const subcommands: Array<{ value: string; label: string; description?: string }> = [
         { value: "status", label: "status", description: "Show active audit status" },
@@ -688,7 +716,7 @@ const COMMANDS: CommandSpec[] = [
       ];
 
       if (!argumentPrefix.includes(" ")) {
-        const slugOptions = slugs.map((slug) => ({
+        const slugOptions = audits.map((slug) => ({
           value: slug,
           label: slug,
           description: "Existing audit report slug",
@@ -700,6 +728,27 @@ const COMMANDS: CommandSpec[] = [
             o.value.toLowerCase().startsWith(lower) ||
             (o.description === "Existing audit report slug" && o.label.toLowerCase().includes(lower)),
         );
+        if (argumentPrefix === "") {
+          const header =
+            audits.length > 0
+              ? {
+                  value: "",
+                  label:
+                    "● Audits: " +
+                    audits.length +
+                    " reports (" +
+                    audits.slice(0, 3).join(", ") +
+                    (audits.length > 3 ? "..." : "") +
+                    ")",
+                  description: "Audit reports in .omp/audits/",
+                }
+              : {
+                  value: "",
+                  label: "○ No audit reports in .omp/audits/",
+                  description: "Use /audit to start an audit",
+                };
+          return [header, ...matches];
+        }
         return matches.length > 0 ? matches : null;
       }
 
@@ -708,7 +757,7 @@ const COMMANDS: CommandSpec[] = [
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
       if (["view", "subtopics", "status", "--version"].includes(sub)) {
-        const matches = slugs
+        const matches = audits
           .filter((slug) => slug.toLowerCase().startsWith(rest) || slug.toLowerCase().includes(rest))
           .map((slug) => ({
             value: `${sub} ${slug}`,
@@ -932,6 +981,22 @@ const COMMANDS: CommandSpec[] = [
 
       if (!argumentPrefix.includes(" ")) {
         const matches = subcommands.filter((sc) => sc.label.toLowerCase().startsWith(lower));
+        if (argumentPrefix === "") {
+          const root = findRepoRoot();
+          const ticket = findFrontierTicket(root);
+          const header = ticket
+            ? {
+                value: "",
+                label: "● Active frontier: " + ticket.feature + " / " + ticket.title,
+                description: ticket.file,
+              }
+            : {
+                value: "",
+                label: "○ No active frontier ticket",
+                description: "Use /wayfinder status or /wayfinder resolve to update",
+              };
+          return [header, ...matches];
+        }
         return matches.length > 0 ? matches : null;
       }
 
@@ -996,6 +1061,29 @@ const COMMANDS: CommandSpec[] = [
 
       if (!argumentPrefix.includes(" ")) {
         const matches = options.filter((o) => o.label.startsWith(lower));
+        if (argumentPrefix === "") {
+          const root = findRepoRoot();
+          const refs = listReferences(root);
+          const header =
+            refs.length > 0
+              ? {
+                  value: "",
+                  label:
+                    "● References: " +
+                    refs.length +
+                    " installed (" +
+                    refs.slice(0, 3).join(", ") +
+                    (refs.length > 3 ? "..." : "") +
+                    ")",
+                  description: "Local reference corpus in .omp/references/",
+                }
+              : {
+                  value: "",
+                  label: "○ No reference repositories installed",
+                  description: "Use /reference add <url> to clone",
+                };
+          return [header, ...matches];
+        }
         return matches.length > 0 ? matches : null;
       }
 
@@ -1037,6 +1125,29 @@ const COMMANDS: CommandSpec[] = [
 
       if (!argumentPrefix.includes(" ")) {
         const matches = options.filter((o) => o.label.startsWith(lower));
+        if (argumentPrefix === "") {
+          const root = findRepoRoot();
+          const routines = listRoutines(root);
+          const header =
+            routines.length > 0
+              ? {
+                  value: "",
+                  label:
+                    "● Routines: " +
+                    routines.length +
+                    " available (" +
+                    routines.slice(0, 3).join(", ") +
+                    (routines.length > 3 ? "..." : "") +
+                    ")",
+                  description: "Programmatic scripts in scripts/routines/",
+                }
+              : {
+                  value: "",
+                  label: "○ No routines in scripts/routines/",
+                  description: "Use /routinize scan to propose new routines",
+                };
+          return [header, ...matches];
+        }
         return matches.length > 0 ? matches : null;
       }
 

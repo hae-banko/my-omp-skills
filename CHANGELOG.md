@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.43.0 — Live status autocomplete headers for wayfinder, research, reference, routinize, and audit
+
+- **Live status autocomplete headers** — when typing `/wayfinder`, `/research`, `/reference`, `/routinize`, or `/audit` without arguments (`argumentPrefix === ""`), a non-selectable header line (`value: ""`) displays the live repository state at the top of the completion dropdown (e.g. `● Active frontier: <feature> / <title>`, `● Active research: <slug> (<status>)`, `● References: N installed`, `● Routines: N available`, `● Audits: N reports`, or their `○` inactive state equivalents).
+- **Narrowing filtering** — headers are displayed only on empty input prefix and prepended to subcommand matches; once narrowing begins (e.g. `/wayfinder s`), the header is excluded to reduce noise.
+- **Selftest coverage** — `scripts/selftest.ts` verifies live status headers for both active and inactive states across all five commands.
+
 ## v0.42.0 — Enhance knowledge_read tool for research projects (report.md content & rich summaries)
 
 - **Full `report.md` retrieval** — `knowledge_read` with `type: "research"` and a project `slug` now returns the status header line along with the full `report.md` content when available, setting `details.paths` to the `report.md` path.

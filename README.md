@@ -80,7 +80,7 @@ Build long-term repository memory and eliminate guesswork:
 - **Frontier ticket locator (`findFrontierTicket`)**: Deterministically identifies the earliest unblocked open ticket under `.omp/scratch/` / `.scratch/`.
 - **/hindsight**: Toggles a settle-time reflection pass that prompts the model to simplify design choices before completing a turn.
 - **/clarify**: Interactively resolves prompt ambiguity with structured TUI choices when user instructions are vague.
----
+- **Live status autocomplete headers**: Slash commands (`/wayfinder`, `/research`, `/reference`, `/routinize`, `/audit`, `/hindsight`, `/clarify`) surface active repository state (`●` active / `○` inactive) as a read-only header line in the TUI completion dropdown when typing without arguments.
 
 ## Command Directory (28 Commands)
 
