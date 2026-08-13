@@ -105,7 +105,7 @@ All 28 slash commands are user-invoked. The model recognizes them at session sta
 | `/research-report` | Deep Research | Phase 3 of deep research: converts deep-research JSON results into a summary-first markdown report with TOC. |
 | `/record` | Knowledge Base & Upkeep | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`). `--recent` resolves instantly without LLM involvement. |
 | `/pitfall` | Knowledge Base & Upkeep | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades. `--recent` resolves instantly without LLM involvement. |
-| `/routinize` | Knowledge Base & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`. |
+| `/routinize` | Knowledge Base & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`, supporting default parameter values declared in `manifest.json`. |
 | `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
 | `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.omp/scratch/`, GitHub, GitLab), triage labels (`.omp/agents/`), domain layout. |
 | `/hindsight` | Knowledge Base & Upkeep | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) before turns settle. |

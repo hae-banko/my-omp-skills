@@ -219,11 +219,24 @@ export function installRoutinesTool(pi: ExtensionApi): void {
         };
       }
 
-      const argsMap = params.args ?? {};
+      const effectiveArgs: Record<string, string> = {};
+      if (routineEntry?.parameters && Array.isArray(routineEntry.parameters)) {
+        for (const p of routineEntry.parameters) {
+          if (p && p.default !== undefined && typeof p.name === "string" && p.name.length > 0) {
+            effectiveArgs[p.name] = p.default;
+          }
+        }
+      }
+      for (const [k, v] of Object.entries(params.args ?? {})) {
+        if (typeof v === "string") {
+          effectiveArgs[k] = v;
+        }
+      }
+
       const env: Record<string, string | undefined> = { ...process.env };
       const cliFlags: string[] = [];
 
-      for (const [k, v] of Object.entries(argsMap)) {
+      for (const [k, v] of Object.entries(effectiveArgs)) {
         env[k] = v;
         env[k.toUpperCase()] = v;
         if (k.startsWith("-")) {
@@ -272,7 +285,7 @@ export function installRoutinesTool(pi: ExtensionApi): void {
                 exitCode,
                 stdout,
                 stderr,
-                args: argsMap,
+                args: effectiveArgs,
                 success: exitCode === 0,
                 ...(error ? { error: error.message } : {}),
               },

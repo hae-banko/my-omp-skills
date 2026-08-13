@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.48.0 — Fix run_routine parameter defaults handling when manifest.json specifies defaults
+
+- **Parameter default values support** — `installRoutinesTool` (`src/routines.ts`) now builds `effectiveArgs` starting with default parameter values defined in `scripts/routines/manifest.json` (`p.default`). User-supplied arguments in `params.args` override these defaults.
+- **Environment variables and CLI flags** — `effectiveArgs` is used when building `env` (`OUTPUT_DIR=dist`), `cliFlags` (`--output-dir dist`), and `details.args` in the tool result.
+- **Selftest coverage** — `scripts/selftest.ts` verifies `run_routine` populates parameter default values when no args are provided and verifies that explicit user args override the defaults.
+
 ## v0.47.0 — Fix Hindsight didRealWork content block inspection bug for thinking property and tool_use discrimination
 
 - **Thinking block property fix** — `didRealWork` (`src/hindsight.ts`) now reads reasoning text from `block.thinking` (primary) with fallback to `block.text` (legacy), matching `@oh-my-pi/pi-ai` `AssistantMessage` structure (`{ type: "thinking", thinking: "..." }`). Previously `block.text` was `undefined`, causing `thinkingChars` to stay 0 and skip reflection on pure reasoning turns.

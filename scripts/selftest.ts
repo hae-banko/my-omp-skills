@@ -2118,12 +2118,23 @@ for (const name of HERDR_TOOLS) {
             description: "Test routine script",
             parameters: [{ name: "MSG", default: "hello", description: "Message" }],
           },
+          {
+            id: "echo_args",
+            name: "Echo Args",
+            file: "echo_args.sh",
+            description: "Test routine args",
+            parameters: [{ name: "output_dir", default: "dist" }],
+          },
         ],
       }),
     );
     writeFileSync(
       join(routinesDir, "echo_test.sh"),
       `#!/usr/bin/env bash\nMSG="\${MSG:-hello}"\necho "Routine MSG: \${MSG}"\n`,
+    );
+    writeFileSync(
+      join(routinesDir, "echo_args.sh"),
+      `#!/usr/bin/env bash\necho "ARGS: $@"\n`,
     );
 
     const res = await runRoutineTool.execute(
@@ -2167,6 +2178,38 @@ for (const name of HERDR_TOOLS) {
     const traversalText = (pathTraversalRes.content ?? []).map((b) => (b.type === "text" ? b.text : "")).join(" ");
     if (!traversalText.includes("Path traversal attempt detected")) {
       fail(`run_routine: path traversal attempt not rejected (got: ${traversalText})`);
+    }
+    // Parameter defaults test (Issue #18)
+    const defaultRes = await runRoutineTool.execute(
+      "selftest-routine-default-args",
+      { routineId: "echo_args" },
+      undefined,
+      undefined,
+      { cwd: fixtureRoot },
+    );
+    const defaultText = (defaultRes.content ?? []).map((b) => (b.type === "text" ? b.text : "")).join(" ");
+    const defaultDetails = defaultRes.details as { args?: Record<string, string> } | undefined;
+    if (defaultDetails?.args?.output_dir !== "dist") {
+      fail(`run_routine: default args missing output_dir=dist (got: ${JSON.stringify(defaultDetails?.args)})`);
+    }
+    if (!defaultText.includes("--output-dir dist")) {
+      fail(`run_routine: CLI flags missing --output-dir dist (got: ${defaultText})`);
+    }
+
+    const overrideRes = await runRoutineTool.execute(
+      "selftest-routine-override-args",
+      { routineId: "echo_args", args: { output_dir: "custom_out" } },
+      undefined,
+      undefined,
+      { cwd: fixtureRoot },
+    );
+    const overrideText = (overrideRes.content ?? []).map((b) => (b.type === "text" ? b.text : "")).join(" ");
+    const overrideDetails = overrideRes.details as { args?: Record<string, string> } | undefined;
+    if (overrideDetails?.args?.output_dir !== "custom_out") {
+      fail(`run_routine: explicit args override failed (got: ${JSON.stringify(overrideDetails?.args)})`);
+    }
+    if (!overrideText.includes("--output-dir custom_out")) {
+      fail(`run_routine: explicit args CLI flags missing --output-dir custom_out (got: ${overrideText})`);
     }
   }
 }
