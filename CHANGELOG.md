@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.47.0 — Fix Hindsight didRealWork content block inspection bug for thinking property and tool_use discrimination
+
+- **Thinking block property fix** — `didRealWork` (`src/hindsight.ts`) now reads reasoning text from `block.thinking` (primary) with fallback to `block.text` (legacy), matching `@oh-my-pi/pi-ai` `AssistantMessage` structure (`{ type: "thinking", thinking: "..." }`). Previously `block.text` was `undefined`, causing `thinkingChars` to stay 0 and skip reflection on pure reasoning turns.
+- **Tool call type discrimination fix** — `didRealWork` returns `true` for content blocks with `type === "toolCall"` or `type === "tool_use"`, ensuring tool use turns from standard Anthropic/OpenAI provider shims trigger reflection.
+- **Selftest coverage** — `scripts/selftest.ts` verifies `didRealWork` return values across thinking length thresholds (>= 400 vs < 400), `tool_use` blocks, `toolCall` blocks, and plain text messages.
+
 ## v0.46.0 — Fix kb-index-injector subdirectory lookup bug and surface pre-existing KB entries
 
 - **Subdirectory lookup fix** — `kb-index-injector` (`src/kb-index-injector.ts`) now uses `findKnowledgeRoot(cwd)` to locate `.omp/knowledge/` when running from subdirectories (e.g. `src/components/`), preventing failed directory reads.

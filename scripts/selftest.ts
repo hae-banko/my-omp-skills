@@ -47,7 +47,7 @@ import {
   STATUS_KEY,
   type KbBlockDetail,
 } from "../src/kb-guard-status.ts";
-import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
+import { didRealWork, isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
 import {
   formatIndexSection,
   installKbIndexInjector,
@@ -1799,6 +1799,23 @@ if (!triageCard || triageCard.display !== true) {
 }
 
 // --- Hindsight: settle-time reflection pass --------------------------------
+// hindsight-didRealWork unit tests (Issue #17)
+if (!didRealWork({ content: [{ type: "thinking", thinking: "x".repeat(400) }] })) {
+  fail("hindsight-didRealWork: returned false for thinking block >= 400");
+}
+if (didRealWork({ content: [{ type: "thinking", thinking: "x".repeat(399) }] })) {
+  fail("hindsight-didRealWork: returned true for thinking block < 400");
+}
+if (!didRealWork({ content: [{ type: "tool_use", id: "1", name: "edit" }] })) {
+  fail("hindsight-didRealWork: returned false for tool_use");
+}
+if (!didRealWork({ content: [{ type: "toolCall", id: "1", name: "edit" }] })) {
+  fail("hindsight-didRealWork: returned false for toolCall");
+}
+if (didRealWork({ content: [{ type: "text", text: "Hello" }] })) {
+  fail("hindsight-didRealWork: returned true for plain text message");
+}
+
 
 // The handler runs bare (no args) in the command-surface checks above, which
 // toggles state — set it explicitly so these assertions are order-independent.

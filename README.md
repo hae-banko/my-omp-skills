@@ -145,7 +145,7 @@ The 14 skills are model-invoked: omp loads a skill automatically when conversati
 
 ### Hindsight Reflection
 
-`/hindsight` is off by default; `/hindsight on` enables the settle-time reflection pass. Configure options via `~/.omp/hindsight.json`:
+`/hindsight` is off by default; `/hindsight on` enables the settle-time reflection pass. Hindsight inspects assistant content blocks (`didRealWork`) to trigger reflection when tool calls (`toolCall` or `tool_use`) or substantial reasoning (>= 400 chars, reading `block.thinking` with `block.text` fallback) are present. Configure options via `~/.omp/hindsight.json`:
 
 ```json
 {

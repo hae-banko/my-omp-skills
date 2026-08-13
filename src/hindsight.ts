@@ -213,23 +213,25 @@ export function installHindsight(pi: ExtensionApi): void {
  * contains a tool call, or when its thinking is substantial. Plain
  * text-only replies (acknowledgments, "done") pass through untouched.
  */
-function didRealWork(last: unknown): boolean {
+export function didRealWork(last: unknown): boolean {
   if (!last || typeof last !== "object" || !("content" in last)) return false;
-  const content: unknown = (last as { content: unknown }).content;
+  const content = last.content;
   if (typeof content === "string") return false;
   if (!Array.isArray(content)) return false;
 
   let thinkingChars = 0;
   for (const block of content) {
     if (!block || typeof block !== "object" || !("type" in block)) continue;
-    const type = (block as { type: unknown }).type;
-    if (type === "toolCall") return true;
-    if (
-      type === "thinking" &&
-      "text" in block &&
-      typeof (block as { text: unknown }).text === "string"
-    ) {
-      thinkingChars += ((block as { text: string }).text).length;
+    const type = block.type;
+    if (type === "toolCall" || type === "tool_use") return true;
+    if (type === "thinking") {
+      const thinking = "thinking" in block ? block.thinking : undefined;
+      const text = "text" in block ? block.text : undefined;
+      const thinkingText =
+        typeof thinking === "string" ? thinking : typeof text === "string" ? text : null;
+      if (thinkingText) {
+        thinkingChars += thinkingText.length;
+      }
     }
   }
   return thinkingChars >= THINKING_MIN_CHARS;
