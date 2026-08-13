@@ -1,16 +1,16 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.50.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.51.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
+  <img src="https://img.shields.io/badge/commands-29-orange" alt="29 slash commands" />
   <img src="https://img.shields.io/badge/skills-14-teal" alt="14 model-invoked skills" />
 </p>
 
 > Turn your AI pair programmer into a disciplined senior engineer.
 
-Stop vibe coding without structure or context persistence. **my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness designed for developers who demand engineering discipline: **plan, spec, build, audit, research, and remember**. It turns loose LLM conversation into structured, test-first, research-backed engineering workflows that persist across sessions and repositories. It equips your agent with 28 user-invoked slash commands, 14 model-invoked skills, custom TUI component renderers, and an append-only knowledge base.
+Stop vibe coding without structure or context persistence. **my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness designed for developers who demand engineering discipline: **plan, spec, build, audit, research, and remember**. It turns loose LLM conversation into structured, test-first, research-backed engineering workflows that persist across sessions and repositories. It equips your agent with 29 user-invoked slash commands, 14 model-invoked skills, custom TUI component renderers, and an append-only knowledge base.
 
 ---
 
@@ -21,12 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.50.0"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.51.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.50.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.51.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 

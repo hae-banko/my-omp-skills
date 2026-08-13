@@ -40,7 +40,7 @@ import {
 import { installPolicy } from "./policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./references.ts";
 import { runRecentCommand } from "./recent-command.ts";
-import { installKbGuardStatus } from "./kb-guard-status.ts";
+import { installTimelineRenderer, runTimelineCommand } from "./timeline.ts";
 import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
 import { installKbIngestStatus } from "./kb-ingest-status.ts";
 import { installKbIndexInjector } from "./kb-index-injector.ts";
@@ -1410,6 +1410,16 @@ const COMMANDS: CommandSpec[] = [
       toggleClarifyState(args, ctx);
     },
   },
+  {
+    name: "timeline",
+    description: "Generate a unified project history & progress digest — /timeline [limit]. User-invoked: local, zero-agent execution.",
+    bodyPath: "commands/timeline.md",
+    handler: (pi) => async (args: string, ctx: CommandContext) => {
+      const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+      const root = override && override.trim() ? override.trim() : findRepoRoot();
+      await runTimelineCommand(pi, root, args, ctx);
+    },
+  },
 ];
 
 function loadBody(rel: string): string {
@@ -1500,6 +1510,7 @@ export default function (pi: ExtensionApi): void {
   installTicketBreakdownRenderer(pi);
   installTriageStatusRenderer(pi);
   installReferenceResultRenderer(pi);
+  installTimelineRenderer(pi);
   installBootstrap(
     pi,
     COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),

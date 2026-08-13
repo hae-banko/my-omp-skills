@@ -57,6 +57,7 @@ import {
 import { getPitfallCount, getRecordCount, recordIngest, resetSession as resetKbIngestSession } from "../src/kb-ingest-status.ts";
 import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentCommand } from "../src/recent-command.ts";
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
+import { formatTimelineLines, getUnifiedTimeline, parseTimelineLimit, runTimelineCommand, TIMELINE_CUSTOM_TYPE } from "../src/timeline.ts";
 import { extractDiscoveredReferences } from "../src/research-store.ts";
 import { findFrontierTicket } from "../src/locators.ts";
 import {
@@ -156,6 +157,7 @@ const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   // like /hindsight. Its silence + card emission are asserted in the
   // dedicated reference block below.
   reference: { silent: true },
+  timeline: { silent: true },
   record: { companions: 1 },
   pitfall: { companions: 1 },
   routinize: { companions: 2 },
@@ -3687,6 +3689,80 @@ print("PY_OK")
     fail(`research-to-reference: python script execution failed: ${err}`);
   }
 }
+
+// --- /timeline Unit Tests ---
+{
+  if (parseTimelineLimit("") !== 15) fail("timeline: parseTimelineLimit('') should be 15");
+  if (parseTimelineLimit("5") !== 5) fail("timeline: parseTimelineLimit('5') should be 5");
+  if (parseTimelineLimit("999") !== 50) fail("timeline: parseTimelineLimit('999') should be 50");
+
+  const timelineFixture = mkdtempSync(join(tmpdir(), "my-omp-timeline-test-"));
+  const kbDir = join(timelineFixture, ".omp", "knowledge");
+  const recordsDir = join(kbDir, "records");
+  const scratchDir = join(timelineFixture, ".omp", "scratch");
+  const researchDir = join(kbDir, "research", "2026-08-10_test-topic");
+
+  mkdirSync(recordsDir, { recursive: true });
+  mkdirSync(scratchDir, { recursive: true });
+  mkdirSync(researchDir, { recursive: true });
+
+  writeFileSync(
+    join(kbDir, "INDEX.md"),
+    "# Index\n- 2026-08-13 [lesson] Sample Lesson Title\n- 2026-08-12 [pitfall] Sample Pitfall Title\n",
+  );
+  writeFileSync(
+    join(scratchDir, "spec-x.md"),
+    "# Feature Spec X\n\nDetails here",
+  );
+  writeFileSync(
+    join(researchDir, "report.md"),
+    "# Report\n\nContent",
+  );
+
+  const items = getUnifiedTimeline(timelineFixture, 10);
+  if (items.length < 3) {
+    fail(`timeline: expected at least 3 events, got ${items.length}`);
+  } else {
+    const cats = items.map((i) => i.category);
+    if (!cats.includes("record") || !cats.includes("pitfall") || !cats.includes("ticket") || !cats.includes("research")) {
+      fail(`timeline: missing expected event categories in: ${JSON.stringify(cats)}`);
+    }
+  }
+
+  const formatted = formatTimelineLines(items);
+  if (formatted.length !== items.length) {
+    fail(`timeline: formatted lines length mismatch: ${formatted.length} vs ${items.length}`);
+  }
+
+  let notifiedMsg = "";
+  const mockCtx: HandlerContext & { notify?(msg: string, level?: string): void } = {
+    ui: {
+      notify(msg: string) {
+        notifiedMsg = msg;
+      },
+    },
+    notify(msg: string) {
+      notifiedMsg = msg;
+    },
+  };
+
+  runTimelineCommand(
+    mockPi as unknown as ExtensionApi,
+    timelineFixture,
+    "10",
+    mockCtx as unknown as HandlerContext,
+  ).then(() => {
+    const lastMsg = customMessages[customMessages.length - 1];
+    if (!lastMsg || lastMsg.customType !== TIMELINE_CUSTOM_TYPE) {
+      fail(`timeline: expected customType ${TIMELINE_CUSTOM_TYPE}, got: ${JSON.stringify(lastMsg)}`);
+    }
+    if (!notifiedMsg.includes("Timeline:")) {
+      fail(`timeline: expected notification containing 'Timeline:', got: ${notifiedMsg}`);
+    }
+    rmSync(timelineFixture, { recursive: true, force: true });
+  });
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

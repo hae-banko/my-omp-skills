@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.51.0 — /timeline command (unified project history & progress digest)
+
+- **Unified Project History & Progress Digest Command (`/timeline`)** — added user-invoked `/timeline [limit]` command that aggregates git commits & tags (`git log`), knowledge base findings (`.omp/knowledge/INDEX.md`), deep research projects (`.omp/knowledge/research/`), and scratch decision tickets (`.omp/scratch/`) into a chronological transcript card (`timeline-digest`).
+- **Zero-Turn Execution** — `/timeline` executes purely in TypeScript without queuing an LLM user prompt (0 token cost, instant execution under 20ms).
+- **Selftest Assertions** — `scripts/selftest.ts` verifies `parseTimelineLimit`, `getUnifiedTimeline`, `formatTimelineLines`, and `runTimelineCommand` execution against a temp fixture.
+
 ## v0.50.0 — Research to Reference Integration (automated GitHub repo citation discovery & TUI completions)
 
 - **Automated GitHub Repo Citation Discovery** — `commands/research-report/generate_report.py` now parses GitHub repository URLs (`https://github.com/owner/repo`) cited across all research item findings and generates a dedicated `## Discovered Reference Repositories` section in `report.md` and `summary.md`, ranking cited repositories by occurrence count with copy-paste `/reference add <url>` command hints.
