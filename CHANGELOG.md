@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.49.0 — Enshrine KV Cache & Token Economics rules and verify prompt prefix stability
+
+- **KV Cache & Token Economics Rulebook** — created `rules/kv-cache-token-economics.md` establishing the KV Cache Prefix Stability Invariant (system prompt additions must append strictly to `evt.systemPrompt` tail, keeping base prefix static), Token Economics & Context Preservation guidelines, and Zero-Turn Harness Surface conventions.
+- **Automated Selftest Assertions** — `scripts/selftest.ts` verifies that `installClarify` and `installKbIndexInjector` `before_agent_start` handlers append strictly to `evt.systemPrompt` without altering `evt.systemPrompt.startsWith(originalBasePrompt)`, verifying prefix identity and suffix presence.
+- **Documentation Updates** — updated `README.md` with KV Cache & Token Economics subsection and version tags, and updated `AGENTS.md` with rulebook reference.
+
 ## v0.48.0 — Fix run_routine parameter defaults handling when manifest.json specifies defaults
 
 - **Parameter default values support** — `installRoutinesTool` (`src/routines.ts`) now builds `effectiveArgs` starting with default parameter values defined in `scripts/routines/manifest.json` (`p.default`). User-supplied arguments in `params.args` override these defaults.

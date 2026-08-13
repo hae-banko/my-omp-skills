@@ -60,6 +60,7 @@ import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/
 import { findFrontierTicket } from "../src/locators.ts";
 import {
   CLARIFY_PROMPT,
+  installClarify,
   isClarifyDebugEnabled,
   isClarifyEnabled,
   isVagueInput,
@@ -3519,8 +3520,89 @@ resetKbIngestSession();
   }
 }
 
+// --- KV Cache & Token Economics: Prefix Stability Assertions ---
+{
+  // 1. installClarify before_agent_start prefix stability
+  const clarifyMockHandlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
+  const clarifyMock = {
+    registerCommand(): void {},
+    sendUserMessage: async (): Promise<void> => {},
+    sendMessage(): void {},
+    registerTool(): void {},
+    registerMessageRenderer(): void {},
+    zod: z,
+    on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
+      clarifyMockHandlers[event] = handler;
+    },
+  };
+
+  setClarifyEnabled(true);
+  installClarify(clarifyMock as unknown as ExtensionApi);
+  const clarifyBeforeStart = clarifyMockHandlers["before_agent_start"];
+  if (typeof clarifyBeforeStart !== "function") {
+    fail("kv-cache-and-token-economics: installClarify did not register before_agent_start");
+  } else {
+    const basePrompt = "SYSTEM PROMPT BASE PREFIX FOR CLARIFY TEST";
+    const evt = {
+      systemPrompt: basePrompt,
+      systemPromptOptions: { selectedTools: ["clarify_prompt"] },
+    };
+    clarifyBeforeStart(evt);
+    if (!evt.systemPrompt.startsWith(basePrompt)) {
+      fail(`kv-cache-and-token-economics: clarify mutated prompt prefix; got: ${JSON.stringify(evt.systemPrompt)}`);
+    }
+    if (!evt.systemPrompt.endsWith(CLARIFY_PROMPT)) {
+      fail(`kv-cache-and-token-economics: clarify did not append CLARIFY_PROMPT to tail; got: ${JSON.stringify(evt.systemPrompt)}`);
+    }
+  }
+  setClarifyEnabled(false);
+
+  // 2. installKbIndexInjector before_agent_start prefix stability
+  const kbTestDir = mkdtempSync(join(tmpdir(), "my-omp-kv-cache-test-"));
+  mkdirSync(join(kbTestDir, ".omp", "knowledge", "records"), { recursive: true });
+  writeFileSync(join(kbTestDir, ".omp", "knowledge", "records", "2026-08-01_kv.md"), "stub");
+  resetKbIngestSession();
+  recordIngest("record");
+
+  const expectedSection = formatIndexSection(kbTestDir);
+
+  const kbMockHandlersKv: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
+  const kbMockKv = {
+    registerCommand(): void {},
+    sendUserMessage: async (): Promise<void> => {},
+    sendMessage(): void {},
+    registerTool(): void {},
+    registerMessageRenderer(): void {},
+    zod: z,
+    on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
+      kbMockHandlersKv[event] = handler;
+    },
+  };
+
+  installKbIndexInjector(kbMockKv as unknown as ExtensionApi);
+  const kbBeforeStart = kbMockHandlersKv["before_agent_start"];
+  if (typeof kbBeforeStart !== "function") {
+    fail("kv-cache-and-token-economics: installKbIndexInjector did not register before_agent_start");
+  } else {
+    const basePrompt = "SYSTEM PROMPT BASE PREFIX FOR KB INJECTOR TEST";
+    const evt = {
+      systemPrompt: basePrompt,
+      cwd: kbTestDir,
+    };
+    await kbBeforeStart(evt, { cwd: kbTestDir });
+    if (!evt.systemPrompt.startsWith(basePrompt)) {
+      fail(`kv-cache-and-token-economics: kb-index-injector mutated prompt prefix; got: ${JSON.stringify(evt.systemPrompt)}`);
+    }
+    if (!evt.systemPrompt.endsWith(expectedSection)) {
+      fail(`kv-cache-and-token-economics: kb-index-injector did not append section to tail; got: ${JSON.stringify(evt.systemPrompt)}`);
+    }
+  }
+  rmSync(kbTestDir, { recursive: true, force: true });
+  resetKbIngestSession();
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — commands, bootstrap, kb-guard-status, policy, knowledge_read, renderers, hindsight, clarify, and kb-index-injector behave correctly.");
+console.log("\nOK — commands, bootstrap, kb-guard-status, policy, knowledge_read, renderers, hindsight, clarify, kb-index-injector, and kv-cache-and-token-economics behave correctly.");

@@ -226,9 +226,9 @@ Beyond the markdown commands, the extension entry (`src/index.ts`) wires runtime
   `fields.yaml`) are **not** guarded — they are editable work products.
 - **Rules** (`rules/`). `knowledge-append-only.md` is a TTSR rule that fires
   when the model is about to `edit` a record/pitfall/INDEX file;
-  `use-record.md`, `use-pitfall.md`, `use-research.md` are always-apply
-  rulebook rules keeping the right slash command in front of the model
-  mid-conversation.
+  `use-record.md`, `use-pitfall.md`, `use-research.md`, and `kv-cache-token-economics.md`
+  are always-apply rulebook rules enforcing system prompt prefix stability, context preservation,
+  and zero-turn harness performance.
 ## Memory backend
 
 When `memory.backend: local` is enabled in `~/.omp/agent/config.yml`, omp's

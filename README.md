@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.44.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.49.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -21,12 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.44.0"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.49.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.44.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.49.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
@@ -167,6 +167,13 @@ The extension enforces a runtime invariant on the repo-local knowledge base at `
 - **Right workflow when blocked** — `/record <title>` to save a new finding, `/pitfall <description>` to capture a runtime mistake, `knowledge_read` to query past entries. For audits, edit with an explicit SemVer bump + `## Revision History` entry.
 - **Active KB index in the system prompt** — when records or pitfalls exist in the repository (or are ingested during the session), the extension appends a small "Active knowledge base" section to the system prompt on every `before_agent_start` (up to 5 most-recent records + 5 most-recent pitfalls, by mtime). Automatically resolves `.omp/knowledge/` across subdirectories via `findKnowledgeRoot` and surfaces pre-existing entries even on fresh session startup. The model can scan the list without burning a `knowledge_read` tool call; if it needs the body of an entry, it calls `knowledge_read type=records|pitfalls slug=<name>`. Repositories without KB entries are untouched — zero prompt inflation.
 
+### KV Cache & Token Economics
+
+The harness enforces KV cache prefix stability and context economy across sessions:
+- **Prefix Stability Invariant**: System prompt extensions (`clarify.ts`, `kb-index-injector.ts`) strictly append dynamic context (`CLARIFY_PROMPT`, active KB index) to the tail of `evt.systemPrompt`, preserving `evt.systemPrompt.startsWith(basePrompt)`. Mutating prefix tokens invalidates the KV prompt cache and degrades multi-turn latency.
+- **Context Economy & Subagent Offloading**: Commands like `/record --recent` and `/reference` bypass LLM execution entirely to return instant in-TS results. Heavy codebase scanning and API research are offloaded to background `task` subagents (`scout` for read-only exploration, `librarian` for docs/source research).
+- **Zero-Turn State Surface**: TUI completion dropdown headers (`value: ""`) display active project state for commands like `/wayfinder`, `/research`, `/reference`, `/routinize`, and `/audit` without burning LLM turns.
+
 ### Native LaTeX Math
 
 Native LaTeX math rendering is always active in the omp TUI — no toggle or configuration needed:
@@ -185,11 +192,11 @@ All plugin management goes through `omp plugin`:
    ```bash
    omp plugin list
    ```
-   Should display `my-omp-skills@v0.44.0`.
+   Should display `my-omp-skills@v0.49.0`.
 
-2. **Upgrade to `v0.44.0`**:
+2. **Upgrade to `v0.49.0`**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.44.0"
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.49.0"
 
 3. **List Available Tag Versions** (requires SSH read access):
    ```bash
