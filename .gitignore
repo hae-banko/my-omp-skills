@@ -3,4 +3,5 @@ dist/
 *.log
 .omp/
 .scratch/
-
+__pycache__/
+*.pyc

@@ -101,9 +101,42 @@ PRIORITY_RANK = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
 SEVERITY_RANK = {"blocker": 0, "major": 1, "minor": 2, "cosmetic": 3}
 TLD_SUFFIX = r"\.(?:com|org|net|io|dev|ai|edu|gov|co|cn|me|app|info|biz|wiki)\b"
 URL_RE = re.compile(r"https?://[^\s)\]>\"']+|(?:[\w-]+\.)+(?:com|org|net|io|dev|ai|edu|gov|co|cn|me|app|info|biz|wiki)(?:/[^\s)\]>\"']*)?", re.I)
-
+GITHUB_REPO_RE = re.compile(r"https?://(?:www\.)?github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)", re.I)
 UNCERTAIN_MARKER = "[uncertain]"
 
+
+def extract_github_repos(items: list) -> list:
+    counts = {}
+    for it in items:
+        text = it["text"]
+        for match in GITHUB_REPO_RE.finditer(text):
+            owner = match.group(1)
+            repo = match.group(2).rstrip(".,;:!?)]}>\"'")
+            if repo.endswith(".git"):
+                repo = repo[:-4]
+            if owner.lower() in ("features", "topics", "collections", "trending", "events", "sponsor", "pricing", "orgs", "settings", "notifications"):
+                continue
+            if repo.lower() in ("settings", "issues", "pulls", "actions", "wiki", "discussions", "releases", "commit", "commits", "blob", "tree", "raw", "stargazers", "watchers"):
+                continue
+            slug = f"{owner}/{repo}"
+            counts[slug] = counts.get(slug, 0) + 1
+    sorted_repos = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+    return [{"name": slug, "url": f"https://github.com/{slug}", "count": count} for slug, count in sorted_repos]
+
+
+def discovered_references_lines(repos: list) -> list:
+    if not repos:
+        return []
+    lines = [
+        "## Discovered Reference Repositories",
+        "",
+        "The following GitHub repositories were cited in the research findings and are candidates for local reference absorption:",
+        "",
+    ]
+    for r in repos[:10]:
+        c_str = f"cited in {r['count']} item{'s' if r['count'] != 1 else ''}"
+        lines.append(f"- **[{r['name']}]({r['url']})** ({c_str}) — `/reference add {r['url']}`")
+    return lines
 
 def display_name(field: str) -> str:
     parts = field.split("_")
@@ -490,8 +523,11 @@ def main() -> None:
                                       total_fields, len(global_sources), coverage, top, comps, items)]
     if shared:
         lines += ["", *shared]
+    github_repos = extract_github_repos(items)
+    disc_refs = discovered_references_lines(github_repos)
+    if disc_refs:
+        lines += ["", *disc_refs]
     lines += ["", *action_plan_lines(ranked)]
-
     lines += ["", "## Table of Contents", ""]
     for it in items:
         badges = [it["meta"][bf] for bf in TOC_BADGES if it["meta"].get(bf)]
@@ -520,6 +556,8 @@ def main() -> None:
                            len(global_sources))
     summary += ["", *exec_summary_lines(topic, total_items, waves, modules, resolved_fields,
                                         total_fields, len(global_sources), coverage, top, comps, items)]
+    if disc_refs:
+        summary += ["", *disc_refs]
     summary += ["", *action_plan_lines(ranked, problem_col=True)]
     summary += ["", "## Notes", "",
                 "Full detail and sources: report.md in this directory. Regenerate: "

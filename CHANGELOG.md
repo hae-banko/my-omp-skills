@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.50.0 — Research to Reference Integration (automated GitHub repo citation discovery & TUI completions)
+
+- **Automated GitHub Repo Citation Discovery** — `commands/research-report/generate_report.py` now parses GitHub repository URLs (`https://github.com/owner/repo`) cited across all research item findings and generates a dedicated `## Discovered Reference Repositories` section in `report.md` and `summary.md`, ranking cited repositories by occurrence count with copy-paste `/reference add <url>` command hints.
+- **Store Payload Integration** — `src/research-store.ts` extracts `discovered_references` from research projects (`results/*.json` and `report.md`) and exposes them on `ResearchDashboardPayload` for dashboard and `knowledge_read` consumers.
+- **TUI `/reference add` Autocomplete Suggestions** — typing `/reference add ` in the TUI input editor inspects recent research projects and automatically suggests discovered GitHub repository URLs in the completion dropdown with `Discovered in research: <slug>` descriptions.
+- **Selftest & Python Unit Test Coverage** — `scripts/selftest.ts` verifies `extractDiscoveredReferences`, `/reference add` TUI autocomplete suggestions, and `generate_report.py` `extract_github_repos` and `discovered_references_lines` outputs.
+
 ## v0.49.0 — Enshrine KV Cache & Token Economics rules and verify prompt prefix stability
 
 - **KV Cache & Token Economics Rulebook** — created `rules/kv-cache-token-economics.md` establishing the KV Cache Prefix Stability Invariant (system prompt additions must append strictly to `evt.systemPrompt` tail, keeping base prefix static), Token Economics & Context Preservation guidelines, and Zero-Turn Harness Surface conventions.

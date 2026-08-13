@@ -31,8 +31,62 @@ import { derivePipelineStatus, phaseOf, type PipelineStatus } from "./research-s
 import { resolveResearchProjectDir } from "./locators.ts";
 
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
+const GITHUB_REPO_RE = /https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/gi;
+const SYSTEM_OWNERS = new Set(["features", "topics", "collections", "trending", "events", "sponsor", "pricing", "orgs", "settings", "notifications"]);
+const SYSTEM_REPOS = new Set(["settings", "issues", "pulls", "actions", "wiki", "discussions", "releases", "commit", "commits", "blob", "tree", "raw", "stargazers", "watchers"]);
 
-/** One interface for callers: resolution + dashboard payload in a single call. */
+export interface DiscoveredReference {
+  name: string;
+  url: string;
+  count: number;
+}
+
+export function extractDiscoveredReferences(projectDir: string): DiscoveredReference[] {
+  if (!projectDir || !existsSync(projectDir)) return [];
+  const counts = new Map<string, number>();
+
+  const scanText = (text: string) => {
+    if (!text) return;
+    GITHUB_REPO_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = GITHUB_REPO_RE.exec(text)) !== null) {
+      const owner = match[1];
+      let repo = match[2].replace(/[.,;:!?)]}>"']+$/, "");
+      if (repo.endsWith(".git")) repo = repo.slice(0, -4);
+      if (SYSTEM_OWNERS.has(owner.toLowerCase()) || SYSTEM_REPOS.has(repo.toLowerCase())) continue;
+      const slug = `${owner}/${repo}`;
+      counts.set(slug, (counts.get(slug) ?? 0) + 1);
+    }
+  };
+
+  const resultsDir = join(projectDir, "results");
+  if (existsSync(resultsDir) && statSync(resultsDir).isDirectory()) {
+    try {
+      for (const f of readdirSync(resultsDir)) {
+        if (f.endsWith(".json")) {
+          try {
+            const raw = readFileSync(join(resultsDir, f), "utf8");
+            scanText(raw);
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  const reportPath = join(projectDir, "report.md");
+  if (existsSync(reportPath)) {
+    try {
+      scanText(readFileSync(reportPath, "utf8"));
+    } catch {}
+  }
+
+  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return sorted.map(([slug, count]) => ({
+    name: slug,
+    url: `https://github.com/${slug}`,
+    count,
+  }));
+}
 export interface ResearchProjectRead {
   slug: string;
   projectDir: string;
@@ -441,6 +495,7 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
     max_waves: 3,
     pending_items: pendingItems,
     unresolved_fields_count: unresolvedCount,
+    discovered_references: extractDiscoveredReferences(projectDir),
     errors,
     project_path: projectDir || undefined,
   };

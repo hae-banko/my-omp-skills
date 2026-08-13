@@ -157,6 +157,7 @@ export interface ResearchDashboardPayload {
   max_waves?: number;
   pending_items?: number;
   unresolved_fields_count?: number;
+  discovered_references?: Array<{ name: string; url: string; count: number }>;
   detail?: ResearchDetail;
   errors?: string[];
   project_path?: string;

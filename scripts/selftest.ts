@@ -57,6 +57,7 @@ import {
 import { getPitfallCount, getRecordCount, recordIngest, resetSession as resetKbIngestSession } from "../src/kb-ingest-status.ts";
 import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentCommand } from "../src/recent-command.ts";
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
+import { extractDiscoveredReferences } from "../src/research-store.ts";
 import { findFrontierTicket } from "../src/locators.ts";
 import {
   CLARIFY_PROMPT,
@@ -3601,6 +3602,91 @@ resetKbIngestSession();
   resetKbIngestSession();
 }
 
+// --- Research to Reference Integration Tests ---
+{
+  const resRefDir = mkdtempSync(join(tmpdir(), "my-omp-research-ref-test-"));
+  const projDir = join(resRefDir, ".omp", "knowledge", "research", "2026-08-07_ref-test");
+  const resultsDir = join(projDir, "results");
+  mkdirSync(resultsDir, { recursive: true });
+
+  writeFileSync(
+    join(resultsDir, "01_item.json"),
+    JSON.stringify({
+      name: "Item 1",
+      evidence: "Source code at https://github.com/test-owner/test-repo-a.git and https://github.com/test-owner/test-repo-b",
+    }),
+  );
+  writeFileSync(
+    join(resultsDir, "02_item.json"),
+    JSON.stringify({
+      name: "Item 2",
+      evidence: "More references at https://github.com/test-owner/test-repo-a",
+    }),
+  );
+  writeFileSync(
+    join(projDir, "report.md"),
+    "# Report\n\nCited https://github.com/test-owner/test-repo-a and https://github.com/test-owner/test-repo-c",
+  );
+
+  const discovered = extractDiscoveredReferences(projDir);
+  if (discovered.length !== 3) {
+    fail(`research-to-reference: expected 3 discovered repos, got ${discovered.length}`);
+  } else {
+    if (discovered[0].name !== "test-owner/test-repo-a" || discovered[0].count !== 3) {
+      fail(`research-to-reference: top repo should be test-owner/test-repo-a count 3, got: ${JSON.stringify(discovered[0])}`);
+    }
+  }
+
+  // Test /reference add completion incorporating research-discovered references
+  const prevCwd = process.cwd();
+  process.chdir(resRefDir);
+  try {
+    const addCompletions = registered["reference"].getArgumentCompletions?.("add ") ?? null;
+    if (!addCompletions || addCompletions.length < 3) {
+      fail(`research-to-reference: expected /reference add suggestions, got: ${JSON.stringify(addCompletions)}`);
+    } else {
+      const urls = addCompletions.map((c) => c.value);
+      if (!urls.includes("add https://github.com/test-owner/test-repo-a")) {
+        fail(`research-to-reference: missing add https://github.com/test-owner/test-repo-a in completions: ${JSON.stringify(urls)}`);
+      }
+      const desc = addCompletions.find((c) => c.value === "add https://github.com/test-owner/test-repo-a")?.description;
+      if (!desc || !desc.includes("2026-08-07_ref-test")) {
+        fail(`research-to-reference: description should mention project slug, got: ${desc}`);
+      }
+    }
+  } finally {
+    process.chdir(prevCwd);
+    rmSync(resRefDir, { recursive: true, force: true });
+  }
+
+  // Python generate_report.py extract_github_repos test
+  const pyCode = `
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path("commands/research-report").resolve()))
+from generate_report import extract_github_repos, discovered_references_lines
+
+items = [
+    {"text": "Ref https://github.com/python-owner/python-repo-1.git and https://github.com/python-owner/python-repo-2"},
+    {"text": "Ref https://github.com/python-owner/python-repo-1"}
+]
+repos = extract_github_repos(items)
+assert len(repos) == 2, f"expected 2 repos, got {len(repos)}"
+assert repos[0]["name"] == "python-owner/python-repo-1", f"top repo mismatch: {repos[0]}"
+assert repos[0]["count"] == 2, f"count mismatch: {repos[0]}"
+lines = discovered_references_lines(repos)
+assert len(lines) > 0, "lines should not be empty"
+assert "## Discovered Reference Repositories" in lines[0], f"heading mismatch: {lines[0]}"
+assert "/reference add https://github.com/python-owner/python-repo-1" in lines[4], f"line mismatch: {lines[4]}"
+print("PY_OK")
+`;
+  try {
+    const pyOut = execFileSync("python3", ["-c", pyCode], { encoding: "utf8" }).trim();
+    if (pyOut !== "PY_OK") fail(`research-to-reference: python test failed: ${pyOut}`);
+  } catch (err: unknown) {
+    fail(`research-to-reference: python script execution failed: ${err}`);
+  }
+}
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

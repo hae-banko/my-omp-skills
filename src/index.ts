@@ -1091,6 +1091,31 @@ const COMMANDS: CommandSpec[] = [
       const sub = lower.slice(0, spaceIdx);
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
+      if (sub === "add") {
+        const root = findRepoRoot();
+        const projectSlugs = listResearchProjects(root);
+        const discovered: Array<{ url: string; name: string; projectSlug: string }> = [];
+        for (const pSlug of projectSlugs.slice(0, 5)) {
+          const pRead = readProject(root, pSlug);
+          if (!pRead.notFound && pRead.payload.discovered_references) {
+            for (const ref of pRead.payload.discovered_references) {
+              if (!discovered.some((d) => d.url === ref.url)) {
+                discovered.push({ url: ref.url, name: ref.name, projectSlug: pSlug });
+              }
+            }
+          }
+        }
+
+        const matches = discovered
+          .filter((d) => d.url.toLowerCase().includes(rest) || d.name.toLowerCase().includes(rest))
+          .map((d) => ({
+            value: `add ${d.url}`,
+            label: `add ${d.url}`,
+            description: `Discovered in research: ${d.projectSlug}`,
+          }));
+        return matches.length > 0 ? matches : null;
+      }
+
       if (sub === "update" || sub === "remove") {
         const dirs = listReferences(findRepoRoot());
         const matches = dirs
