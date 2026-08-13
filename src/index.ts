@@ -40,6 +40,7 @@ import { installPolicy } from "./policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./references.ts";
 import { installKbGuardStatus } from "./kb-guard-status.ts";
 import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
+import { installKbIngestStatus } from "./kb-ingest-status.ts";
 import { installRoutinesTool } from "./routines.ts";
 import {
   installResearchDashboardRenderer,
@@ -1304,6 +1305,14 @@ export default function (pi: ExtensionApi): void {
   // are the ones tested via `handlers[...]` directly; running it last
   // preserves its behavior under the test mock. In production the omp
   // runtime fans out registrations, so this ordering is harmless.
+  // kb-ingest-status registers `tool_call`; installPolicy registers
+  // `tool_call` too. The selftest mock stores ONE handler per event slot
+  // (last writer wins), so installPolicy must be the last writer for
+  // `tool_call` — policy's blocks are the ones the existing test surface
+  // inspects. ingest tests run against a separate mock (same pattern as
+  // kb-guard-status). In production the omp runtime fans out handlers,
+  // so this ordering is harmless.
+  installKbIngestStatus(pi);
   installPolicy(pi);
   installKbGuardStatus(pi);
   installKnowledgeTool(pi);

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.39.0 — Surface KB ingest count in the status bar (parallel to v0.38.0 blocks)
+
+- **KB ingest status widget** — `installKbIngestStatus` registers a sibling status-bar entry (`"KB: N records · M pitfalls"`) on `session_start`. Increments on `tool_call` events where the model writes a NEW file under `.omp/knowledge/records/` or `.omp/knowledge/pitfalls/`. Edit calls and existing-file overwrites do NOT increment (those are revision, not ingest).
+- **Complements v0.38.0** — together the status bar surfaces the full invariant: `KB append-only · N blocks` (denied writes) + `KB: N records · M pitfalls` (accepted appends).
+- **Zero LLM overhead** — render-only, no events fired into the model, no token cost. Both widgets share `session_start` / `agent_end` lifecycle.
+
 ## v0.38.0 — Surface KB guardrail state in the status bar
 
 - **KB guardrail status widget** — `installKbGuardStatus` registers a status-bar entry (`"KB append-only · N blocks"`) on `session_start` whenever the working tree contains `.omp/knowledge/`. It is purely passive: surfaces block count, no model coordination, no event spam. Cleared automatically when KB is absent.
