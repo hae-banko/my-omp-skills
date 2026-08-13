@@ -4,215 +4,139 @@
   <img src="https://img.shields.io/badge/version-0.53.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-29-orange" alt="29 slash commands" />
+  <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
   <img src="https://img.shields.io/badge/skills-14-teal" alt="14 model-invoked skills" />
 </p>
 
-> Turn your AI pair programmer into a disciplined senior engineer.
-
-Stop vibe coding without structure or context persistence. **my-omp-skills** is an extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) agent harness designed for developers who demand engineering discipline: **plan, spec, build, audit, research, and remember**. It turns loose LLM conversation into structured, test-first, research-backed engineering workflows that persist across sessions and repositories. It equips your agent with 29 user-invoked slash commands, 14 model-invoked skills, custom TUI component renderers, and an append-only knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **28 user-invoked slash commands**, **14 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
-## Quick Onboarding (30 Seconds)
+## Installation
 
-### 1. Install Plugin
-
-This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
+Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.53.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.53.0"
+```
 
-Equivalent scp form:
+Or via SSH:
 
 ```bash
 omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.53.0"
+```
 
-> **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
+> **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
 
-### 2. Initialize Your Repository
+---
 
-Run the setup command once per repository to configure issue tracking, triage label vocabulary, and domain doc layouts:
+## Repository Initialization
+
+Run setup once per repository to configure issue tracking, label vocabulary, and domain doc layouts:
 
 ```bash
 /omp-setup
 ```
 
-It defaults to a local `.omp/scratch/` issue tracker (legacy `.scratch/` supported; GitHub and GitLab issue tracking are also supported). `/omp-setup` is safe and idempotent.
-
-### 3. Take Your First Win
-
-Start experiencing disciplined AI pair programming right away:
-
-- **/ask-me**: Interactive command router — describe what you want to do and `/ask-me` suggests the exact workflow command to execute.
-- **/grill-me**: Stress-test your design or implementation plan before writing a single line of code.
-- **/clarify on**: Turn on prompt clarification so the agent interactively clarifies vague or ambiguous instructions before acting.
+By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/scratch/` (legacy `.scratch/` supported). GitHub and GitLab tracker integrations are also supported.
 
 ---
 
-## Workflows in Action
+## Subsystem Overview
 
-### 1. Plan & Stress-Test Before Coding
-Before jumping into implementation, turn ambiguous ideas into airtight execution plans:
-- **/grill-me**: Runs a relentless, single-question interview loop to uncover edge cases, missing dependencies, and architectural oversights.
-- **/wayfinder**: Maps multi-session epics into dependency-linked decision tickets on your tracker, allowing you to resolve them step by step.
-- **/improve-codebase-architecture**: Scans your repository for deepening opportunities, renders an interactive HTML report, and grills you on your selected refactoring target.
+### 1. Planning & Feature Delivery
+- **/ask-me**: Suggests the exact slash command or workflow for your objective.
+- **/grill-me** & **/grill-with-docs**: Interview loops to stress-test designs and extract ADRs/glossary entries before writing code.
+- **/to-spec**, **/to-tickets**, **/implement**: Workflow chain for synthesizing context into specs, decomposing specs into tracer-bullet tickets with dependency edges, and building features via TDD.
+- **/wayfinder**: Maps multi-session epics into decision tickets on the issue tracker.
+- **/triage**: Filters and processes incoming issues/PRs into agent-ready execution briefs.
 
-### 2. Spec, Break Down, and Ship
-Transform high-level requirements into shipped, code-reviewed code:
-- **/to-spec**: Synthesizes existing conversation context into a structured, trackable specification.
-- **/to-tickets**: Decomposes a spec or plan into tracer-bullet tickets with explicit blocking dependencies.
-- **/implement**: Executes ticketed work driven by TDD (test-driven development) at pre-agreed seams and finishes with automated two-axis code review before committing.
-- **/triage**: Filters and processes incoming issues/PRs through specialized triage roles to produce agent-ready briefs.
+### 2. Multi-Agent Deep Research
+- **/research**: Phase 1 — Generates a research outline, field framework, and review dashboard.
+- **/research-deep**: Phase 2 — Spawns parallel background subagents operating in OODA waves to gather evidence into validated JSON outputs.
+- **/research-report**: Phase 3 — Compiles JSON results into a summary-first markdown report (`report.md` and `summary.md`) with a table of contents, execution provenance, and cited source links.
+- **/research-add-items** & **/research-add-fields**: Extends existing research outlines and field frameworks.
 
-### 3. Deep Multi-Agent Research
-Execute deep, multi-pass research projects with background agents (with accurate field metrics and specialized subagents):
-- **/research**: Phase 1 — Drafts a structured research outline and field framework, producing living status cards and interactive HTML dashboards.
-- **/research-deep**: Phase 2 — Spawns parallel background research agents operating in OODA waves to gather evidence into validated JSON outputs.
-- **/research-report**: Phase 3 — Compiles JSON outputs into a summary-first markdown report complete with table of contents, execution provenance, and a deduplicated sources appendix.
+### 3. Knowledge Base & History
+- **/record**: Permanently appends engineering lessons, audits, or notes into `.omp/knowledge/records/`.
+- **/pitfall**: Captures runtime mistakes and debugging discoveries into `.omp/knowledge/pitfalls/`.
+- **/timeline**: Generates a zero-turn unified project digest (git log, knowledge base, research projects, decision tickets) rendered in a TUI card.
+- **/reference**: Manages a local reference code corpus under `.omp/references/` with zero agent turn overhead.
+- **/routinize**: Converts repeated ad-hoc actions into parameterized scripts under `scripts/routines/`.
+- **Zero-turn Knowledge Surfacing**: `before_agent_start` automatically matches prompt keywords against `.omp/knowledge/` and injects relevant findings into system context.
 
-### 4. Persistent Memory & Interactive Clarification
-Build long-term repository memory and eliminate guesswork:
-- **/record**: Permanently saves durable engineering lessons, audits, and decisions into `.omp/knowledge/`.
-- **/pitfall**: Captures runtime mistakes and debugging discoveries mid-task before context fades.
-- **Zero-turn pitfall auto-surfacing (`before_agent_start`)**: Automatically matches prompt keywords against `.omp/knowledge/` pitfalls and records via fast Index-First search and relative-path deduplication, injecting relevant findings directly into system context.
-- **Freeform keyword & research report search (`xd://knowledge_read`)**: `readKnowledge` and `knowledge_read` support relevance-ranked search across records, pitfalls, audits, and research projects, plus rich research project summaries, full `report.md` content retrieval, and direct sub-file lookups (e.g. `slug: "2026-08-07_topic/outline.yaml"`).
-- **Frontier ticket locator (`findFrontierTicket`)**: Deterministically identifies the earliest unblocked open ticket under `.omp/scratch/` / `.scratch/`.
+### 4. Quality & Controls
+- **/audit**: Conducts independent audits of a codebase area or architecture under `.omp/audits/<slug>/` with SemVer lineage.
 - **/hindsight**: Toggles a settle-time reflection pass that prompts the model to simplify design choices before completing a turn.
-- **/clarify**: Interactively resolves prompt ambiguity with structured TUI choices when user instructions are vague.
-- **Live status autocomplete headers**: Slash commands (`/wayfinder`, `/research`, `/reference`, `/routinize`, `/audit`, `/hindsight`, `/clarify`) surface active repository state (`●` active / `○` inactive) as a read-only header line in the TUI completion dropdown when typing without arguments.
+- **/clarify**: Interactively resolves vague user prompts via TUI choice dialogs.
+- **/math**: Demos native LaTeX math rendering ($...$, $$...$$) supported in the `omp` TUI.
+- **/plugin-issue**: Submits a bug report or feature request directly to this repository.
 
-## Command Directory (28 Commands)
+---
 
-All 28 slash commands are user-invoked. The model recognizes them at session start and will suggest them when appropriate.
+## Slash Commands (28 User-Invoked Commands)
 
 | Command | Category | Description |
 | --- | --- | --- |
-| `/ask-me` | Plan & Decide | Router over this package; suggests the exact command or workflow for your task. |
-| `/grill-me` | Plan & Decide | Relentless one-question-at-a-time interview to sharpen a plan or design before building. |
-| `/grill-with-docs` | Plan & Decide | Interactive grilling session that also records domain docs (ADRs, glossary) as decisions resolve. |
-| `/wayfinder` | Plan & Decide | Maps multi-session projects into decision tickets on the tracker, resolved one at a time. |
-| `/improve-codebase-architecture` | Plan & Decide | Scans codebase for deepening opportunities, presents an HTML report, then grills the chosen target. |
-| `/to-spec` | Ship & Build | Synthesizes current conversation context into a formal spec published to the configured tracker. |
-| `/to-tickets` | Ship & Build | Breaks a spec or plan into tracer-bullet tickets with explicit blocking edges on the tracker. |
-| `/implement` | Ship & Build | Builds work described by tickets/specs, driving TDD at pre-agreed seams and closing with code-review. |
-| `/triage` | Ship & Build | Moves issues and PRs through triage roles into agent-ready briefs (`--unlabeled`, `--needs-triage`). |
-| `/audit` | Audit & Inspect | Independent audit of a codebase area or architecture under `.omp/audits/<slug>/` with SemVer lineage. |
-| `/research` | Deep Research | Phase 1 of deep research: generates research outline, field framework, review cards, and HTML dashboards. |
-| `/research-add-items` | Deep Research | Adds research items to an existing `outline.yaml` and updates living `research.md`. |
-| `/research-add-fields` | Deep Research | Adds field framework definitions to an existing `fields.yaml` and updates living `research.md`. |
-| `/research-deep` | Deep Research | Phase 2 of deep research: researches outline items with parallel background agents in OODA waves. |
-| `/research-report` | Deep Research | Phase 3 of deep research: converts deep-research JSON results into a summary-first markdown report with TOC. |
-| `/record` | Knowledge Base & Upkeep | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`). `--recent` resolves instantly without LLM involvement. |
-| `/pitfall` | Knowledge Base & Upkeep | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades. `--recent` resolves instantly without LLM involvement. |
-| `/routinize` | Knowledge Base & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`, supporting default parameter values declared in `manifest.json`. |
-| `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
-| `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.omp/scratch/`, GitHub, GitLab), triage labels (`.omp/agents/`), domain layout. |
-| `/hindsight` | Knowledge Base & Upkeep | Toggles settle-time reflection pass (`on`, `off`, or bare to toggle) before turns settle. |
-| `/clarify` | Knowledge Base & Upkeep | Toggles prompt clarification mode (`on`, `off`, `debug [on|off]`, `status`, or bare to toggle) and injects clarification guidelines. |
-| `/math` | Knowledge Base & Upkeep | Explains and demos native LaTeX math rendering ($...$, $$...$$, `\begin{aligned}`). |
-| `/omp-handoff` | Knowledge Base & Upkeep | Compacts current conversation into a handoff document for another agent session. |
-| `/plugin-issue` | Knowledge Base & Upkeep | Reports a bug or feature request on this plugin's GitHub repository. |
-| `/teach` | Knowledge Base & Upkeep | Teaches a skill or concept over multiple sessions using current directory as a stateful workspace. |
-| `/writing-great-skills` | Knowledge Base & Upkeep | Reference for skill writing vocabulary, constraints, and principles. |
+| `/ask-me` | Planning | Router over package commands; suggests the exact workflow for your objective. |
+| `/grill-me` | Planning | Interactive interview loop to stress-test a plan or design before building. |
+| `/grill-with-docs` | Planning | Interview loop that creates domain docs (ADRs, glossary) as decisions resolve. |
+| `/wayfinder` | Planning | Maps large multi-session projects into decision tickets resolved step-by-step. |
+| `/improve-codebase-architecture` | Planning | Scans codebase for refactoring targets, presents an HTML report, and grills the chosen target. |
+| `/to-spec` | Shipping | Synthesizes current conversation context into a formal spec on the tracker. |
+| `/to-tickets` | Shipping | Breaks a plan or spec into tracer-bullet tickets with explicit blocking edges. |
+| `/implement` | Shipping | Builds work described by tickets/specs, driving TDD and closing with code review. |
+| `/triage` | Shipping | Processes issues and PRs through specialized triage roles into execution briefs. |
+| `/audit` | Audit | Conducts an independent audit of a codebase area under `.omp/audits/<slug>/`. |
+| `/research` | Research | Phase 1 of deep research: generates research outline, field framework, and dashboard. |
+| `/research-add-items` | Research | Appends research items to an existing `outline.yaml`. |
+| `/research-add-fields` | Research | Appends field definitions to an existing `fields.yaml`. |
+| `/research-deep` | Research | Phase 2 of deep research: gathers evidence via parallel background agents in OODA waves. |
+| `/research-report` | Research | Phase 3 of deep research: compiles JSON results into a summary-first markdown report. |
+| `/timeline` | Knowledge & Upkeep | Generates a zero-turn unified project digest (git log, KB, research, tickets) in a TUI card. |
+| `/record` | Knowledge & Upkeep | Saves a durable lesson, audit, or note to `.omp/knowledge/`. `--recent` resolves instantly in TS. |
+| `/pitfall` | Knowledge & Upkeep | Captures a runtime mistake into `.omp/knowledge/`. `--recent` resolves instantly in TS. |
+| `/routinize` | Knowledge & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`. |
+| `/reference` | Knowledge & Upkeep | Local reference code corpus manager (`add`, `update`, `remove`, `list`) with zero LLM overhead. |
+| `/omp-setup` | Knowledge & Upkeep | Configures issue tracker, triage labels, and domain layout for a repository. |
+| `/hindsight` | Knowledge & Upkeep | Toggles settle-time reflection pass (`on`, `off`, `status`) before turns settle. |
+| `/clarify` | Knowledge & Upkeep | Toggles prompt clarification mode (`on`, `off`, `debug`, `status`) for vague prompts. |
+| `/math` | Knowledge & Upkeep | Explains and demonstrates native LaTeX math rendering in the TUI. |
+| `/omp-handoff` | Knowledge & Upkeep | Compacts current conversation into a handoff document for another agent session. |
+| `/plugin-issue` | Knowledge & Upkeep | Submits a bug report or feature request on this repository. |
+| `/teach` | Knowledge & Upkeep | Teaches a skill or concept over multiple sessions using current directory as a workspace. |
+| `/writing-great-skills` | Knowledge & Upkeep | Reference guide for writing and editing agent skills. |
 
 ---
 
 ## Model-Invoked Skills (14 Skills)
 
-The 14 skills are model-invoked: omp loads a skill automatically when conversation or codebase context matches (exception: `using-git-worktrees` is user-invoked).
+Omp automatically loads model-invoked skills when conversation or codebase context matches the skill condition.
 
 | Skill | Description | Trigger Condition |
 | --- | --- | --- |
-| `grilling` | Relentless one-question-at-a-time interview until every decision branch resolves. | You have a plan or design worth stress-testing before building. |
-| `tdd` | Red-green-refactor test-first loop at pre-agreed seams. | Building a feature or fixing a bug where tests guard the observable contract. |
-| `code-review` | Two-axis review (Standards + Spec) of diffs via parallel subagents. | You ask to review a branch, PR, or work-in-progress changes. |
-| `diagnosing-bugs` | Disciplined loop: reproduce, minimize, hypothesize, instrument, fix, regression-test. | Something is broken, throwing, failing, or suffering performance regressions. |
-|_`research`_| Investigate a question against high-trust primary sources using specialized subagents (`librarian`/`scout`); findings as cited markdown. | A question needs facts from primary documentation, external libraries, APIs, or codebase architecture. |
-| `prototype` | Throwaway code that answers one design question (logic or UI). | Sanity-checking whether a state model or user interface feels right. |
-| `domain-modeling` | Builds and sharpens project domain model; maintains `CONTEXT.md` and ADRs. | Terminology is fuzzy or an architectural decision needs recording. |
-| `codebase-design` | Vocabulary for deep modules: hiding complex behavior behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
-| `resolving-merge-conflicts` | Resolves in-progress merges/rebases by intent, hunk by hunk—never `--abort`. | A merge or rebase is in progress with conflicts. |
-| `using-references` | Consults cloned reference corpus before reconstructing external behavior from memory. | Reimplementing algorithms (ODE solvers, dense ML) with an available reference. |
-| `using-herdr` | Operates herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent` tools or CLI). | The user mentions herdr or asks to control workspaces, panes, or sibling agents. |
-| `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/` convention). | **User-invoked only**: explicitly requested by user. |
-| `show-me` | Visual explanations via code sketches, call trees, file layouts, Mermaid, diffs, or HTML artifacts. | Explaining structure, control flow, UI hierarchy, architecture, or visual concepts. |
-| `design-control-loop` | Cybernetic control loop design (sensor, controller, actuator, disturbances) for codebase maintenance & CI workflows. | Designing scheduled or automated codebase feedback loops, automated PR workflows, or quality gates. |
+| `grilling` | Relentless one-question-at-a-time interview until decisions resolve. | Plan or design worth stress-testing before building. |
+| `tdd` | Red-green-refactor test-first loop at pre-agreed seams. | Building a feature or fixing a bug covered by tests. |
+| `code-review` | Two-axis review (Standards + Spec) via parallel subagents. | User asks to review a branch, PR, or changes. |
+| `diagnosing-bugs` | Reproduction, minimization, hypothesis testing, and fix verification loop. | Broken functionality, exceptions, or performance regressions. |
+| `research` | Fact-finding against primary sources using subagents (`librarian`/`scout`). | Questions requiring evidence from docs, source, or APIs. |
+| `prototype` | Throwaway code answering a specific design or UI question. | Sanity-checking state models or user interfaces. |
+| `domain-modeling` | Builds project domain model; maintains `CONTEXT.md` and ADRs. | Fuzzy terminology or architectural decisions needing recording. |
+| `codebase-design` | Deep module design: hiding complex behavior behind clean interfaces. | Designing module interfaces or establishing seams. |
+| `resolving-merge-conflicts` | Resolves git merge/rebase conflicts hunk-by-hunk by intent. | Active git merge or rebase conflict in progress. |
+| `using-references` | Consults cloned reference corpus before reconstructing external algorithms. | Implementing complex algorithms with available reference source. |
+| `using-herdr` | Controls herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent`). | User mentions herdr or asks to manage panes/workspaces. |
+| `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/`). | **User-invoked only**: explicitly requested by user. |
+| `show-me` | Visual explanations via sketches, call trees, file layouts, Mermaid, or HTML. | Explaining structure, control flow, UI hierarchy, or architecture. |
+| `design-control-loop` | Cybernetic control loop design (sensor, controller, actuator) for codebase workflows. | Designing scheduled feedback loops, PR workflows, or quality gates. |
 
 ---
 
-## Configuration & Customization
+## Extension Architecture & Guardrails
 
-### Hindsight Reflection
-
-`/hindsight` is off by default; `/hindsight on` enables the settle-time reflection pass. Hindsight inspects assistant content blocks (`didRealWork`) to trigger reflection when tool calls (`toolCall` or `tool_use`) or substantial reasoning (>= 400 chars, reading `block.thinking` with `block.text` fallback) are present. Configure options via `~/.omp/hindsight.json`:
-
-```json
-{
-  "name": "strict",
-  "nudge": "Before settling, re-read your last turn and identify any design-level change that would simplify the approach. Prefer deletion over addition.",
-  "leadIn": "Reconsider your last turn in light of the tool results.",
-  "onMessage": "Hindsight: on (strict)",
-  "offMessage": "Hindsight: off"
-}
-
-### Runtime Guardrails (KB Append-Only)
-
-The extension enforces a runtime invariant on the repo-local knowledge base at `.omp/knowledge/` (and `.omp/audits/`): `records/`, `pitfalls/`, and `INDEX.md` are append-only, and audit reports only change via a controlled SemVer bump. Every blocked tool call is reported to the model as a tool-result reason, but the user (and the model's self-introspection) also sees a passive status-bar entry.
-
-- **Surface** — when the working tree contains `.omp/knowledge/`, two footer status-bar widgets run side-by-side: `KB append-only · N blocks` (cumulative session block count) and `KB: N records · M pitfalls` (cumulative session ingest count for `records/` and `pitfalls/` writes that landed on NEW files).
-- **Visibility** — both widgets render whether or not any events have fired. `0 blocks` + `0 records · 0 pitfalls` is the quiet state; non-zero values signal the guardrail has been active and the model has been appending this session. The ingest widget only counts NEW-file writes; `edit` calls and overwrites of existing files do not bump it (those are revisions, not ingest).
-- **No LLM overhead** — surface is render-only (`ui.setStatus`). No input messages, no extra tool calls, no model coordination. Clears automatically when the KB is absent (e.g. outside the repo root).
-- **Audit trail** — the block widget keeps the last 8 blocked calls in memory (tool, path, timestamp, reason class) for future audit-card rendering. The list is reset on each `session_start`.
-- **Right workflow when blocked** — `/record <title>` to save a new finding, `/pitfall <description>` to capture a runtime mistake, `knowledge_read` to query past entries. For audits, edit with an explicit SemVer bump + `## Revision History` entry.
-- **Active KB index in the system prompt** — when records or pitfalls exist in the repository (or are ingested during the session), the extension appends a small "Active knowledge base" section to the system prompt on every `before_agent_start` (up to 5 most-recent records + 5 most-recent pitfalls, by mtime). Automatically resolves `.omp/knowledge/` across subdirectories via `findKnowledgeRoot` and surfaces pre-existing entries even on fresh session startup. The model can scan the list without burning a `knowledge_read` tool call; if it needs the body of an entry, it calls `knowledge_read type=records|pitfalls slug=<name>`. Repositories without KB entries are untouched — zero prompt inflation.
-
-### KV Cache & Token Economics
-
-The harness enforces KV cache prefix stability and context economy across sessions:
-- **Prefix Stability Invariant**: System prompt extensions (`clarify.ts`, `kb-index-injector.ts`) strictly append dynamic context (`CLARIFY_PROMPT`, active KB index) to the tail of `evt.systemPrompt`, preserving `evt.systemPrompt.startsWith(basePrompt)`. Mutating prefix tokens invalidates the KV prompt cache and degrades multi-turn latency.
-- **Context Economy & Subagent Offloading**: Commands like `/record --recent` and `/reference` bypass LLM execution entirely to return instant in-TS results. Heavy codebase scanning and API research are offloaded to background `task` subagents (`scout` for read-only exploration, `librarian` for docs/source research).
-- **Zero-Turn State Surface**: TUI completion dropdown headers (`value: ""`) display active project state for commands like `/wayfinder`, `/research`, `/reference`, `/routinize`, and `/audit` without burning LLM turns.
-
-### Native LaTeX Math
-
-Native LaTeX math rendering is always active in the omp TUI — no toggle or configuration needed:
-- **Inline math**: `$E = mc^2$`
-- **Display math**: `$$\frac{d}{dx}\left( \int_{a}^{x} f(t)\,dt \right) = f(x)$$` or multi-line `\begin{aligned} ... \end{aligned}` blocks.
-
-Run `/math` in any omp session for a live demo.
-
----
-
-## Updating & Troubleshooting
-
-All plugin management goes through `omp plugin`:
-
-1. **View Installed Plugins**:
-   ```bash
-   omp plugin list
-   ```
-   Should display `my-omp-skills@v0.49.0`.
-
-2. **Upgrade to `v0.49.0`**:
-   ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.49.0"
-
-3. **List Available Tag Versions** (requires SSH read access):
-   ```bash
-   git ls-remote git@github.com:hae-banko/my-omp-skills.git --tags
-   ```
-
-4. **Clear & Fix Stale Mirror Cache**:
-   If Bun or `omp` caches predate a tag update:
-   ```bash
-   git -C ~/.bun/install/cache/958cddb050b6f945.git fetch origin +refs/tags/*:refs/tags/* +refs/heads/main:refs/heads/main
-   ```
-
-5. **Uninstall**:
-   ```bash
-   omp plugin uninstall my-omp-skills
-   ```
+- **Append-Only Knowledge Base (`.omp/knowledge/`)**: Records, pitfalls, and index files are protected from overwrites and in-place edits. Two status-bar widgets track session blocks and new file ingest counts.
+- **KV Cache Prefix Stability**: Dynamic system prompt extensions (`clarify`, `kb-index-injector`) strictly append to `evt.systemPrompt` tail, preserving base prompt prefix hashing to maintain high LLM prompt cache hit rates (>90%).
+- **ANSI Card Layout Engine (`src/research/research-format.ts`)**: TUI transcript cards use width-aware layout primitives with ANSI escape sequence stripping, preserving 76-column box alignment across CJK text, emoji, and colored borders.
 
 ---
 
@@ -220,9 +144,9 @@ All plugin management goes through `omp plugin`:
 
 Distributed under the [MIT License](LICENSE).
 
-Adapted from open-source suites (all MIT licensed):
-- [mattpocock/skills](https://github.com/mattpocock/skills) — Base command and skill structure.
-- [obra/superpowers](https://github.com/obra/superpowers) — Source of `using-git-worktrees` skill.
-- [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) — Source of the `/research` command family.
-- [humanlayer/skills](https://github.com/humanlayer/humanlayer) — Source of `show-me` and `design-control-loop` skills.
-- [dkmnx/pi-clarify](https://github.com/dkmnx/pi-clarify) — Source of `/clarify` prompt clarification command and tool.
+Adapted from open-source extension suites (all MIT licensed):
+- [mattpocock/skills](https://github.com/mattpocock/skills) — Command and skill structure patterns.
+- [obra/superpowers](https://github.com/obra/superpowers) — Bootstrap injection pattern.
+- [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) — Deep research workflow architecture.
+- [humanlayer/skills](https://github.com/humanlayer/humanlayer) — `show-me` and `design-control-loop` skills.
+- [dkmnx/pi-clarify](https://github.com/dkmnx/pi-clarify) — Prompt clarification pattern.
