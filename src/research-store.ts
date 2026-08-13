@@ -141,7 +141,7 @@ export function readOutlineItems(projectDir: string): string[] | undefined {
     const content = readFileSync(outlinePath, "utf8");
     const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
     if (matches) {
-      return matches.map((m) => m.replace(/^\s*-\s*name:\s*/, "").trim().replace(/^['"]|['"]$/g, ""));
+      return matches.map((m) => m.replace(/^\s*-\s*name:\s*/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, ""));
     }
     // Fallback for outlines that list items without `- name:` keys.
     const names: string[] = [];
@@ -154,7 +154,7 @@ export function readOutlineItems(projectDir: string): string[] | undefined {
       }
       if (inItems && /^[a-z0-9_]+:/i.test(l.trim())) inItems = false;
       if (inItems && /^\s*-\s*/.test(l)) {
-        names.push(l.trim().replace(/^-\s*/, "").replace(/^['"]|['"]$/g, "").trim());
+        names.push(l.trim().replace(/^-\s*/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, ""));
       }
     }
     return names;
@@ -168,7 +168,7 @@ export function readOutlineItems(projectDir: string): string[] | undefined {
  * validate_json.py: `- name:` entries under `categories:` / `field_categories`
  * only (both adapters must agree on the defined-field denominator).
  */
-function readFieldNames(projectDir: string): string[] | undefined {
+export function readFieldNames(projectDir: string): string[] | undefined {
   const fieldsPath = pickFieldsPath(projectDir);
   if (!fieldsPath) return undefined;
   try {
@@ -187,7 +187,7 @@ function readFieldNames(projectDir: string): string[] | undefined {
         continue;
       }
       if (inBlock && /^-\s*name:\s*(.+)$/.test(trimmed)) {
-        names.push(trimmed.replace(/^-\s*name:\s*/, "").replace(/^['"]|['"]$/g, "").trim());
+        names.push(trimmed.replace(/^-\s*name:\s*/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, ""));
       }
     }
     return names;
@@ -208,7 +208,7 @@ interface ExecutionBlock {
   approval_mode?: string;
 }
 
-function readExecutionBlock(projectDir: string): ExecutionBlock {
+export function readExecutionBlock(projectDir: string): ExecutionBlock {
   const outlinePath = pickOutlinePath(projectDir);
   if (!outlinePath) return {};
   try {
@@ -217,8 +217,8 @@ function readExecutionBlock(projectDir: string): ExecutionBlock {
     if (!blockMatch) return {};
     const block = blockMatch[1];
     const readStr = (key: string): string | undefined => {
-      const m = block.match(new RegExp(`^\\s+${key}:\\s*["']?([^"'\r\n]+)["']?`, "m"));
-      return m ? m[1].trim() : undefined;
+      const m = block.match(new RegExp(`^\\s+${key}:\\s*(.+)$`, "m"));
+      return m ? m[1].replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, "") : undefined;
     };
     const readInt = (key: string): number | undefined => {
       const m = block.match(new RegExp(`^\\s+${key}:\\s*(\\d+)`, "m"));
@@ -298,11 +298,15 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
   }
   totalItems = totalItems ?? 0;
 
-  let totalFields = frontMatter?.counts?.fields;
-  if (totalFields === undefined) {
-    totalFields = hasFields ? readFieldNames(projectDir)?.length : undefined;
+  const definedFieldsPerItem = hasFields ? readFieldNames(projectDir)?.length : undefined;
+  let totalFields: number;
+  if (frontMatter?.counts?.fields !== undefined) {
+    totalFields = frontMatter.counts.fields;
+  } else if (definedFieldsPerItem !== undefined && totalItems > 0) {
+    totalFields = definedFieldsPerItem * totalItems;
+  } else {
+    totalFields = definedFieldsPerItem ?? 0;
   }
-  totalFields = totalFields ?? 0;
 
   const completedItems = jsonFiles.length;
   let completedFields = 0;
@@ -329,7 +333,7 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
     completedFields = totalFields > 0 ? Math.min(totalFields, totalValidFieldsAcrossJson) : totalValidFieldsAcrossJson;
   }
 
-  const coverage = totalItems > 0 ? Math.min(1, completedItems / totalItems) : hasReport ? 1 : 0;
+  const coverage = totalItems > 0 && totalFields > 0 ? Math.min(1, completedFields / totalFields) : hasReport ? 1 : 0;
 
   // Canonical pipeline status — one vocabulary across all research cards.
   // Front-matter `status` is the read source; derivePipelineStatus derives it

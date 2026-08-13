@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.44.0 — Research dashboard field metrics fix, YAML comment parsing fix, and research skill prompt contract
+
+- **Research dashboard field metrics calculation fix** — fixed `getResearchDashboardMetrics` field math when `frontMatter.counts.fields` is missing. Previously `totalFields` took `readFieldNames` length (defined fields per item, e.g. 15) instead of multiplying by `totalItems` (e.g. 15 * 21 = 315), causing early 100% coverage reporting after completing only 1 item. `coverage` calculation now evaluates `totalItems > 0 && totalFields > 0 ? Math.min(1, completedFields / totalFields) : hasReport ? 1 : 0`.
+- **YAML inline comment parsing fix** — `readOutlineItems`, `readFieldNames`, and `readExecutionBlock` in `src/research-store.ts` now strip inline YAML comments (`.replace(/#.*$/, "")`) before trimming and quote removal.
+- **Refined `research` skill prompt contract** — `skills/research/SKILL.md` now explicitly guides the model to spin up background subagents via `task` (`agent: "librarian"` for external docs/APIs/specs/code and `agent: "scout"` for codebase exploration), save single-topic findings to `.omp/knowledge/records/YYYY-MM-DD_<topic_slug>.md` (or propose `/record`) and update `INDEX.md`, and direct multi-item deep research to the `/research` command family.
+- **Selftest coverage** — `scripts/selftest.ts` verifies `getResearchDashboardMetrics` metric calculation on projects without front-matter counts, as well as inline YAML comment stripping in `fields.yaml` and `outline.yaml`.
+
 ## v0.43.0 — Live status autocomplete headers for wayfinder, research, reference, routinize, and audit
 
 - **Live status autocomplete headers** — when typing `/wayfinder`, `/research`, `/reference`, `/routinize`, or `/audit` without arguments (`argumentPrefix === ""`), a non-selectable header line (`value: ""`) displays the live repository state at the top of the completion dropdown (e.g. `● Active frontier: <feature> / <title>`, `● Active research: <slug> (<status>)`, `● References: N installed`, `● Routines: N available`, `● Audits: N reports`, or their `○` inactive state equivalents).

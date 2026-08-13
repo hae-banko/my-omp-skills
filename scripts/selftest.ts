@@ -84,6 +84,13 @@ import type {
   TicketBreakdownPayload,
   TriageStatusPayload,
 } from "../src/telemetry-renderer.ts";
+import {
+  getResearchDashboardMetrics,
+  readExecutionBlock,
+  readFieldNames,
+  readOutlineItems,
+} from "../src/research-store.ts";
+
 
 interface HandlerContext {
   ui?: {
@@ -1088,6 +1095,85 @@ if (!renderers["my-omp-research-error"]) {
   if (!(card instanceof TuiContainer)) fail("renderer: my-omp-research-error did not produce a component");
 }
 
+// --- Research Dashboard Field Metrics & Inline YAML Comment Stripping Fixes (Issue #14) ---
+{
+  const researchFixDir = mkdtempSync(join(tmpdir(), "my-omp-research-fix-"));
+  const projectDir = join(researchFixDir, ".omp", "knowledge", "research", "issue-14-test");
+  const resultsDir = join(projectDir, "results");
+  mkdirSync(resultsDir, { recursive: true });
+
+  // 1. Outline with 2 items and inline YAML comments
+  writeFileSync(
+    join(projectDir, "outline.yaml"),
+    `topic: Issue 14 Test # inline comment for topic
+items:
+  - name: item_one # first item comment
+  - name: item_two # second item comment
+execution:
+  preset: small # preset comment
+`,
+  );
+
+  // 2. Fields with 3 fields per item (total expected across 2 items = 6) and inline comments
+  writeFileSync(
+    join(projectDir, "fields.yaml"),
+    `categories:
+  category_one:
+    - name: field_a # field a comment
+    - name: field_b # field b comment
+    - name: field_c # field c comment
+`,
+  );
+  writeFileSync(
+    join(resultsDir, "item_one.json"),
+    JSON.stringify({
+      field_a: "value_a",
+      field_b: "value_b",
+      field_c: "value_c",
+      uncertain: [],
+    }),
+  );
+
+  // Assert YAML comment stripping
+  const outlineItems = readOutlineItems(projectDir);
+  if (!outlineItems || outlineItems.length !== 2 || outlineItems[0] !== "item_one" || outlineItems[1] !== "item_two") {
+    fail(`readOutlineItems inline comment stripping failed: ${JSON.stringify(outlineItems)}`);
+  }
+
+  const fieldNames = readFieldNames(projectDir);
+  if (!fieldNames || fieldNames.length !== 3 || fieldNames[0] !== "field_a" || fieldNames[1] !== "field_b" || fieldNames[2] !== "field_c") {
+    fail(`readFieldNames inline comment stripping failed: ${JSON.stringify(fieldNames)}`);
+  }
+
+  const execBlock = readExecutionBlock(projectDir);
+  if (execBlock.preset !== "small") {
+    fail(`readExecutionBlock inline comment stripping failed: preset=${JSON.stringify(execBlock.preset)}`);
+  }
+
+  // Assert metric calculations without frontMatter.counts.fields
+  const metrics = getResearchDashboardMetrics(projectDir, "issue-14-test");
+  if (!metrics.global_metrics) {
+    fail("metrics: global_metrics missing");
+  } else {
+    if (metrics.global_metrics.total_items !== 2) {
+      fail(`metrics: total_items=${metrics.global_metrics.total_items}, expected 2`);
+    }
+    if (metrics.global_metrics.completed_items !== 1) {
+      fail(`metrics: completed_items=${metrics.global_metrics.completed_items}, expected 1`);
+    }
+    if (metrics.global_metrics.total_fields !== 6) {
+      fail(`metrics: total_fields=${metrics.global_metrics.total_fields}, expected 6`);
+    }
+    if (metrics.global_metrics.completed_fields !== 3) {
+      fail(`metrics: completed_fields=${metrics.global_metrics.completed_fields}, expected 3`);
+    }
+    if (metrics.global_metrics.coverage !== 0.5) {
+      fail(`metrics: coverage=${metrics.global_metrics.coverage}, expected 0.5`);
+    }
+  }
+
+  rmSync(researchFixDir, { recursive: true, force: true });
+}
 // --- Renderer unit checks: 76-cell width budget + content contracts ---------
 
 // Every line of every research card must fit the fixed 76-cell box. The

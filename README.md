@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.40.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.44.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -21,12 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.42.0"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.44.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.42.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.44.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
@@ -66,7 +66,7 @@ Transform high-level requirements into shipped, code-reviewed code:
 - **/triage**: Filters and processes incoming issues/PRs through specialized triage roles to produce agent-ready briefs.
 
 ### 3. Deep Multi-Agent Research
-Execute deep, multi-pass research projects with background agents:
+Execute deep, multi-pass research projects with background agents (with accurate field metrics and specialized subagents):
 - **/research**: Phase 1 — Drafts a structured research outline and field framework, producing living status cards and interactive HTML dashboards.
 - **/research-deep**: Phase 2 — Spawns parallel background research agents operating in OODA waves to gather evidence into validated JSON outputs.
 - **/research-report**: Phase 3 — Compiles JSON outputs into a summary-first markdown report complete with table of contents, execution provenance, and a deduplicated sources appendix.
@@ -128,7 +128,7 @@ The 14 skills are model-invoked: omp loads a skill automatically when conversati
 | `tdd` | Red-green-refactor test-first loop at pre-agreed seams. | Building a feature or fixing a bug where tests guard the observable contract. |
 | `code-review` | Two-axis review (Standards + Spec) of diffs via parallel subagents. | You ask to review a branch, PR, or work-in-progress changes. |
 | `diagnosing-bugs` | Disciplined loop: reproduce, minimize, hypothesize, instrument, fix, regression-test. | Something is broken, throwing, failing, or suffering performance regressions. |
-| `research` | Background agent investigates high-trust primary sources; findings as cited markdown. | A question needs facts from primary documentation or papers. |
+|_`research`_| Investigate a question against high-trust primary sources using specialized subagents (`librarian`/`scout`); findings as cited markdown. | A question needs facts from primary documentation, external libraries, APIs, or codebase architecture. |
 | `prototype` | Throwaway code that answers one design question (logic or UI). | Sanity-checking whether a state model or user interface feels right. |
 | `domain-modeling` | Builds and sharpens project domain model; maintains `CONTEXT.md` and ADRs. | Terminology is fuzzy or an architectural decision needs recording. |
 | `codebase-design` | Vocabulary for deep modules: hiding complex behavior behind a small interface at a clean seam. | Designing a module's interface or deciding where a seam goes. |
@@ -185,12 +185,11 @@ All plugin management goes through `omp plugin`:
    ```bash
    omp plugin list
    ```
-   Should display `my-omp-skills@v0.42.0`.
+   Should display `my-omp-skills@v0.44.0`.
 
-2. **Upgrade to `v0.42.0`**:
+2. **Upgrade to `v0.44.0`**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.42.0"
-   ```
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.44.0"
 
 3. **List Available Tag Versions** (requires SSH read access):
    ```bash
