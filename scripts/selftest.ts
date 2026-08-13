@@ -55,6 +55,7 @@ import {
   systemPromptHasSection,
 } from "../src/kb-index-injector.ts";
 import { getPitfallCount, getRecordCount, recordIngest, resetSession as resetKbIngestSession } from "../src/kb-ingest-status.ts";
+import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentCommand } from "../src/recent-command.ts";
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
 import { findFrontierTicket } from "../src/locators.ts";
 import {
@@ -3002,6 +3003,144 @@ if (seededEvt.systemPrompt.length !== lenAfterFirst) {
 rmSync(kbIndexDir, { recursive: true, force: true });
 resetKbIngestSession();
 
+
+// --- /record --recent / /pitfall --recent: LOCAL recent-listing handler -----
+// The command runs in TS only — no command body, no user prompt, no LLM turn.
+// Each branch (default count, explicit count, no-KB, free-text fall-through)
+// is asserted against a fresh fixture to keep the test deterministic.
+{
+  // --- Mock pi that captures sendMessage + notify for assertions ---
+  const makeMockPi = (): {
+    pi: ExtensionApi;
+    sent: Array<Record<string, unknown>>;
+    toasts: Array<{ message: string; level: string }>;
+  } => {
+    const sent: Array<Record<string, unknown>> = [];
+    const toasts: Array<{ message: string; level: string }> = [];
+    const pi: ExtensionApi = {
+      registerCommand: () => {},
+      sendUserMessage: () => Promise.resolve(),
+      sendMessage: (msg) => { sent.push(msg as Record<string, unknown>); },
+      on: () => {},
+      registerTool: () => {},
+      registerMessageRenderer: () => {},
+      zod: {} as ExtensionApi["zod"],
+    };
+    return { pi, sent, toasts };
+  };
+
+  // --- 1. isRecentArgs / parseRecentCount parser coverage ---
+  const positiveArgCases = ["--recent", "--recent 5", "--recent 50"];
+  for (const args of positiveArgCases) {
+    if (!isRecentArgs(args)) fail(`isRecentArgs(${JSON.stringify(args)}) should be true`);
+  }
+  if (isRecentArgs("--recent abc")) fail("isRecentArgs('--recent abc') should be false (non-numeric)");
+  if (isRecentArgs("")) fail("isRecentArgs('') should be false");
+  if (isRecentArgs("fix the bug")) fail("isRecentArgs('fix the bug') should be false");
+  if (!isRecentArgs("  --recent  ")) fail("isRecentArgs('  --recent  ') should be true (whitespace tolerant)");
+
+  if (parseRecentCount("--recent") !== DEFAULT_LIMIT) fail(`parseRecentCount('--recent') should be ${DEFAULT_LIMIT}`);
+  if (parseRecentCount("--recent 5") !== 5) fail("parseRecentCount('--recent 5') should be 5");
+  if (parseRecentCount("--recent 999") !== MAX_LIMIT) fail(`parseRecentCount('--recent 999') should clamp to ${MAX_LIMIT}`);
+
+  // --- 2. Free-text fall-through: handled=false, no card, no notify ---
+  {
+    const root = mkdtempSync(join(tmpdir(), "my-omp-recent-fallthrough-"));
+    const { pi, sent, toasts } = makeMockPi();
+    const r = await runRecentCommand({ kind: "record", rawArgs: "fix the bug", root, pi, ctx: { ui: { notify: (m, l) => toasts.push({ message: m, level: l ?? "info" }) } } });
+    if (r.handled !== false) fail("runRecentCommand: free-text args should return handled=false");
+    if (sent.length !== 0) fail(`runRecentCommand: free-text should not emit cards, got ${sent.length}`);
+    if (toasts.length !== 0) fail(`runRecentCommand: free-text should not emit notify, got ${toasts.length}`);
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  // --- 3. No-KB: handled=true with "not found" card + warning notify ---
+  {
+    const root = mkdtempSync(join(tmpdir(), "my-omp-recent-nokb-"));
+    const { pi, sent, toasts } = makeMockPi();
+    const r = await runRecentCommand({ kind: "record", rawArgs: "--recent", root, pi, ctx: { ui: { notify: (m, l) => toasts.push({ message: m, level: l ?? "info" }) } } });
+    if (r.handled !== true) fail("runRecentCommand: --recent with no KB should return handled=true");
+    const card = sent[0];
+    if (!card) fail("runRecentCommand: no-KB path did not emit a card");
+    else if (card.customType !== "knowledge-record") fail(`runRecentCommand: no-KB card customType=${card.customType}, expected knowledge-record`);
+    if (!toasts.some((t) => t.message.includes("No .omp/knowledge/"))) fail(`runRecentCommand: no-KB notify missing; got ${JSON.stringify(toasts)}`);
+    if (!toasts.some((t) => t.level === "warn")) fail("runRecentCommand: no-KB should emit a warn-level notify");
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  // --- 4. Seeded fixture: --recent 3 with 3 records returns RECENT RECORDS (3) ---
+  {
+    const root = mkdtempSync(join(tmpdir(), "my-omp-recent-seeded-"));
+    mkdirSync(join(root, ".omp", "knowledge", "records"), { recursive: true });
+    writeFileSync(join(root, ".omp", "knowledge", "records", "2026-08-01_first.md"),  "---\ntitle: First record\n---\nbody one");
+    writeFileSync(join(root, ".omp", "knowledge", "records", "2026-08-02_second.md"), "---\ntitle: Second record\n---\nbody two");
+    writeFileSync(join(root, ".omp", "knowledge", "records", "2026-08-03_third.md"),  "---\ntitle: Third record\n---\nbody three");
+    const { pi, sent, toasts } = makeMockPi();
+    const r = await runRecentCommand({ kind: "record", rawArgs: "--recent 3", root, pi, ctx: { ui: { notify: (m, l) => toasts.push({ message: m, level: l ?? "info" }) } } });
+    if (r.handled !== true) fail("runRecentCommand: --recent 3 with seeded KB should return handled=true");
+    const card = sent[0];
+    if (!card) fail("runRecentCommand: seeded path did not emit a card");
+    else {
+      if (card.customType !== "knowledge-record") fail(`runRecentCommand: card customType=${card.customType}, expected knowledge-record`);
+      if (card.display !== true) fail("runRecentCommand: card display must be true");
+      if (card.attribution !== "user") fail("runRecentCommand: card attribution must be user");
+      const content = String(card.content ?? "");
+      if (!content.includes("RECORD")) fail(`runRecentCommand: card label missing 'RECORD'; got ${JSON.stringify(content)}`);
+      if (!content.includes("(3)")) fail(`runRecentCommand: card label missing count '(3)'; got ${JSON.stringify(content)}`);
+    }
+    const infoToast = toasts.find((t) => t.level === "info");
+    if (!infoToast) fail("runRecentCommand: seeded path should emit an info-level notify");
+    else if (!infoToast.message.includes("3 recent records")) fail(`runRecentCommand: notify message wrong: ${infoToast.message}`);
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  // --- 5. Seeded fixture: --recent with default limit + pitfalls kind ---
+  {
+    const root = mkdtempSync(join(tmpdir(), "my-omp-recent-pitfalls-"));
+    mkdirSync(join(root, ".omp", "knowledge", "pitfalls"), { recursive: true });
+    writeFileSync(join(root, ".omp", "knowledge", "pitfalls", "2026-08-01_pitfall.md"), "---\ntitle: Pitfall title\n---\noops body");
+    const { pi, sent, toasts } = makeMockPi();
+    const r = await runRecentCommand({ kind: "pitfall", rawArgs: "--recent", root, pi, ctx: { ui: { notify: (m, l) => toasts.push({ message: m, level: l ?? "info" }) } } });
+    if (r.handled !== true) fail("runRecentCommand: /pitfall --recent should return handled=true");
+    const card = sent[0];
+    if (!card) fail("runRecentCommand: pitfalls path did not emit a card");
+    else if (card.customType !== "knowledge-pitfall") fail(`runRecentCommand: pitfalls card customType=${card.customType}, expected knowledge-pitfall`);
+    if (!toasts.some((t) => t.level === "info" && t.message.includes("1 recent pitfall"))) fail(`runRecentCommand: pitfall singular notify expected; got ${JSON.stringify(toasts)}`);
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  // --- 6. Integration: the registered /record handler routes --recent to bypass ---
+  {
+    const prevCwd = process.cwd();
+    const root = mkdtempSync(join(tmpdir(), "my-omp-recent-integration-"));
+    mkdirSync(join(root, ".omp", "knowledge", "records"), { recursive: true });
+    writeFileSync(join(root, ".omp", "knowledge", "records", "2026-08-05_x.md"), "---\ntitle: X\n---\nbody x");
+    process.chdir(root);
+    try {
+      sent.length = 0;
+      customMessages.length = 0;
+      const toasts: string[] = [];
+      await registered["record"].handler("--recent", { ui: { notify: (m: string) => toasts.push(m) } });
+      // Sent (user prompt) must be empty — bypass does NOT queue a user prompt.
+      if (sent.length !== 0) fail("record --recent: registered handler queued a user prompt (should bypass)");
+      const card = customMessages.find((m) => m.customType === "knowledge-record");
+      if (!card) fail("record --recent: registered handler did not emit the knowledge-record card");
+      if (!toasts.some((t) => t.includes("recent record"))) fail(`record --recent: notify missing; got ${JSON.stringify(toasts)}`);
+    } finally {
+      process.chdir(prevCwd);
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  // --- 7. Integration: free-text args still flow through the default handler ---
+  {
+    sent.length = 0;
+    customMessages.length = 0;
+    await registered["record"].handler("some new finding", {});
+    if (sent.length === 0) fail("record free-text: expected the default handler to queue a user prompt");
+    if (!sent[0]?.includes("/record some new finding")) fail(`record free-text: prompt wrong: ${sent[0]}`);
+  }
+}
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

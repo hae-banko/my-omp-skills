@@ -103,8 +103,8 @@ All 28 slash commands are user-invoked. The model recognizes them at session sta
 | `/research-add-fields` | Deep Research | Adds field framework definitions to an existing `fields.yaml` and updates living `research.md`. |
 | `/research-deep` | Deep Research | Phase 2 of deep research: researches outline items with parallel background agents in OODA waves. |
 | `/research-report` | Deep Research | Phase 3 of deep research: converts deep-research JSON results into a summary-first markdown report with TOC. |
-| `/record` | Knowledge Base & Upkeep | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`). |
-| `/pitfall` | Knowledge Base & Upkeep | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades. |
+| `/record` | Knowledge Base & Upkeep | Saves a durable lesson, audit, or note to the local knowledge base (`.omp/knowledge/`). `--recent` resolves instantly without LLM involvement. |
+| `/pitfall` | Knowledge Base & Upkeep | Captures a fresh mistake into `.omp/knowledge/` mid-task before context fades. `--recent` resolves instantly without LLM involvement. |
 | `/routinize` | Knowledge Base & Upkeep | Converts repeated ad-hoc work into parameterized scripts under `scripts/routines/`. |
 | `/reference` | Knowledge Base & Upkeep | Local reference corpus manager (`add`, `update`, `remove`, `list`) with zero agent turn overhead. |
 | `/omp-setup` | Knowledge Base & Upkeep | Configures repo setup: issue tracker (local `.omp/scratch/`, GitHub, GitLab), triage labels (`.omp/agents/`), domain layout. |

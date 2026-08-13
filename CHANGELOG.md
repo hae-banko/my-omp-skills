@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.41.0 — Instant /record --recent and /pitfall --recent (no LLM turn)
+
+- **`--recent` bypasses the LLM** — `/record --recent [N]` and `/pitfall --recent [N]` now resolve in TypeScript only, reading the most recent entries from `.omp/knowledge/INDEX.md` and emitting a transcript card. No command body injected, no tool call, no model turn.
+- **Token savings** — saves ~2KB body injection + an entire LLM turn per invocation. For users running `--recent` frequently during a session (e.g. "did I record this yet?"), this is the difference between sub-100ms passive and a full agent round-trip.
+- **Mirrors `/reference`** — same pattern: passive in-TS handler with a transcript card. Other commands that benefit from this pattern (`/audit --recent`, `/hindsight --recent`) can follow.
+- **Auto-detected via `getArgumentCompletions`** — the existing `/record --recent` autocomplete already advertised the fast path; users get the implementation now.
+
 ## v0.40.0 — Compact KB index in system prompt on KB activity
 
 - **Compact KB index self-injection** — `installKbIndexInjector` subscribes to `before_agent_start` and appends a small "Active knowledge base" section listing up to 5 records + 5 pitfalls when the session has ingested ≥1 entry. The section lists filenames, dates, and a one-line usage hint for `knowledge_read`.

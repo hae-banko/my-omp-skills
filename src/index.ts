@@ -38,6 +38,7 @@ import {
 } from "./locators.ts";
 import { installPolicy } from "./policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./references.ts";
+import { runRecentCommand } from "./recent-command.ts";
 import { installKbGuardStatus } from "./kb-guard-status.ts";
 import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
 import { installKbIngestStatus } from "./kb-ingest-status.ts";
@@ -1160,6 +1161,22 @@ const COMMANDS: CommandSpec[] = [
       }
       return null;
     },
+    handler: (pi, { body, companionPaths }) => async (args, ctx) => {
+      // --recent bypass: read + emit card in TS, no LLM turn.
+      const root = process.cwd();
+      const r = await runRecentCommand({ kind: "record", rawArgs: args, root, pi, ctx });
+      if (r.handled) return;
+      // Free-text finding: fall through to the default body-send flow.
+      await runDefaultHandler({
+        pi,
+        name: "record",
+        customType: "knowledge-record",
+        body,
+        args,
+        companionPaths,
+        ctx,
+      });
+    },
   },
   {
     name: "pitfall",
@@ -1181,6 +1198,22 @@ const COMMANDS: CommandSpec[] = [
         ];
       }
       return null;
+    },
+    handler: (pi, { body, companionPaths }) => async (args, ctx) => {
+      // --recent bypass: read + emit card in TS, no LLM turn.
+      const root = process.cwd();
+      const r = await runRecentCommand({ kind: "pitfall", rawArgs: args, root, pi, ctx });
+      if (r.handled) return;
+      // Free-text pitfall: fall through to the default body-send flow.
+      await runDefaultHandler({
+        pi,
+        name: "pitfall",
+        customType: "knowledge-pitfall",
+        body,
+        args,
+        companionPaths,
+        ctx,
+      });
     },
   },
   {
