@@ -62,17 +62,86 @@ export function findRelevantKnowledge(
     return { title, tags, body };
   };
 
+  const indexPath = join(base, "INDEX.md");
+  if (existsSync(indexPath) && statSync(indexPath).isFile()) {
+    const indexBody = readFileSync(indexPath, "utf8");
+    const lines = indexBody.split("\n").filter((l) => l.trim().length > 0);
+    for (const line of lines) {
+      const lineLower = line.toLowerCase();
+      const matchesIndex = terms.some((term) => lineLower.includes(term));
+      if (!matchesIndex) continue;
+
+      const pathMatch = line.match(/\.omp\/knowledge\/(pitfalls|records)\/[^\s)]+/);
+      const refPath = pathMatch ? pathMatch[0] : ".omp/knowledge/INDEX.md";
+      if (seenPaths.has(refPath)) continue;
+
+      const targetFilePath = join(root, refPath);
+      let score = 0;
+      let title = line.replace(/^-\s*/, "").slice(0, 80);
+      let snippet = line.replace(/^-\s*/, "").slice(0, 100);
+      const kind: RelevantKnowledgeItem["kind"] = refPath.includes("/pitfalls/")
+        ? "pitfall"
+        : refPath.includes("/records/")
+        ? "record"
+        : "index";
+
+      if (pathMatch && existsSync(targetFilePath) && statSync(targetFilePath).isFile()) {
+        const body = readFileSync(targetFilePath, "utf8");
+        const filename = refPath.split("/").pop() ?? "";
+        const parsed = parseMd(body, filename.replace(/\.md$/, ""));
+        title = parsed.title;
+        const firstL = firstLine(body);
+        snippet = firstL || title;
+
+        const titleLower = title.toLowerCase();
+        const fileLower = filename.toLowerCase();
+        const firstLLower = firstL.toLowerCase();
+        const bodyLower = body.toLowerCase();
+        const tags = parsed.tags;
+
+        for (const term of terms) {
+          if (titleLower.includes(term) || fileLower.includes(term) || tags.some((t) => t.includes(term))) {
+            score += 10;
+          } else if (firstLLower.includes(term)) {
+            score += 5;
+          } else if (lineLower.includes(term)) {
+            score += 3;
+          } else if (bodyLower.includes(term)) {
+            score += 2;
+          }
+        }
+      } else {
+        for (const term of terms) {
+          if (lineLower.includes(term)) {
+            score += 3;
+          }
+        }
+      }
+
+      if (score > 0) {
+        seenPaths.add(refPath);
+        items.push({
+          title,
+          path: refPath,
+          snippet,
+          kind,
+          score,
+        });
+      }
+    }
+  }
+
   for (const kind of ["pitfall", "record"] as const) {
     const dirName = kind === "pitfall" ? "pitfalls" : "records";
     const dir = join(base, dirName);
     const files = listMarkdownFiles(dir);
     for (const f of files) {
+      const relPath = `.omp/knowledge/${dirName}/${f}`;
+      if (seenPaths.has(relPath)) continue;
       const filePath = join(dir, f);
-      if (seenPaths.has(filePath)) continue;
       if (!existsSync(filePath) || !statSync(filePath).isFile()) continue;
       const body = readFileSync(filePath, "utf8");
       const { title, tags } = parseMd(body, f.replace(/\.md$/, ""));
-      const relPath = `.omp/knowledge/${dirName}/${f}`;
 
       let score = 0;
       const titleLower = title.toLowerCase();
@@ -91,7 +160,7 @@ export function findRelevantKnowledge(
       }
 
       if (score > 0) {
-        seenPaths.add(filePath);
+        seenPaths.add(relPath);
         items.push({
           title,
           path: relPath,
@@ -99,36 +168,6 @@ export function findRelevantKnowledge(
           kind,
           score,
         });
-      }
-    }
-  }
-
-  const indexPath = join(base, "INDEX.md");
-  if (existsSync(indexPath) && statSync(indexPath).isFile()) {
-    const indexBody = readFileSync(indexPath, "utf8");
-    const lines = indexBody.split("\n").filter((l) => l.trim().length > 0);
-    for (const line of lines) {
-      const lineLower = line.toLowerCase();
-      let score = 0;
-      for (const term of terms) {
-        if (lineLower.includes(term)) {
-          score += 3;
-        }
-      }
-      if (score > 0) {
-        const pathMatch = line.match(/\.omp\/knowledge\/(pitfalls|records)\/[^\s)]+/);
-        const refPath = pathMatch ? pathMatch[0] : ".omp/knowledge/INDEX.md";
-        if (!seenPaths.has(refPath)) {
-          seenPaths.add(refPath);
-          const kind = refPath.includes("/pitfalls/") ? "pitfall" : refPath.includes("/records/") ? "record" : "index";
-          items.push({
-            title: line.replace(/^-\s*/, "").slice(0, 80),
-            path: refPath,
-            snippet: line.replace(/^-\s*/, "").slice(0, 100),
-            kind,
-            score,
-          });
-        }
       }
     }
   }

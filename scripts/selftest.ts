@@ -760,12 +760,38 @@ if (!knowledgeTool) {
     fail("knowledge_read tool: query parameter failed to return dma match");
   }
 
-  // 2. findRelevantKnowledge
+  // 2. findRelevantKnowledge & findRelevantKnowledge-dedup-and-fast-index
   const rel = findRelevantKnowledge(fixtureRoot, "Fix the dma dtcm buffer issue on stm32");
   if (rel.length === 0 || !rel.some((r) => r.title.includes("DMA DTCM Transfer Bug"))) {
     fail("findRelevantKnowledge: failed to extract terms and match pitfall file");
   }
 
+  // Deduplication check: item in both INDEX.md and records/ must appear exactly once
+  const dtcmDedup = findRelevantKnowledge(fixtureRoot, "dtcm");
+  const dtcmPaths = dtcmDedup.map((r) => r.path);
+  if (new Set(dtcmPaths).size !== dtcmPaths.length) {
+    fail("findRelevantKnowledge-dedup-and-fast-index: returned duplicate paths");
+  }
+  if (dtcmPaths.filter((p) => p === ".omp/knowledge/records/2026-08-03_dtcm.md").length !== 1) {
+    fail("findRelevantKnowledge-dedup-and-fast-index: expected .omp/knowledge/records/2026-08-03_dtcm.md exactly once");
+  }
+  // Relative path normalization check
+  if (!dtcmPaths.every((p) => p.startsWith(".omp/knowledge/"))) {
+    fail("findRelevantKnowledge-dedup-and-fast-index: paths in result are not relative");
+  }
+  // Index-First search check: items in INDEX.md are matched and retrieved
+  if (dtcmDedup.length === 0 || !dtcmDedup.some((r) => r.title === "DTCM")) {
+    fail("findRelevantKnowledge-dedup-and-fast-index: Index-First search failed to match item");
+  }
+  // Fallback scan for unindexed files
+  writeFileSync(
+    join(fixtureRoot, ".omp", "knowledge", "records", "2026-08-10_unindexed_cache.md"),
+    "---\ntitle: Unindexed Cache Optimization\n---\nTesting unindexed fallback scan.",
+  );
+  const unindexedRel = findRelevantKnowledge(fixtureRoot, "unindexed optimization");
+  if (!unindexedRel.some((r) => r.title === "Unindexed Cache Optimization" && r.path === ".omp/knowledge/records/2026-08-10_unindexed_cache.md")) {
+    fail("findRelevantKnowledge-dedup-and-fast-index: fallback scan failed to find unindexed record");
+  }
   // 3. before_agent_start auto-surfacing
   const beforeFn = handlers["before_agent_start"];
   if (!beforeFn) {

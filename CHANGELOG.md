@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.45.0 — Fix findRelevantKnowledge deduplication bug and implement Index-First fast search
+
+- **Relative path `seenPaths` deduplication fix** — normalized `seenPaths` in `findRelevantKnowledge` (`src/knowledge.ts`) to store relative paths (e.g. `.omp/knowledge/records/foo.md`) instead of absolute file system paths. This eliminates duplicate injections in the prompt's `<relevant-knowledge>` block when an entry exists in both `INDEX.md` and `records/` or `pitfalls/`.
+- **Index-First fast search** — `findRelevantKnowledge` now reads `.omp/knowledge/INDEX.md` first. For lines matching prompt terms, it reads ONLY the target markdown file to extract title, tags, and snippets. Scoring assigns +10 for title match, +5 for first line match, +3 for index line match, and +2 for body match. Fallback directory scans of `records/` and `pitfalls/` run only for unindexed files, avoiding unnecessary disk reads on every user turn.
+- **Selftest coverage** — `scripts/selftest.ts` verifies deduplication when entries exist in both `INDEX.md` and disk directories, relative path normalization in `seenPaths`, Index-First retrieval, and fallback directory scanning for unindexed files.
+
 ## v0.44.0 — Research dashboard field metrics fix, YAML comment parsing fix, and research skill prompt contract
 
 - **Research dashboard field metrics calculation fix** — fixed `getResearchDashboardMetrics` field math when `frontMatter.counts.fields` is missing. Previously `totalFields` took `readFieldNames` length (defined fields per item, e.g. 15) instead of multiplying by `totalItems` (e.g. 15 * 21 = 315), causing early 100% coverage reporting after completing only 1 item. `coverage` calculation now evaluates `totalItems > 0 && totalFields > 0 ? Math.min(1, completedFields / totalFields) : hasReport ? 1 : 0`.
