@@ -4,7 +4,7 @@
 
 import type { ExtensionApi, ToolResult } from "./api.ts";
 import { findKnowledgeRoot, readKnowledge, type KnowledgeQuery } from "./knowledge.ts";
-import { toolResultCard } from "./research-format.ts";
+import { BORDER_COLORS, toolResultCard } from "./research-format.ts";
 
 const TOOL_NAME = "knowledge_read";
 
@@ -61,10 +61,10 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
       // details: { found, type, count, paths } — validated by the execute path.
       const details = result.details as { found?: boolean; type?: string; count?: number };
       if (details && details.found === false) {
-        return toolResultCard(["no knowledge base here"], "KNOWLEDGE — not found");
+        return toolResultCard(["no knowledge base here"], "KNOWLEDGE — not found", BORDER_COLORS.cyan);
       }
       const label = `KNOWLEDGE — ${String(details?.type ?? "index").toUpperCase()} (${details?.count ?? 0})`;
-      return toolResultCard(knowledgeResultLines(result).slice(0, 8), label);
+      return toolResultCard(knowledgeResultLines(result).slice(0, 8), label, BORDER_COLORS.cyan);
     },
   });
 
@@ -74,7 +74,7 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
         message && typeof message === "object" && "content" in message
           ? String(message.content ?? "")
           : "";
-      return toolResultCard(content.split("\n").slice(0, 8), label);
+      return toolResultCard(content.split("\n").slice(0, 8), label, BORDER_COLORS.cyan);
     });
   };
   registerMessageCard("knowledge-record", "RECORD");

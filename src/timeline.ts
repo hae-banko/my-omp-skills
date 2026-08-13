@@ -13,7 +13,7 @@ import type { CommandContext, ExtensionApi } from "./api.ts";
 import { findKnowledgeRoot, readKnowledge } from "./knowledge.ts";
 import { listResearchProjects } from "./locators.ts";
 import { readProject } from "./research-store.ts";
-import { toolResultCard } from "./research-format.ts";
+import { BORDER_COLORS, toolResultCard } from "./research-format.ts";
 export const DEFAULT_TIMELINE_LIMIT = 15;
 export const MAX_TIMELINE_LIMIT = 50;
 export const TIMELINE_CUSTOM_TYPE = "timeline-digest";
@@ -263,6 +263,6 @@ export function installTimelineRenderer(pi: ExtensionApi): void {
     const lines = content.split("\n");
     const title = lines[0] || "TIMELINE DIGEST";
     const body = lines.slice(1);
-    return toolResultCard(body, title);
+    return toolResultCard(body, title, BORDER_COLORS.cyan);
   });
 }

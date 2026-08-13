@@ -81,7 +81,7 @@ import type {
 } from "../src/research-renderer.ts";
 // displayWidth is a pure display-cell measurement primitive (not part of the
 // renderer seam); the ≤76-cell budget checks below use it to verify lines.
-import { displayWidth } from "../src/research-format.ts";
+import { BORDER_COLORS, boxLine, colorize, displayWidth, makeTopBorder, stripAnsi } from "../src/research-format.ts";
 import type {
   AuditCardPayload,
   TicketBreakdownPayload,
@@ -3762,7 +3762,32 @@ print("PY_OK")
     rmSync(timelineFixture, { recursive: true, force: true });
   });
 }
+// --- Colored Card Layout Borders Unit Tests ---
+{
+  const coloredText = colorize("hello", BORDER_COLORS.cyan);
+  if (!coloredText.includes("\x1b[36m") || !coloredText.includes("\x1b[0m")) {
+    fail(`colorize: expected ANSI escape sequence, got: ${JSON.stringify(coloredText)}`);
+  }
+  if (stripAnsi(coloredText) !== "hello") {
+    fail(`stripAnsi: expected 'hello', got: ${stripAnsi(coloredText)}`);
+  }
+  if (displayWidth(coloredText) !== 5) {
+    fail(`displayWidth: expected display width 5 for colored text, got ${displayWidth(coloredText)}`);
+  }
 
+  const topBorder = makeTopBorder(BORDER_COLORS.blue);
+  if (displayWidth(topBorder) !== 76) {
+    fail(`makeTopBorder: expected display width 76, got ${displayWidth(topBorder)}`);
+  }
+
+  const coloredBoxLine = boxLine("Sample Content Line", BORDER_COLORS.cyan);
+  if (displayWidth(coloredBoxLine) !== 76) {
+    fail(`boxLine: expected display width 76 for colored line, got ${displayWidth(coloredBoxLine)}`);
+  }
+  if (!coloredBoxLine.includes("\x1b[36m│\x1b[0m")) {
+    fail(`boxLine: vertical border should be colored with ANSI cyan sequence, got: ${coloredBoxLine}`);
+  }
+}
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

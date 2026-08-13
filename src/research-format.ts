@@ -65,11 +65,33 @@ function charDisplayWidth(code: number): number {
   return 1;
 }
 
-/** Display-cell width of a string (wcwidth approximation). */
+const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]/g;
+
+/** Strip ANSI escape sequences. */
+export function stripAnsi(text: string): string {
+  return text.replace(ANSI_RE, "");
+}
+
+/** Display-cell width of a string (wcwidth approximation, ANSI escape codes stripped). */
 export function displayWidth(text: string): number {
+  const clean = stripAnsi(text);
   let w = 0;
-  for (const ch of text) w += charDisplayWidth(ch.codePointAt(0) ?? 0);
+  for (const ch of clean) w += charDisplayWidth(ch.codePointAt(0) ?? 0);
   return w;
+}
+
+export const BORDER_COLORS = {
+  dim: "90",
+  cyan: "36",
+  blue: "34",
+  magenta: "35",
+  green: "32",
+  yellow: "33",
+} as const;
+
+export function colorize(text: string, colorCode: string): string {
+  if (!colorCode) return text;
+  return `\x1b[${colorCode}m${text}\x1b[0m`;
 }
 
 const ELLIPSIS = "...";
@@ -120,15 +142,31 @@ export function padToWidth(text: string, width: number): string {
   return pad > 0 ? text + " ".repeat(pad) : text;
 }
 
-/** One content row of the card box: `│<padded, truncated>│`. */
-export function boxLine(text: string): string {
-  return `│${padToWidth(truncateToWidth(text, INNER_WIDTH), INNER_WIDTH)}│`;
+/** One content row of the card box: `│<padded, truncated>│`, with optional border coloring. */
+export function boxLine(text: string, colorCode?: string): string {
+  const left = colorCode ? colorize("│", colorCode) : "│";
+  const right = colorCode ? colorize("│", colorCode) : "│";
+  return `${left}${padToWidth(truncateToWidth(text, INNER_WIDTH), INNER_WIDTH)}${right}`;
+}
+
+export function makeTopBorder(colorCode?: string): string {
+  const raw = `┌${"─".repeat(INNER_WIDTH)}┐`;
+  return colorCode ? colorize(raw, colorCode) : raw;
+}
+
+export function makeDivider(colorCode?: string): string {
+  const raw = `├${"─".repeat(INNER_WIDTH)}┤`;
+  return colorCode ? colorize(raw, colorCode) : raw;
+}
+
+export function makeBottomBorder(colorCode?: string): string {
+  const raw = `└${"─".repeat(INNER_WIDTH)}┘`;
+  return colorCode ? colorize(raw, colorCode) : raw;
 }
 
 export const TOP_BORDER = `┌${"─".repeat(INNER_WIDTH)}┐`;
 export const DIVIDER = `├${"─".repeat(INNER_WIDTH)}┤`;
 export const BOTTOM_BORDER = `└${"─".repeat(INNER_WIDTH)}┘`;
-
 /** Extract `details` from a custom message; falls back to the message itself. */
 export function extractPayload<T>(message: unknown): T | undefined {
   if (message && typeof message === "object") {
@@ -145,19 +183,24 @@ export function extractPayload<T>(message: unknown): T | undefined {
  * each content line `  `-indented. Reproduces the card the tool renderers
  * previously hand-rolled, now inside the shared 76-cell box.
  */
-export function toolResultCard(lines: string[], title?: string): Container {
+/**
+ * Label-plus-lines tool-result card: the title as a bordered header row, then
+ * each content line `  `-indented. Reproduces the card the tool renderers
+ * previously hand-rolled, now inside the shared 76-cell box. Optional border color.
+ */
+export function toolResultCard(lines: string[], title?: string, colorCode: string = BORDER_COLORS.dim): Container {
   const container = new Container();
-  container.addChild(new Text(TOP_BORDER, 0, 0));
+  container.addChild(new Text(makeTopBorder(colorCode), 0, 0));
   if (title) {
-    container.addChild(new Text(boxLine(` ${title}`), 0, 0));
+    container.addChild(new Text(boxLine(` ${title}`, colorCode), 0, 0));
   }
   if (title && lines.length > 0) {
-    container.addChild(new Text(DIVIDER, 0, 0));
+    container.addChild(new Text(makeDivider(colorCode), 0, 0));
   }
   for (const line of lines) {
-    container.addChild(new Text(boxLine(`  ${line}`), 0, 0));
+    container.addChild(new Text(boxLine(`  ${line}`, colorCode), 0, 0));
   }
-  container.addChild(new Text(BOTTOM_BORDER, 0, 0));
+  container.addChild(new Text(makeBottomBorder(colorCode), 0, 0));
   return container;
 }
 

@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./api.ts";
 import { listReferences } from "./locators.ts";
-import { toolResultCard } from "./research-format.ts";
+import { BORDER_COLORS, toolResultCard } from "./research-format.ts";
 
 const REFERENCES_LINE = ".omp/references/";
 const RESULT_CUSTOM_TYPE = "reference-result";
@@ -334,6 +334,6 @@ export function installReferenceResultRenderer(pi: ExtensionApi): void {
   pi.registerMessageRenderer(RESULT_CUSTOM_TYPE, (message, _options, _theme) => {
     const content =
       message && typeof message === "object" && "content" in message ? String(message.content ?? "") : "";
-    return toolResultCard(content.split("\n").slice(0, 8), "REFERENCE");
+    return toolResultCard(content.split("\n").slice(0, 8), "REFERENCE", BORDER_COLORS.blue);
   });
 }

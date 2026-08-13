@@ -1,6 +1,6 @@
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi } from "./api.ts";
-import { BOTTOM_BORDER, DIVIDER, TOP_BORDER, boxLine, extractPayload } from "./research-format.ts";
+import { BORDER_COLORS, boxLine, extractPayload, makeBottomBorder, makeDivider, makeTopBorder } from "./research-format.ts";
 
 export interface AuditSubtopicSpec {
   name: string;
@@ -140,18 +140,18 @@ export function renderAuditCard(
 
   const rawLines: string[] = [];
 
-  rawLines.push(TOP_BORDER);
-  rawLines.push(boxLine(` AUDIT REPORT — ${title} [${version} | ${status}]`));
-  rawLines.push(DIVIDER);
+  rawLines.push(makeTopBorder(BORDER_COLORS.cyan));
+  rawLines.push(boxLine(` AUDIT REPORT — ${title} [${version} | ${status}]`, BORDER_COLORS.cyan));
+  rawLines.push(makeDivider(BORDER_COLORS.cyan));
 
-  rawLines.push(boxLine(`   Slug: ${slug}`));
-  rawLines.push(boxLine(`   Version: ${version}`));
-  rawLines.push(boxLine(`   Status: ${status}`));
-  rawLines.push(boxLine(`   Root Report Path: ${rootReportPath}`));
-  rawLines.push(boxLine(`   Subtopics Count: ${subtopicsCount}`));
-  rawLines.push(boxLine(`   Latest Revision: ${latestRevisionStr}`));
+  rawLines.push(boxLine(`   Slug: ${slug}`, BORDER_COLORS.cyan));
+  rawLines.push(boxLine(`   Version: ${version}`, BORDER_COLORS.cyan));
+  rawLines.push(boxLine(`   Status: ${status}`, BORDER_COLORS.cyan));
+  rawLines.push(boxLine(`   Root Report Path: ${rootReportPath}`, BORDER_COLORS.cyan));
+  rawLines.push(boxLine(`   Subtopics Count: ${subtopicsCount}`, BORDER_COLORS.cyan));
+  rawLines.push(boxLine(`   Latest Revision: ${latestRevisionStr}`, BORDER_COLORS.cyan));
 
-  rawLines.push(BOTTOM_BORDER);
+  rawLines.push(makeBottomBorder(BORDER_COLORS.cyan));
 
   const container = new Container();
   rawLines.forEach((line) => {
@@ -194,22 +194,22 @@ export function renderTicketBreakdownCard(
 
   const rawLines: string[] = [];
 
-  rawLines.push(TOP_BORDER);
-  rawLines.push(boxLine(` TICKET BREAKDOWN — ${feature} [${readyStatus}]`));
-  rawLines.push(DIVIDER);
+  rawLines.push(makeTopBorder(BORDER_COLORS.blue));
+  rawLines.push(boxLine(` TICKET BREAKDOWN — ${feature} [${readyStatus}]`, BORDER_COLORS.blue));
+  rawLines.push(makeDivider(BORDER_COLORS.blue));
 
-  rawLines.push(boxLine(`   Tracker Path: ${trackerPath}`));
-  rawLines.push(boxLine(`   Ticket Count: ${ticketCount}`));
-  rawLines.push(boxLine(`   Ready Status: ${readyStatus}`));
+  rawLines.push(boxLine(`   Tracker Path: ${trackerPath}`, BORDER_COLORS.blue));
+  rawLines.push(boxLine(`   Ticket Count: ${ticketCount}`, BORDER_COLORS.blue));
+  rawLines.push(boxLine(`   Ready Status: ${readyStatus}`, BORDER_COLORS.blue));
 
-  rawLines.push(DIVIDER);
-  rawLines.push(boxLine("   Tickets & Blocking Dependencies:"));
+  rawLines.push(makeDivider(BORDER_COLORS.blue));
+  rawLines.push(boxLine("   Tickets & Blocking Dependencies:", BORDER_COLORS.blue));
 
   if (tickets.length === 0) {
     if (ticketCount > 0) {
-      rawLines.push(boxLine(`     - ${ticketCount} ticket(s) configured in backlog`));
+      rawLines.push(boxLine(`     - ${ticketCount} ticket(s) configured in backlog`, BORDER_COLORS.blue));
     } else {
-      rawLines.push(boxLine("     (none)"));
+      rawLines.push(boxLine("     (none)", BORDER_COLORS.blue));
     }
   } else {
     const previewTickets = tickets.slice(0, 8);
@@ -233,18 +233,17 @@ export function renderTicketBreakdownCard(
               : `Ticket ${b}`,
           )
           .join(", ");
-        rawLines.push(boxLine(`     - ${formattedBlockers} -> ${idStr}: ${titleStr}`));
+        rawLines.push(boxLine(`     - ${formattedBlockers} -> ${idStr}: ${titleStr}`, BORDER_COLORS.blue));
       } else {
-        rawLines.push(boxLine(`     - ${idStr}: ${titleStr} [ready]`));
+        rawLines.push(boxLine(`     - ${idStr}: ${titleStr}`, BORDER_COLORS.blue));
       }
     }
     if (tickets.length > 8) {
-      rawLines.push(boxLine(`     ... and ${tickets.length - 8} more ticket(s)`));
+      rawLines.push(boxLine(`     ... and ${tickets.length - 8} more ticket(s)`, BORDER_COLORS.blue));
     }
   }
 
-  rawLines.push(BOTTOM_BORDER);
-
+  rawLines.push(makeBottomBorder(BORDER_COLORS.blue));
   const container = new Container();
   rawLines.forEach((line) => {
     container.addChild(new Text(line, 0, 0));
@@ -312,23 +311,23 @@ export function renderTriageStatusCard(
 
   const rawLines: string[] = [];
 
-  rawLines.push(TOP_BORDER);
-  rawLines.push(boxLine(" TRIAGE STATUS — Backlog Overview"));
-  rawLines.push(DIVIDER);
+  rawLines.push(makeTopBorder(BORDER_COLORS.green));
+  rawLines.push(boxLine(" TRIAGE STATUS — Backlog Overview", BORDER_COLORS.green));
+  rawLines.push(makeDivider(BORDER_COLORS.green));
 
-  rawLines.push(boxLine(`   Total Items: ${totalItems}`));
+  rawLines.push(boxLine(`   Total Items: ${totalItems}`, BORDER_COLORS.green));
 
-  rawLines.push(DIVIDER);
-  rawLines.push(boxLine("   Backlog Breakdown:"));
-  rawLines.push(boxLine(`     - unlabeled: ${unlabeled}`));
-  rawLines.push(boxLine(`     - needs-triage: ${needsTriage}`));
-  rawLines.push(boxLine(`     - agent-ready: ${agentReady}`));
+  rawLines.push(makeDivider(BORDER_COLORS.green));
+  rawLines.push(boxLine("   Backlog Breakdown:", BORDER_COLORS.green));
+  rawLines.push(boxLine(`     - unlabeled: ${unlabeled}`, BORDER_COLORS.green));
+  rawLines.push(boxLine(`     - needs-triage: ${needsTriage}`, BORDER_COLORS.green));
+  rawLines.push(boxLine(`     - agent-ready: ${agentReady}`, BORDER_COLORS.green));
 
-  rawLines.push(DIVIDER);
-  rawLines.push(boxLine(`   Next Recommended Action:`));
-  rawLines.push(boxLine(`     ${nextAction}`));
+  rawLines.push(makeDivider(BORDER_COLORS.green));
+  rawLines.push(boxLine(`   Next Recommended Action:`, BORDER_COLORS.green));
+  rawLines.push(boxLine(`     ${nextAction}`, BORDER_COLORS.green));
 
-  rawLines.push(BOTTOM_BORDER);
+  rawLines.push(makeBottomBorder(BORDER_COLORS.green));
 
   const container = new Container();
   rawLines.forEach((line) => {

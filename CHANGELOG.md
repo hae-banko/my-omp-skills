@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.52.0 — Colorized ANSI Card Layout Borders & Layout Engine
+
+- **ANSI-Aware Layout Engine (`src/research-format.ts`)** — updated `displayWidth`, `truncateToWidth`, `truncateMiddle`, and `padToWidth` to strip ANSI color escape sequences (`/\x1b\[[0-9;]*[a-zA-Z]/g`) before measuring display width, preserving 100% pixel-perfect 76-column box alignment on colored borders and content.
+- **Colorized Border Customization** — added `BORDER_COLORS` palette (`dim`, `cyan`, `blue`, `magenta`, `green`, `yellow`), `colorize()`, and border generators (`makeTopBorder`, `makeDivider`, `makeBottomBorder`, `boxLine`).
+- **Card Renderers Integration** — applied subtle colorized borders across `/timeline` (cyan), `/reference` (blue), `knowledge_read` / `/recent` (cyan), telemetry cards (cyan/blue/green), and research dashboard renderers.
+- **Selftest Assertions** — `scripts/selftest.ts` verifies `stripAnsi`, ANSI-aware `displayWidth`, `colorize`, and 76-column card width preservation for colored border lines.
+
 ## v0.51.0 — /timeline command (unified project history & progress digest)
 
 - **Unified Project History & Progress Digest Command (`/timeline`)** — added user-invoked `/timeline [limit]` command that aggregates git commits & tags (`git log`), knowledge base findings (`.omp/knowledge/INDEX.md`), deep research projects (`.omp/knowledge/research/`), and scratch decision tickets (`.omp/scratch/`) into a chronological transcript card (`timeline-digest`).

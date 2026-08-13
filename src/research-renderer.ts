@@ -9,6 +9,7 @@
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi } from "./api.ts";
 import {
+  BORDER_COLORS,
   BOTTOM_BORDER,
   DIVIDER,
   INNER_WIDTH,
@@ -18,9 +19,14 @@ import {
   displayWidth,
   extractPayload,
   formatDuration,
+  makeBottomBorder,
+  makeDivider,
   makeProgressBar,
+  makeTopBorder,
+  padToWidth,
   starsFor,
   truncateMiddle,
+  truncateToWidth,
 } from "./research-format.ts";
 import { PIPELINE_STATUSES, phaseOf, phaseStepper, type PipelineStatus } from "./research-status.ts";
 import { freshnessLabel, type Freshness } from "./research-freshness.ts";
