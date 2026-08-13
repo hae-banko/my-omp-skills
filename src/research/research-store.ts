@@ -28,7 +28,7 @@ import type {
 } from "./research-renderer.ts";
 import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research-freshness.ts";
 import { derivePipelineStatus, phaseOf, type PipelineStatus } from "./research-status.ts";
-import { resolveResearchProjectDir } from "./locators.ts";
+import { resolveResearchProjectDir } from "../core/locators.ts";
 
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
 const GITHUB_REPO_RE = /https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/gi;

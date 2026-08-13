@@ -30,12 +30,12 @@ import { Container as TuiContainer } from "@oh-my-pi/pi-tui";
 import { z } from "zod";
 
 import extension from "../src/index.ts";
-import { __resetBootstrapForTests } from "../src/bootstrap.ts";
+import { __resetBootstrapForTests } from "../src/core/bootstrap.ts";
 // parseHerdrOutput is a PURE parser with no registered seam of its own (the
 // herdr tools themselves are the registered surface, gated below), so the
 // harness imports it directly — the one deliberate direct import left in.
-import { parseHerdrOutput } from "../src/herdr-tools.ts";
-import type { ExtensionApi, ToolResult } from "../src/api.ts";
+import { parseHerdrOutput } from "../src/features/herdr-tools.ts";
+import type { ExtensionApi, ToolResult } from "../src/core/api.ts";
 import {
   __setStatusFnForTests,
   formatStatusText,
@@ -46,20 +46,20 @@ import {
   resetSession,
   STATUS_KEY,
   type KbBlockDetail,
-} from "../src/kb-guard-status.ts";
-import { didRealWork, isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
+} from "../src/knowledge/kb-guard-status.ts";
+import { didRealWork, isHindsightEnabled, reloadHindsightConfig } from "../src/features/hindsight.ts";
 import {
   formatIndexSection,
   installKbIndexInjector,
   SECTION_MARKER,
   systemPromptHasSection,
-} from "../src/kb-index-injector.ts";
-import { getPitfallCount, getRecordCount, recordIngest, resetSession as resetKbIngestSession } from "../src/kb-ingest-status.ts";
-import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentCommand } from "../src/recent-command.ts";
-import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
-import { formatTimelineLines, getUnifiedTimeline, parseTimelineLimit, runTimelineCommand, TIMELINE_CUSTOM_TYPE } from "../src/timeline.ts";
-import { extractDiscoveredReferences } from "../src/research-store.ts";
-import { findFrontierTicket } from "../src/locators.ts";
+} from "../src/knowledge/kb-index-injector.ts";
+import { getPitfallCount, getRecordCount, recordIngest, resetSession as resetKbIngestSession } from "../src/knowledge/kb-ingest-status.ts";
+import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentCommand } from "../src/features/recent-command.ts";
+import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge/knowledge.ts";
+import { formatTimelineLines, getUnifiedTimeline, parseTimelineLimit, runTimelineCommand, TIMELINE_CUSTOM_TYPE } from "../src/features/timeline.ts";
+import { extractDiscoveredReferences } from "../src/research/research-store.ts";
+import { findFrontierTicket } from "../src/core/locators.ts";
 import {
   CLARIFY_PROMPT,
   installClarify,
@@ -70,7 +70,7 @@ import {
   setClarifyEnabled,
   shouldBypassClarify,
   stripClarifyBypassPrefix,
-} from "../src/clarify.ts";
+} from "../src/features/clarify.ts";
 import type {
   ResearchReviewPayload,
   ResearchWaveProgressPayload,
@@ -78,22 +78,21 @@ import type {
   ResearchDashboardPayload,
   ResearchHelpPayload,
   ResearchErrorPayload,
-} from "../src/research-renderer.ts";
+} from "../src/research/research-renderer.ts";
 // displayWidth is a pure display-cell measurement primitive (not part of the
 // renderer seam); the ≤76-cell budget checks below use it to verify lines.
-import { BORDER_COLORS, boxLine, colorize, displayWidth, makeTopBorder, stripAnsi } from "../src/research-format.ts";
+import { BORDER_COLORS, boxLine, colorize, displayWidth, makeTopBorder, stripAnsi } from "../src/research/research-format.ts";
 import type {
   AuditCardPayload,
   TicketBreakdownPayload,
   TriageStatusPayload,
-} from "../src/telemetry-renderer.ts";
+} from "../src/features/telemetry-renderer.ts";
 import {
   getResearchDashboardMetrics,
   readExecutionBlock,
   readFieldNames,
   readOutlineItems,
-} from "../src/research-store.ts";
-
+} from "../src/research/research-store.ts";
 
 interface HandlerContext {
   ui?: {

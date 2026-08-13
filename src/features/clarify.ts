@@ -6,9 +6,9 @@
 
 import { Type } from "@sinclair/typebox";
 import { Container, Text } from "@earendil-works/pi-tui";
-import type { CommandContext, ExtensionApi, ToolResult } from "./api.ts";
-import { findKnowledgeRoot, findRelevantKnowledge } from "./knowledge.ts";
-import { toolResultCard } from "./research-format.ts";
+import type { CommandContext, ExtensionApi, ToolResult } from "../core/api.ts";
+import { findKnowledgeRoot, findRelevantKnowledge } from "../knowledge/knowledge.ts";
+import { toolResultCard } from "../research/research-format.ts";
 
 export interface ThemeHelper {
   fg?(color: string, text: string): string;

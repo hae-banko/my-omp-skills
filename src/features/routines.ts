@@ -2,8 +2,8 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { Container } from "@oh-my-pi/pi-tui";
-import type { ExtensionApi, ToolResult } from "./api.ts";
-import { toolResultCard } from "./research-format.ts";
+import type { ExtensionApi, ToolResult } from "../core/api.ts";
+import { toolResultCard } from "../research/research-format.ts";
 
 const UNDERSCORE_RE = /_/g;
 const repoRootCache = new Map<string, string>();

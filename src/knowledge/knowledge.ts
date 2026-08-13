@@ -5,8 +5,8 @@
 
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { listResearchProjects, resolveResearchProjectDir } from "./locators.ts";
-import { readOutlineItems, readProject } from "./research-store.ts";
+import { listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
+import { readOutlineItems, readProject } from "../research/research-store.ts";
 
 export type KnowledgeType = "index" | "records" | "pitfalls" | "research" | "audits";
 

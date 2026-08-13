@@ -7,9 +7,9 @@
 // `knowledge-record` / `knowledge-pitfall` message renderers
 // (src/knowledge-tool.ts). Zero LLM overhead per invocation.
 
-import type { CommandContext, ExtensionApi } from "./api.ts";
-import { findKnowledgeRoot, readKnowledge } from "./knowledge.ts";
-import { toolResultCard } from "./research-format.ts";
+import type { CommandContext, ExtensionApi } from "../core/api.ts";
+import { findKnowledgeRoot, readKnowledge } from "../knowledge/knowledge.ts";
+import { toolResultCard } from "../research/research-format.ts";
 
 /** Default number of entries shown when `--recent` is passed without a count. */
 export const DEFAULT_LIMIT = 10;

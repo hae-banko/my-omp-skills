@@ -22,7 +22,7 @@
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionApi } from "./api.ts";
+import type { ExtensionApi } from "../core/api.ts";
 import { findKnowledgeRoot } from "./knowledge.ts";
 import { getPitfallCount, getRecordCount } from "./kb-ingest-status.ts";
 

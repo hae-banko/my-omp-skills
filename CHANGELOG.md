@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.53.0 — Domain-Grouped Subdirectory Refactoring (`src/`)
+
+- **Domain-Grouped `src/` Directory Structure** — refactored 25 flat modules into logical domain subdirectories: `src/core/` (`api`, `bootstrap`, `locators`), `src/knowledge/` (`knowledge`, `knowledge-tool`, `policy`, `kb-index-injector`, `kb-ingest-status`, `kb-guard-status`), `src/research/` (`research-store`, `research-renderer`, `research-format`, `research-status`, `research-freshness`, `research-theme`), and `src/features/` (`timeline`, `references`, `recent-command`, `clarify`, `hindsight`, `herdr-tools`, `routines`, `telemetry-renderer`).
+- **Clean Import Cutover** — updated all internal module imports across `src/index.ts`, `src/core/`, `src/knowledge/`, `src/research/`, `src/features/`, and `scripts/selftest.ts`.
+- **Zero Regressions** — verified test suite and typechecks pass with zero errors.
+
 ## v0.52.0 — Colorized ANSI Card Layout Borders & Layout Engine
 
 - **ANSI-Aware Layout Engine (`src/research-format.ts`)** — updated `displayWidth`, `truncateToWidth`, `truncateMiddle`, and `padToWidth` to strip ANSI color escape sequences (`/\x1b\[[0-9;]*[a-zA-Z]/g`) before measuring display width, preserving 100% pixel-perfect 76-column box alignment on colored borders and content.

@@ -14,18 +14,18 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import type { CommandContext, ExtensionApi } from "./api.ts";
-import { installBootstrap } from "./bootstrap.ts";
-import { installClarify, isClarifyDebugEnabled, isClarifyEnabled, toggleClarifyState } from "./clarify.ts";
-import { installHerdrTools } from "./herdr-tools.ts";
+import type { CommandContext, ExtensionApi } from "./core/api.ts";
+import { installBootstrap } from "./core/bootstrap.ts";
+import { installClarify, isClarifyDebugEnabled, isClarifyEnabled, toggleClarifyState } from "./features/clarify.ts";
+import { installHerdrTools } from "./features/herdr-tools.ts";
 import {
   installHindsight,
   isHindsightEnabled,
   reloadHindsightConfig,
   setHindsightEnabled,
   hindsightToggleMessages,
-} from "./hindsight.ts";
-import { installKnowledgeTool } from "./knowledge-tool.ts";
+} from "./features/hindsight.ts";
+import { installKnowledgeTool } from "./knowledge/knowledge-tool.ts";
 import {
   findFrontierTicket,
   listAuditSlugs,
@@ -36,15 +36,15 @@ import {
   listScratchMarkdown,
   listSpecFiles,
   resolveResearchProjectDir,
-} from "./locators.ts";
-import { installPolicy } from "./policy.ts";
-import { installReferenceResultRenderer, runReferenceCommand } from "./references.ts";
-import { runRecentCommand } from "./recent-command.ts";
-import { installTimelineRenderer, runTimelineCommand } from "./timeline.ts";
-import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
-import { installKbIngestStatus } from "./kb-ingest-status.ts";
-import { installKbIndexInjector } from "./kb-index-injector.ts";
-import { installRoutinesTool } from "./routines.ts";
+} from "./core/locators.ts";
+import { installPolicy } from "./knowledge/policy.ts";
+import { installReferenceResultRenderer, runReferenceCommand } from "./features/references.ts";
+import { runRecentCommand } from "./features/recent-command.ts";
+import { installTimelineRenderer, runTimelineCommand } from "./features/timeline.ts";
+import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research/research-store.ts";
+import { installKbIngestStatus } from "./knowledge/kb-ingest-status.ts";
+import { installKbIndexInjector } from "./knowledge/kb-index-injector.ts";
+import { installRoutinesTool } from "./features/routines.ts";
 import {
   installResearchDashboardRenderer,
   installResearchErrorRenderer,
@@ -58,9 +58,9 @@ import {
   type ResearchHelpPayload,
   type ResearchItemSpec,
   type ResearchReviewPayload,
-} from "./research-renderer.ts";
-import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research-freshness.ts";
-import { derivePipelineStatus, phaseOf } from "./research-status.ts";
+} from "./research/research-renderer.ts";
+import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research/research-freshness.ts";
+import { derivePipelineStatus, phaseOf } from "./research/research-status.ts";
 import {
   installAuditCardRenderer,
   installTicketBreakdownRenderer,
@@ -68,8 +68,7 @@ import {
   type AuditCardPayload,
   type AuditSubtopicSpec,
   type TriageStatusPayload,
-} from "./telemetry-renderer.ts";
-
+} from "./features/telemetry-renderer.ts";
 const ROOT = join(import.meta.dirname, "..");
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
 const ARGUMENTS_RE = /\$ARGUMENTS/g;

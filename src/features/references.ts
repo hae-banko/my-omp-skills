@@ -16,9 +16,9 @@
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { CommandContext, ExtensionApi } from "./api.ts";
-import { listReferences } from "./locators.ts";
-import { BORDER_COLORS, toolResultCard } from "./research-format.ts";
+import type { CommandContext, ExtensionApi } from "../core/api.ts";
+import { listReferences } from "../core/locators.ts";
+import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 
 const REFERENCES_LINE = ".omp/references/";
 const RESULT_CUSTOM_TYPE = "reference-result";

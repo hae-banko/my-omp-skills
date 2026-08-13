@@ -19,7 +19,7 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, normalize, resolve, sep } from "node:path";
-import type { ExtensionApi } from "./api.ts";
+import type { ExtensionApi } from "../core/api.ts";
 
 /** Unique key for `ui.setStatus`. Distinct from `kb-guardrail` so both widgets coexist. */
 export const STATUS_KEY = "kb-ingest";

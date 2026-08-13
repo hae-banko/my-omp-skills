@@ -33,7 +33,7 @@ import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Container, Text } from "@oh-my-pi/pi-tui";
-import type { ExtensionApi } from "./api.ts";
+import type { ExtensionApi } from "../core/api.ts";
 
 /** A "substantial" pure-reasoning turn, in characters of thinking text. */
 const THINKING_MIN_CHARS = 400;

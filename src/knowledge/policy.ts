@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
-import type { ExtensionApi, ToolCallEvent, ToolCallEventResult } from "./api.ts";
+import type { ExtensionApi, ToolCallEvent, ToolCallEventResult } from "../core/api.ts";
 import { recordBlock } from "./kb-guard-status.ts";
 
 const KB_REASON =

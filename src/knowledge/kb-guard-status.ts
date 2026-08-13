@@ -18,7 +18,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionApi } from "./api.ts";
+import type { ExtensionApi } from "../core/api.ts";
 
 /** Unique key for `ui.setStatus`. The status bar uses key to de-dup. */
 export const STATUS_KEY = "kb-guardrail";

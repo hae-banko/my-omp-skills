@@ -1,6 +1,6 @@
 import { Container, Text } from "@oh-my-pi/pi-tui";
-import type { ExtensionApi } from "./api.ts";
-import { BORDER_COLORS, boxLine, extractPayload, makeBottomBorder, makeDivider, makeTopBorder } from "./research-format.ts";
+import type { ExtensionApi } from "../core/api.ts";
+import { BORDER_COLORS, boxLine, extractPayload, makeBottomBorder, makeDivider, makeTopBorder } from "../research/research-format.ts";
 
 export interface AuditSubtopicSpec {
   name: string;

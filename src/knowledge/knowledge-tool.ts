@@ -2,9 +2,9 @@
 // The tool gives the model a sanctioned way to look up past findings; the
 // renderers give the TUI compact cards instead of raw text.
 
-import type { ExtensionApi, ToolResult } from "./api.ts";
+import type { ExtensionApi, ToolResult } from "../core/api.ts";
 import { findKnowledgeRoot, readKnowledge, type KnowledgeQuery } from "./knowledge.ts";
-import { BORDER_COLORS, toolResultCard } from "./research-format.ts";
+import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 
 const TOOL_NAME = "knowledge_read";
 

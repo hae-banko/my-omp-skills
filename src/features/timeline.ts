@@ -9,11 +9,11 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { CommandContext, ExtensionApi } from "./api.ts";
-import { findKnowledgeRoot, readKnowledge } from "./knowledge.ts";
-import { listResearchProjects } from "./locators.ts";
-import { readProject } from "./research-store.ts";
-import { BORDER_COLORS, toolResultCard } from "./research-format.ts";
+import type { CommandContext, ExtensionApi } from "../core/api.ts";
+import { findKnowledgeRoot, readKnowledge } from "../knowledge/knowledge.ts";
+import { listResearchProjects } from "../core/locators.ts";
+import { readProject } from "../research/research-store.ts";
+import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 export const DEFAULT_TIMELINE_LIMIT = 15;
 export const MAX_TIMELINE_LIMIT = 50;
 export const TIMELINE_CUSTOM_TYPE = "timeline-digest";

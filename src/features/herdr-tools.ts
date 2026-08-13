@@ -14,8 +14,8 @@
 // herdr panes, workspaces, or agents.
 
 import { execFile } from "node:child_process";
-import type { ExtensionApi, ToolDefinition, ToolResult } from "./api.ts";
-import { toolResultCard } from "./research-format.ts";
+import type { ExtensionApi, ToolDefinition, ToolResult } from "../core/api.ts";
+import { toolResultCard } from "../research/research-format.ts";
 const WHITESPACE_RE = /\s+/;
 
 function inHerdr(): boolean {
