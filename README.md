@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.39.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.40.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -21,12 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.39.0"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.40.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.39.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.40.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
@@ -165,6 +165,7 @@ The extension enforces a runtime invariant on the repo-local knowledge base at `
 - **No LLM overhead** — surface is render-only (`ui.setStatus`). No input messages, no extra tool calls, no model coordination. Clears automatically when the KB is absent (e.g. outside the repo root).
 - **Audit trail** — the block widget keeps the last 8 blocked calls in memory (tool, path, timestamp, reason class) for future audit-card rendering. The list is reset on each `session_start`.
 - **Right workflow when blocked** — `/record <title>` to save a new finding, `/pitfall <description>` to capture a runtime mistake, `knowledge_read` to query past entries. For audits, edit with an explicit SemVer bump + `## Revision History` entry.
+- **Active KB index in the system prompt** — when the session has ingested ≥1 record or pitfall, the extension appends a small "Active knowledge base" section to the system prompt on every `before_agent_start` (up to 5 most-recent records + 5 most-recent pitfalls, by mtime). The model can scan the list without burning a `knowledge_read` tool call; if it needs the body of an entry, it calls `knowledge_read type=records|pitfalls slug=<name>`. Inactive sessions (no ingest this turn) are untouched — zero FS work and zero prompt inflation.
 
 ### Native LaTeX Math
 
@@ -184,11 +185,11 @@ All plugin management goes through `omp plugin`:
    ```bash
    omp plugin list
    ```
-   Should display `my-omp-skills@v0.39.0`.
+   Should display `my-omp-skills@v0.40.0`.
 
-2. **Upgrade to `v0.39.0`**:
+2. **Upgrade to `v0.40.0`**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.39.0"
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.40.0"
    ```
 
 3. **List Available Tag Versions** (requires SSH read access):

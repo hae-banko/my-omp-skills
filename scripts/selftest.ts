@@ -13,7 +13,7 @@
 // Run: bun run scripts/selftest.ts
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -48,6 +48,13 @@ import {
   type KbBlockDetail,
 } from "../src/kb-guard-status.ts";
 import { isHindsightEnabled, reloadHindsightConfig } from "../src/hindsight.ts";
+import {
+  formatIndexSection,
+  installKbIndexInjector,
+  SECTION_MARKER,
+  systemPromptHasSection,
+} from "../src/kb-index-injector.ts";
+import { getPitfallCount, getRecordCount, recordIngest, resetSession as resetKbIngestSession } from "../src/kb-ingest-status.ts";
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge.ts";
 import { findFrontierTicket } from "../src/locators.ts";
 import {
@@ -2842,8 +2849,162 @@ for (const name of HERDR_TOOLS) {
   setClarifyEnabled(false);
 }
 
+// --- kb-index-injector ------------------------------------------------------
+
+// Pure-function dedup helper checks. These are independent of any mock state
+// and run first.
+if (systemPromptHasSection("")) fail("kb-index-injector: systemPromptHasSection(\"\") must be false");
+if (systemPromptHasSection("foo")) fail("kb-index-injector: systemPromptHasSection(\"foo\") must be false");
+if (!systemPromptHasSection(SECTION_MARKER)) {
+  fail("kb-index-injector: systemPromptHasSection(SECTION_MARKER) must be true");
+}
+if (!systemPromptHasSection("prefix " + SECTION_MARKER + " suffix")) {
+  fail("kb-index-injector: substring match must succeed for wrapped marker");
+}
+
+// formatIndexSection with a non-existent cwd → "" (no FS work to do).
+if (formatIndexSection("/nonexistent-kb-index-path-" + Date.now()) !== "") {
+  fail("kb-index-injector: formatIndexSection(nonexistent) must return \"\"");
+}
+
+// Seed a tmpdir with 3 records + 2 pitfalls. Bump mtime deterministically so
+// the most-recent ordering is predictable.
+const kbIndexDir = mkdtempSync(join(tmpdir(), "my-omp-kb-index-"));
+mkdirSync(join(kbIndexDir, ".omp", "knowledge", "records"), { recursive: true });
+mkdirSync(join(kbIndexDir, ".omp", "knowledge", "pitfalls"), { recursive: true });
+const seededRecordNames = ["2026-08-01_first.md", "2026-08-02_second.md", "2026-08-03_third.md"];
+const seededPitfallNames = ["2026-08-04_alpha.md", "2026-08-05_beta.md"];
+for (const name of seededRecordNames) {
+  writeFileSync(join(kbIndexDir, ".omp", "knowledge", "records", name), "stub");
+}
+for (const name of seededPitfallNames) {
+  writeFileSync(join(kbIndexDir, ".omp", "knowledge", "pitfalls", name), "stub");
+}
+// Bump mtime so records[2] is newest, records[0] is oldest; same for pitfalls.
+const now = Date.now();
+for (let i = 0; i < seededRecordNames.length; i += 1) {
+  const ts = (now / 1000) - (seededRecordNames.length - i);
+  utimesSync(join(kbIndexDir, ".omp", "knowledge", "records", seededRecordNames[i]), ts, ts);
+}
+for (let i = 0; i < seededPitfallNames.length; i += 1) {
+  const ts = (now / 1000) - (seededPitfallNames.length - i);
+  utimesSync(join(kbIndexDir, ".omp", "knowledge", "pitfalls", seededPitfallNames[i]), ts, ts);
+}
+
+// formatIndexSection with seeded KB but zero counters → still produces a
+// section listing the files. Counter text reflects getRecordCount/getPitfallCount.
+recordIngest("record");
+recordIngest("record");
+recordIngest("record");
+recordIngest("pitfall");
+recordIngest("pitfall");
+const sectionWithSeeds = formatIndexSection(kbIndexDir);
+if (!sectionWithSeeds.includes(SECTION_MARKER)) {
+  fail("kb-index-injector: formatIndexSection missing SECTION_MARKER");
+}
+for (const name of seededRecordNames) {
+  if (!sectionWithSeeds.includes(name)) {
+    fail(`kb-index-injector: formatIndexSection missing record ${name}`);
+  }
+}
+for (const name of seededPitfallNames) {
+  if (!sectionWithSeeds.includes(name)) {
+    fail(`kb-index-injector: formatIndexSection missing pitfall ${name}`);
+  }
+}
+if (!sectionWithSeeds.includes("You have ingested 3 records and 2 pitfalls this session.")) {
+  fail(`kb-index-injector: counter text wrong; got: ${JSON.stringify(sectionWithSeeds)}`);
+}
+
+// Cap: 7 record files → only 5 listed in the section. The counter line
+// still reflects whatever session counters are set (1 record here).
+resetKbIngestSession();
+const kbIndexCapDir = mkdtempSync(join(tmpdir(), "my-omp-kb-index-cap-"));
+mkdirSync(join(kbIndexCapDir, ".omp", "knowledge", "records"), { recursive: true });
+for (let i = 0; i < 7; i += 1) {
+  const name = `2026-08-${String(i + 1).padStart(2, "0")}_cap.md`;
+  writeFileSync(join(kbIndexCapDir, ".omp", "knowledge", "records", name), "stub");
+  const ts = (now / 1000) - (7 - i);
+  utimesSync(join(kbIndexCapDir, ".omp", "knowledge", "records", name), ts, ts);
+}
+recordIngest("record");
+const cappedSection = formatIndexSection(kbIndexCapDir);
+const recordBullets = cappedSection.split("\n").filter((l) => l.startsWith("- records/"));
+if (recordBullets.length !== 5) {
+  fail(`kb-index-injector: cap should be 5 record bullets, observed=${recordBullets.length}`);
+}
+rmSync(kbIndexCapDir, { recursive: true, force: true });
+
+// installKbIndexInjector integration: simulate a fresh mock so the
+// `before_agent_start` slot in the shared `handlers` registry is not
+// clobbered (clarify already wrote its own handler there).
+const kbIndexMockHandlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
+const kbIndexMock = {
+  registerCommand(): void {},
+  sendUserMessage: async (): Promise<void> => {},
+  sendMessage(): void {},
+  registerTool(): void {},
+  registerMessageRenderer(): void {},
+  zod: z,
+  on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
+    kbIndexMockHandlers[event] = handler;
+  },
+};
+
+// (a) Zero counters → no work. Even with a real KB present on disk, an
+// inactive session must not pay the FS round-trip.
+resetKbIngestSession();
+installKbIndexInjector(kbIndexMock as unknown as ExtensionApi);
+const zeroBeforeFn = kbIndexMockHandlers["before_agent_start"];
+if (typeof zeroBeforeFn !== "function") {
+  fail("kb-index-injector: installKbIndexInjector did not register before_agent_start");
+} else {
+  const evt: { systemPrompt: string; cwd: string } = {
+    systemPrompt: "",
+    cwd: kbIndexDir,
+  };
+  await zeroBeforeFn(evt, { cwd: kbIndexDir });
+if (evt.systemPrompt !== "") {
+    fail(`kb-index-injector: zero counters injected anyway; got: ${JSON.stringify(evt.systemPrompt)}`);
+  }
+}
+
+// (b) With counters bumped and KB seeded → systemPrompt grows by exactly 1
+// and contains SECTION_MARKER.
+recordIngest("record");
+recordIngest("record");
+recordIngest("pitfall");
+const seededEvt: { systemPrompt: string; cwd: string } = {
+  systemPrompt: "BASE",
+  cwd: kbIndexDir,
+};
+const beforeFn = kbIndexMockHandlers["before_agent_start"];
+if (typeof beforeFn !== "function") {
+  fail("kb-index-injector: before_agent_start handler missing (re-installed?)");
+} else {
+  await beforeFn(seededEvt, { cwd: kbIndexDir });
+  if (!seededEvt.systemPrompt.includes(SECTION_MARKER)) {
+    fail("kb-index-injector: SECTION_MARKER missing after first before_agent_start");
+  }
+  if (!seededEvt.systemPrompt.startsWith("BASE")) {
+    fail(`kb-index-injector: BASE prefix lost; got: ${JSON.stringify(seededEvt.systemPrompt)}`);
+  }
+
+  // (c) Dedup: a SECOND `before_agent_start` MUST NOT append again.
+  const lenAfterFirst = seededEvt.systemPrompt.length;
+  await beforeFn(seededEvt, { cwd: kbIndexDir });
+if (seededEvt.systemPrompt.length !== lenAfterFirst) {
+    fail(
+      `kb-index-injector: dedup failed; systemPrompt grew from ${lenAfterFirst} to ${seededEvt.systemPrompt.length}`,
+    );
+  }
+}
+rmSync(kbIndexDir, { recursive: true, force: true });
+resetKbIngestSession();
+
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }
-console.log("\nOK — commands, bootstrap, kb-guard-status, policy, knowledge_read, renderers, hindsight, and clarify behave correctly.");
+console.log("\nOK — commands, bootstrap, kb-guard-status, policy, knowledge_read, renderers, hindsight, clarify, and kb-index-injector behave correctly.");

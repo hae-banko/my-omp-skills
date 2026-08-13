@@ -41,6 +41,7 @@ import { installReferenceResultRenderer, runReferenceCommand } from "./reference
 import { installKbGuardStatus } from "./kb-guard-status.ts";
 import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research-store.ts";
 import { installKbIngestStatus } from "./kb-ingest-status.ts";
+import { installKbIndexInjector } from "./kb-index-injector.ts";
 import { installRoutinesTool } from "./routines.ts";
 import {
   installResearchDashboardRenderer,
@@ -1313,8 +1314,8 @@ export default function (pi: ExtensionApi): void {
   // kb-guard-status). In production the omp runtime fans out handlers,
   // so this ordering is harmless.
   installKbIngestStatus(pi);
+  installKbIndexInjector(pi);
   installPolicy(pi);
-  installKbGuardStatus(pi);
   installKnowledgeTool(pi);
   installClarify(pi);
   installHindsight(pi);

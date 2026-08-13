@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.40.0 — Compact KB index in system prompt on KB activity
+
+- **Compact KB index self-injection** — `installKbIndexInjector` subscribes to `before_agent_start` and appends a small "Active knowledge base" section listing up to 5 records + 5 pitfalls when the session has ingested ≥1 entry. The section lists filenames, dates, and a one-line usage hint for `knowledge_read`.
+- **Zero-cost when inactive** — if `getRecordCount() + getPitfallCount() === 0`, no section is added and no work is done. Unrelated sessions are untouched.
+- **Dedup safe** — `systemPromptHasSection` guards against double-injection when the same session triggers consecutive `before_agent_start` events.
+- **Reduces tool round-trips** — when the model is mid-task and could benefit from "what did we already learn", it no longer needs to call `knowledge_read`. Saves one round-trip per "did I already record this?" moment.
+
 ## v0.39.0 — Surface KB ingest count in the status bar (parallel to v0.38.0 blocks)
 
 - **KB ingest status widget** — `installKbIngestStatus` registers a sibling status-bar entry (`"KB: N records · M pitfalls"`) on `session_start`. Increments on `tool_call` events where the model writes a NEW file under `.omp/knowledge/records/` or `.omp/knowledge/pitfalls/`. Edit calls and existing-file overwrites do NOT increment (those are revision, not ingest).
