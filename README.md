@@ -21,12 +21,12 @@ Stop vibe coding without structure or context persistence. **my-omp-skills** is 
 This is a **private repository**, so plugin installations use SSH (or `git+https` with a PAT). Ensure you have an **SSH key with read access** to `hae-banko/my-omp-skills` on your machine:
 
 ```bash
-omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.40.0"
+omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.42.0"
 
 Equivalent scp form:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.40.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.42.0"
 
 > **Important**: After installing or upgrading, **exit and re-enter `omp`**. Commands, skills, rules, and custom tools are loaded at session startup.
 
@@ -76,7 +76,7 @@ Build long-term repository memory and eliminate guesswork:
 - **/record**: Permanently saves durable engineering lessons, audits, and decisions into `.omp/knowledge/`.
 - **/pitfall**: Captures runtime mistakes and debugging discoveries mid-task before context fades.
 - **Zero-turn pitfall auto-surfacing (`before_agent_start`)**: Automatically matches prompt keywords against `.omp/knowledge/` pitfalls and records, injecting relevant findings directly into system context.
-- **Freeform keyword search (`xd://knowledge_read`)**: Added `query` parameter to `readKnowledge` and `knowledge_read` tool schema for relevance-ranked keyword and tag search across records, pitfalls, audits, and research projects.
+- **Freeform keyword & research report search (`xd://knowledge_read`)**: `readKnowledge` and `knowledge_read` support relevance-ranked search across records, pitfalls, audits, and research projects, plus rich research project summaries, full `report.md` content retrieval, and direct sub-file lookups (e.g. `slug: "2026-08-07_topic/outline.yaml"`).
 - **Frontier ticket locator (`findFrontierTicket`)**: Deterministically identifies the earliest unblocked open ticket under `.omp/scratch/` / `.scratch/`.
 - **/hindsight**: Toggles a settle-time reflection pass that prompts the model to simplify design choices before completing a turn.
 - **/clarify**: Interactively resolves prompt ambiguity with structured TUI choices when user instructions are vague.
@@ -185,11 +185,11 @@ All plugin management goes through `omp plugin`:
    ```bash
    omp plugin list
    ```
-   Should display `my-omp-skills@v0.40.0`.
+   Should display `my-omp-skills@v0.42.0`.
 
-2. **Upgrade to `v0.40.0`**:
+2. **Upgrade to `v0.42.0`**:
    ```bash
-   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.40.0"
+   omp plugin install "git+ssh://git@github.com/hae-banko/my-omp-skills.git#v0.42.0"
    ```
 
 3. **List Available Tag Versions** (requires SSH read access):

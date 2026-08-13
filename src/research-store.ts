@@ -134,7 +134,7 @@ function pickFieldsPath(projectDir: string): string | undefined {
 }
 
 /** Item names from outline.yaml; undefined when no outline exists. */
-function readOutlineItems(projectDir: string): string[] | undefined {
+export function readOutlineItems(projectDir: string): string[] | undefined {
   const outlinePath = pickOutlinePath(projectDir);
   if (!outlinePath) return undefined;
   try {

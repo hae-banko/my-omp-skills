@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.42.0 — Enhance knowledge_read tool for research projects (report.md content & rich summaries)
+
+- **Full `report.md` retrieval** — `knowledge_read` with `type: "research"` and a project `slug` now returns the status header line along with the full `report.md` content when available, setting `details.paths` to the `report.md` path.
+- **Rich overview summaries for pending reports** — when `report.md` does not yet exist, `knowledge_read` returns a rich overview text featuring status, completed/total item and field metrics, outline items, and directory file listings (`Report: pending`).
+- **Sub-file lookups within research projects** — querying relative paths inside a research project (e.g. `slug: "2026-08-07_topic/outline.yaml"` or `slug: "2026-08-07_topic/results/01_item.json"`) reads the specific sub-file content directly.
+- **Rich research project listings** — calling `knowledge_read` with `type: "research"` without a slug formats each entry with status, item/field completion metrics, topic, and `[report.md]` readiness indicator. With `full: true`, full reports or summaries are included inline.
+
 ## v0.41.0 — Instant /record --recent and /pitfall --recent (no LLM turn)
 
 - **`--recent` bypasses the LLM** — `/record --recent [N]` and `/pitfall --recent [N]` now resolve in TypeScript only, reading the most recent entries from `.omp/knowledge/INDEX.md` and emitting a transcript card. No command body injected, no tool call, no model turn.

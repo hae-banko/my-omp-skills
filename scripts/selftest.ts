@@ -502,6 +502,29 @@ mkdirSync(join(fixtureRoot, ".omp", "knowledge", "pitfalls"), { recursive: true 
 mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-08-01_demo"), {
   recursive: true,
 });
+mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-31_has-report"), { recursive: true });
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-31_has-report", "research.md"),
+  "---\ntopic: Has Report Topic\nstatus: REPORT_READY\ncounts:\n  items: 2\n  fields: 4\n---\n",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-31_has-report", "report.md"),
+  "# Research Report Content\nDetailed research conclusions.",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-31_has-report", "outline.yaml"),
+  "topic: Has Report Topic\nitems:\n  - name: item 1\n  - name: item 2\n",
+);
+
+mkdirSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-30_no-report"), { recursive: true });
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-30_no-report", "research.md"),
+  "---\ntopic: No Report Topic\nstatus: OUTLINE\ncounts:\n  items: 3\n  fields: 6\n---\n",
+);
+writeFileSync(
+  join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-30_no-report", "outline.yaml"),
+  "topic: No Report Topic\nitems:\n  - name: item A\n  - name: item B\n  - name: item C\n",
+);
 mkdirSync(join(fixtureRoot, ".omp", "audits", "demo-audit", "archive"), { recursive: true });
 mkdirSync(join(fixtureRoot, ".omp", "audits", "complex-audit", "subtopics"), { recursive: true });
 writeFileSync(
@@ -778,6 +801,70 @@ if (!knowledgeTool) {
       fail("findFrontierTicket: expected blockedBy to contain '001-setup'");
     }
   }
+  // --- knowledge_read-research-enhancement tests ---
+  // 1. type: "research" with no slug given: returns list of projects with rich status/metrics lines
+  const resNoSlug = readKnowledge(fixtureRoot, { type: "research" });
+  if (!resNoSlug.found) fail("readKnowledge research (no slug): expected found true");
+  if (!resNoSlug.text.includes("2026-07-31_has-report") || !resNoSlug.text.includes("REPORT_READY")) {
+    fail("readKnowledge research (no slug): missing 2026-07-31_has-report status line");
+  }
+  if (!resNoSlug.text.includes("[report.md]")) {
+    fail("readKnowledge research (no slug): missing [report.md] marker");
+  }
+  if (!resNoSlug.text.includes("2026-07-30_no-report") || !resNoSlug.text.includes("OUTLINE")) {
+    fail("readKnowledge research (no slug): missing 2026-07-30_no-report status line");
+  }
+
+  // 2. type: "research" and slug when report.md exists
+  const resReportExists = readKnowledge(fixtureRoot, { type: "research", slug: "2026-07-31_has-report" });
+  if (!resReportExists.found) fail("readKnowledge research (report exists): expected found true");
+  if (!resReportExists.text.includes("Research project: 2026-07-31_has-report")) {
+    fail("readKnowledge research (report exists): missing project header");
+  }
+  if (!resReportExists.text.includes("# Research Report Content")) {
+    fail("readKnowledge research (report exists): missing report.md content");
+  }
+  if (!resReportExists.details.paths.some((p) => p.endsWith("report.md"))) {
+    fail("readKnowledge research (report exists): details.paths does not contain report.md path");
+  }
+
+  // 3. type: "research" and slug when report.md does NOT exist
+  const resNoReport = readKnowledge(fixtureRoot, { type: "research", slug: "2026-07-30_no-report" });
+  if (!resNoReport.found) fail("readKnowledge research (no report): expected found true");
+  if (!resNoReport.text.includes("Report: pending")) {
+    fail("readKnowledge research (no report): missing Report: pending label");
+  }
+  if (!resNoReport.text.includes("Outline items:") || !resNoReport.text.includes("- item A")) {
+    fail("readKnowledge research (no report): missing outline items list");
+  }
+  if (!resNoReport.text.includes("Available files:") || !resNoReport.text.includes("- outline.yaml")) {
+    fail("readKnowledge research (no report): missing available files list");
+  }
+  if (!resNoReport.details.paths.some((p) => p.includes("2026-07-30_no-report"))) {
+    fail("readKnowledge research (no report): details.paths missing project dir");
+  }
+
+  // 4. type: "research" and subfile slug
+  const resSubfile = readKnowledge(fixtureRoot, { type: "research", slug: "2026-07-31_has-report/outline.yaml" });
+  if (!resSubfile.found) fail("readKnowledge research (subfile): expected found true");
+  if (!resSubfile.text.includes("item 1")) {
+    fail("readKnowledge research (subfile): missing outline.yaml content");
+  }
+  if (resSubfile.details.count !== 1 || !resSubfile.details.paths.some((p) => p.endsWith("outline.yaml"))) {
+    fail("readKnowledge research (subfile): invalid details.paths/count");
+  }
+
+  // 5. type: "research" and invalid slug
+  const resInvalidSlug = readKnowledge(fixtureRoot, { type: "research", slug: "nonexistent-slug-xyz" });
+  if (!resInvalidSlug.found || resInvalidSlug.details.count !== 0) {
+    fail("readKnowledge research (invalid slug): expected count 0");
+  }
+  if (!resInvalidSlug.text.includes('No research project matching "nonexistent-slug-xyz".')) {
+    fail("readKnowledge research (invalid slug): unexpected text response");
+  }
+  // Clean up research test directories so completion tests later in selftest pass
+  rmSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-31_has-report"), { recursive: true, force: true });
+  rmSync(join(fixtureRoot, ".omp", "knowledge", "research", "2026-07-30_no-report"), { recursive: true, force: true });
 }
 if (!renderers["knowledge-record"] || !renderers["knowledge-pitfall"]) {
   fail("renderers: knowledge-record/pitfall not registered");

@@ -5,6 +5,8 @@
 
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { listResearchProjects, resolveResearchProjectDir } from "./locators.ts";
+import { readOutlineItems, readProject } from "./research-store.ts";
 
 export type KnowledgeType = "index" | "records" | "pitfalls" | "research" | "audits";
 
@@ -396,48 +398,160 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
 
   // research projects
   if (type === "research") {
-    const researchDir = join(base, "research");
-    let projects: string[] = [];
-    if (existsSync(researchDir) && statSync(researchDir).isDirectory()) {
-      try {
-        projects = readdirSync(researchDir, { withFileTypes: true })
-          .filter((ent) => ent.isDirectory() && !ent.name.startsWith("."))
-          .map((ent) => ent.name)
-          .sort()
-          .reverse();
-      } catch {
-        projects = [];
-      }
-    }
     if (query.slug) {
-      const match = projects.find((p) => p.startsWith(query.slug ?? "") || p.includes(query.slug ?? ""));
-      if (!match) {
+      const qSlug = query.slug.trim();
+      const normSlug = qSlug.replace(/\\/g, "/");
+      const slashIdx = normSlug.indexOf("/");
+      if (slashIdx !== -1) {
+        const projSlugPart = normSlug.slice(0, slashIdx);
+        const relFilePath = normSlug.slice(slashIdx + 1);
+        const locator = resolveResearchProjectDir(root, projSlugPart);
+        if (!locator.notFound) {
+          const subfilePath = join(locator.projectDir, relFilePath);
+          if (existsSync(subfilePath) && statSync(subfilePath).isFile()) {
+            const content = readFileSync(subfilePath, "utf8");
+            return {
+              found: true,
+              text: content,
+              details: {
+                found: true,
+                type: "research",
+                count: 1,
+                paths: [subfilePath],
+              },
+            };
+          }
+        }
+      }
+
+      const { slug: resolvedSlug, projectDir, notFound } = resolveResearchProjectDir(root, qSlug);
+      if (notFound) {
         return {
           found: true,
           text: `No research project matching "${query.slug}".`,
-          details: { found: true, type, count: 0, paths: [] },
+          details: { found: true, type: "research", count: 0, paths: [] },
         };
       }
-      const projectDir = join(researchDir, match);
-      const entries =
-        existsSync(projectDir) && statSync(projectDir).isDirectory()
-          ? readdirSync(projectDir).sort()
-          : [];
+
+      const projRead = readProject(root, resolvedSlug);
+      const payload = projRead.payload;
+      const status = payload.status ?? "UNKNOWN";
+      const completedItems = payload.global_metrics?.completed_items ?? 0;
+      const totalItems = payload.global_metrics?.total_items ?? 0;
+      const completedFields = payload.global_metrics?.completed_fields ?? 0;
+      const totalFields = payload.global_metrics?.total_fields ?? 0;
+
+      const reportPath = join(projectDir, "report.md");
+      if (existsSync(reportPath) && statSync(reportPath).isFile()) {
+        const reportContent = readFileSync(reportPath, "utf8");
+        const text = `Research project: ${resolvedSlug}\nStatus: ${status} · Items: ${completedItems}/${totalItems} · Fields: ${completedFields}/${totalFields}\n\n${reportContent}`;
+        return {
+          found: true,
+          text,
+          details: {
+            found: true,
+            type: "research",
+            count: 1,
+            paths: [reportPath],
+          },
+        };
+      } else {
+        const outlineItems = readOutlineItems(projectDir);
+        const itemsList =
+          outlineItems && outlineItems.length > 0
+            ? outlineItems.map((item) => `- ${item}`).join("\n")
+            : "(none)";
+        const entries =
+          existsSync(projectDir) && statSync(projectDir).isDirectory()
+            ? readdirSync(projectDir).sort()
+            : [];
+        const dirEntriesList =
+          entries.length > 0
+            ? entries.map((e) => `- ${e}`).join("\n")
+            : "(none)";
+
+        const text = `Research project: ${resolvedSlug}\nStatus: ${status} · Items: ${completedItems}/${totalItems} · Fields: ${completedFields}/${totalFields}\nReport: pending\n\nOutline items:\n${itemsList}\n\nAvailable files:\n${dirEntriesList}`;
+        return {
+          found: true,
+          text,
+          details: {
+            found: true,
+            type: "research",
+            count: 1,
+            paths: [projectDir],
+          },
+        };
+      }
+    }
+
+    const projects = listResearchProjects(root);
+    if (projects.length === 0) {
       return {
         found: true,
-        text: `Research project: ${match}\n${entries.map((e) => `- ${e}`).join("\n")}`,
-        details: { found: true, type, count: entries.length, paths: [projectDir] },
+        text: "No research projects yet.",
+        details: { found: true, type: "research", count: 0, paths: [] },
       };
     }
+
     const picked = projects.slice(0, limit);
+    const textLines: string[] = [];
+    const paths: string[] = [];
+
+    for (const pSlug of picked) {
+      const projRead = readProject(root, pSlug);
+      const projectDir = projRead.projectDir;
+      const payload = projRead.payload;
+      const status = payload.status ?? "UNKNOWN";
+      const completedItems = payload.global_metrics?.completed_items ?? 0;
+      const totalItems = payload.global_metrics?.total_items ?? 0;
+      const completedFields = payload.global_metrics?.completed_fields ?? 0;
+      const totalFields = payload.global_metrics?.total_fields ?? 0;
+      const topic = payload.topic;
+
+      const reportPath = join(projectDir, "report.md");
+      const reportReady = existsSync(reportPath) && statSync(reportPath).isFile();
+      const topicStr = topic ? ` — ${topic}` : "";
+      const statusLine = `- ${pSlug} — ${status} (${completedItems}/${totalItems} items, ${completedFields}/${totalFields} fields)${topicStr}${reportReady ? " [report.md]" : ""}`;
+
+      if (query.full) {
+        if (reportReady) {
+          const reportContent = readFileSync(reportPath, "utf8");
+          textLines.push(`## ${pSlug}\n${statusLine}\n\n${reportContent}`);
+          paths.push(reportPath);
+        } else {
+          const outlineItems = readOutlineItems(projectDir);
+          const itemsList =
+            outlineItems && outlineItems.length > 0
+              ? outlineItems.map((item) => `- ${item}`).join("\n")
+              : "(none)";
+          const entries =
+            existsSync(projectDir) && statSync(projectDir).isDirectory()
+              ? readdirSync(projectDir).sort()
+              : [];
+          const dirEntriesList =
+            entries.length > 0
+              ? entries.map((e) => `- ${e}`).join("\n")
+              : "(none)";
+
+          textLines.push(
+            `## ${pSlug}\n${statusLine}\nReport: pending\n\nOutline items:\n${itemsList}\n\nAvailable files:\n${dirEntriesList}`,
+          );
+          paths.push(projectDir);
+        }
+      } else {
+        textLines.push(statusLine);
+        paths.push(projectDir);
+      }
+    }
+
     return {
       found: true,
-      text: picked.join("\n") || "No research projects yet.",
+      text: textLines.join(query.full ? "\n\n" : "\n"),
       details: {
         found: true,
-        type,
-        count: picked.length,
-        paths: picked.map((p) => join(researchDir, p)),
+        type: "research",
+        count: paths.length,
+        paths,
       },
     };
   }
