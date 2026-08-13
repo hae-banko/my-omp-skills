@@ -3183,8 +3183,7 @@ const kbIndexMock = {
   },
 };
 
-// (a) Zero counters → no work. Even with a real KB present on disk, an
-// inactive session must not pay the FS round-trip.
+// (a) Pre-existing KB on disk with zero session counters → surfaces pre-existing entries.
 resetKbIngestSession();
 installKbIndexInjector(kbIndexMock as unknown as ExtensionApi);
 const zeroBeforeFn = kbIndexMockHandlers["before_agent_start"];
@@ -3192,12 +3191,15 @@ if (typeof zeroBeforeFn !== "function") {
   fail("kb-index-injector: installKbIndexInjector did not register before_agent_start");
 } else {
   const evt: { systemPrompt: string; cwd: string } = {
-    systemPrompt: "",
+    systemPrompt: "BASE",
     cwd: kbIndexDir,
   };
   await zeroBeforeFn(evt, { cwd: kbIndexDir });
-if (evt.systemPrompt !== "") {
-    fail(`kb-index-injector: zero counters injected anyway; got: ${JSON.stringify(evt.systemPrompt)}`);
+  if (!evt.systemPrompt.includes(SECTION_MARKER)) {
+    fail("kb-index-injector: pre-existing entries should be injected when KB exists");
+  }
+  if (!evt.systemPrompt.includes("Repository knowledge base entries:")) {
+    fail(`kb-index-injector: pre-existing heading wrong; got: ${JSON.stringify(evt.systemPrompt)}`);
   }
 }
 
@@ -3233,6 +3235,90 @@ if (seededEvt.systemPrompt.length !== lenAfterFirst) {
 }
 rmSync(kbIndexDir, { recursive: true, force: true });
 resetKbIngestSession();
+
+// --- kb-index-injector-subdir-and-preexisting -----------------------------
+{
+  resetKbIngestSession();
+
+  // 1. Setup repo directory with .omp/knowledge/ and a subdirectory
+  const repoDir = mkdtempSync(join(tmpdir(), "my-omp-kb-subdir-test-"));
+  const subDir = join(repoDir, "src", "components");
+  mkdirSync(join(repoDir, ".omp", "knowledge", "records"), { recursive: true });
+  mkdirSync(join(repoDir, ".omp", "knowledge", "pitfalls"), { recursive: true });
+  mkdirSync(subDir, { recursive: true });
+
+  writeFileSync(join(repoDir, ".omp", "knowledge", "records", "2026-08-01_rec.md"), "record content");
+  writeFileSync(join(repoDir, ".omp", "knowledge", "pitfalls", "2026-08-01_pit.md"), "pitfall content");
+
+  // 2. Verify formatIndexSection & recentEntries work from subdirectory when session count is 0
+  const sectionFromSubdir = formatIndexSection(subDir);
+  if (!sectionFromSubdir.includes(SECTION_MARKER)) {
+    fail("kb-index-injector-subdir: formatIndexSection from subdir missing SECTION_MARKER");
+  }
+  if (!sectionFromSubdir.includes("Repository knowledge base entries:")) {
+    fail(`kb-index-injector-subdir: expected pre-existing heading when count=0; got:\n${sectionFromSubdir}`);
+  }
+  if (sectionFromSubdir.includes("You have ingested")) {
+    fail("kb-index-injector-subdir: section should not include 'You have ingested' when session count is 0");
+  }
+  if (!sectionFromSubdir.includes("2026-08-01_rec.md") || !sectionFromSubdir.includes("2026-08-01_pit.md")) {
+    fail("kb-index-injector-subdir: recentEntries failed to resolve KB files from subdirectory");
+  }
+
+  // 3. Verify before_agent_start surfaces pre-existing KB entries from subdirectory with count = 0
+  const mockHandlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
+  const mockPi = {
+    registerCommand(): void {},
+    sendUserMessage: async (): Promise<void> => {},
+    sendMessage(): void {},
+    registerTool(): void {},
+    registerMessageRenderer(): void {},
+    zod: z,
+    on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
+      mockHandlers[event] = handler;
+    },
+  };
+  installKbIndexInjector(mockPi as unknown as ExtensionApi);
+  const beforeStart = mockHandlers["before_agent_start"];
+  const evtZero = { systemPrompt: "BASE_PROMPT" };
+  await beforeStart(evtZero, { cwd: subDir });
+
+  if (!evtZero.systemPrompt.startsWith("BASE_PROMPT\n\n## Active knowledge base")) {
+    fail(`kb-index-injector-subdir: systemPrompt not injected correctly from subDir; got:\n${evtZero.systemPrompt}`);
+  }
+  if (!evtZero.systemPrompt.includes("Repository knowledge base entries:")) {
+    fail("kb-index-injector-subdir: missing pre-existing heading in systemPrompt when session count=0");
+  }
+
+  // 4. Verify heading when session count > 0
+  recordIngest("record");
+  recordIngest("pitfall");
+  const sectionWithCounts = formatIndexSection(subDir);
+  if (!sectionWithCounts.includes("You have ingested 1 records and 1 pitfalls this session. Recent entries:")) {
+    fail(`kb-index-injector-subdir: heading wrong when session count > 0; got:\n${sectionWithCounts}`);
+  }
+  if (sectionWithCounts.includes("Repository knowledge base entries:")) {
+    fail("kb-index-injector-subdir: section should not include 'Repository knowledge base entries:' when session count > 0");
+  }
+
+  // 5. Verify empty repositories (no records or pitfalls) return "" and do not modify systemPrompt
+  resetKbIngestSession();
+  const emptyRepoDir = mkdtempSync(join(tmpdir(), "my-omp-kb-empty-repo-"));
+  const emptySection = formatIndexSection(emptyRepoDir);
+  if (emptySection !== "") {
+    fail(`kb-index-injector-subdir: formatIndexSection on empty repo should be ""; got:\n${emptySection}`);
+  }
+
+  const evtEmpty = { systemPrompt: "BASE_PROMPT" };
+  await beforeStart(evtEmpty, { cwd: emptyRepoDir });
+  if (evtEmpty.systemPrompt !== "BASE_PROMPT") {
+    fail(`kb-index-injector-subdir: empty repo should not modify systemPrompt; got:\n${evtEmpty.systemPrompt}`);
+  }
+
+  rmSync(repoDir, { recursive: true, force: true });
+  rmSync(emptyRepoDir, { recursive: true, force: true });
+  resetKbIngestSession();
+}
 
 
 // --- /record --recent / /pitfall --recent: LOCAL recent-listing handler -----

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.46.0 — Fix kb-index-injector subdirectory lookup bug and surface pre-existing KB entries
+
+- **Subdirectory lookup fix** — `kb-index-injector` (`src/kb-index-injector.ts`) now uses `findKnowledgeRoot(cwd)` to locate `.omp/knowledge/` when running from subdirectories (e.g. `src/components/`), preventing failed directory reads.
+- **Pre-existing KB system prompt injection** — `installKbIndexInjector` surfaces existing repository records and pitfalls on fresh session startup even when `getRecordCount() + getPitfallCount() === 0`. The section heading cleanly adapts to `Repository knowledge base entries:` when session ingest count is 0 and `You have ingested N records and M pitfalls this session. Recent entries:` when session ingest count > 0.
+- **Selftest coverage** — `scripts/selftest.ts` verifies subdirectory root resolution, pre-existing KB injection on startup, session count heading transitions, and empty repository no-op handling.
+
 ## v0.45.0 — Fix findRelevantKnowledge deduplication bug and implement Index-First fast search
 
 - **Relative path `seenPaths` deduplication fix** — normalized `seenPaths` in `findRelevantKnowledge` (`src/knowledge.ts`) to store relative paths (e.g. `.omp/knowledge/records/foo.md`) instead of absolute file system paths. This eliminates duplicate injections in the prompt's `<relevant-knowledge>` block when an entry exists in both `INDEX.md` and `records/` or `pitfalls/`.

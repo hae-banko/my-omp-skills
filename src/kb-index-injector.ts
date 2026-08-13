@@ -10,11 +10,8 @@
 //
 // Two correctness constraints drive the shape:
 //
-// 1. **Zero work when inactive** — if the session has not ingested any
-//    records or pitfalls, no section is added and no FS read happens. The
-//    `before_agent_start` event is hot: every turn, every compaction, every
-//    retry. We MUST NOT do work for sessions that have never touched the
-//    KB.
+// 1. **Zero work when empty** — if the repository has no records or pitfalls,
+//    no section is added.
 //
 // 2. **Dedup-safe** — the same session can fire `before_agent_start`
 //    multiple times (user prompt, compaction, etc.). The section MUST NOT
@@ -26,6 +23,7 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionApi } from "./api.ts";
+import { findKnowledgeRoot } from "./knowledge.ts";
 import { getPitfallCount, getRecordCount } from "./kb-ingest-status.ts";
 
 /**
@@ -57,9 +55,13 @@ export function formatIndexSection(cwd: string): string {
   const lines: string[] = [];
   lines.push(SECTION_MARKER);
   lines.push("");
-  lines.push(
-    `You have ingested ${recordCount} records and ${pitfallCount} pitfalls this session. Recent entries:`,
-  );
+  if (recordCount > 0 || pitfallCount > 0) {
+    lines.push(
+      `You have ingested ${recordCount} records and ${pitfallCount} pitfalls this session. Recent entries:`,
+    );
+  } else {
+    lines.push("Repository knowledge base entries:");
+  }
 
   if (records.length > 0) {
     lines.push("");
@@ -96,7 +98,7 @@ export function systemPromptHasSection(systemPrompt: string): boolean {
 
 /**
  * Subscribe to `before_agent_start` and append the compact KB index when
- * (a) the session has ingested ≥1 record/pitfall this session, and (b) the
+ * (a) records/pitfalls exist in the repository or session, and (b) the
  * system prompt does not already contain the section header.
  */
 export function installKbIndexInjector(pi: ExtensionApi): void {
@@ -105,7 +107,6 @@ export function installKbIndexInjector(pi: ExtensionApi): void {
     const evt = event as { systemPrompt?: unknown; cwd?: unknown };
     if (!("systemPrompt" in evt)) return;
     if (typeof evt.systemPrompt !== "string") return;
-    if (getRecordCount() + getPitfallCount() === 0) return;
     if (systemPromptHasSection(evt.systemPrompt)) return;
     const cwd =
       readStringField(ctx, "cwd") ?? readStringField(event, "cwd") ?? process.cwd();
@@ -133,7 +134,8 @@ interface RecentEntry {
  * directory is absent or contains no `.md` files.
  */
 function recentEntries(cwd: string, kind: "records" | "pitfalls"): RecentEntry[] {
-  const dir = join(cwd, ".omp", "knowledge", kind);
+  const root = findKnowledgeRoot(cwd) ?? cwd;
+  const dir = join(root, ".omp", "knowledge", kind);
   if (!existsSync(dir)) return [];
   let names: string[];
   try {
