@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.55.0 — Self-Contained `.omp/adr/` Default Location & ADR Locators
+
+- **Self-Contained `.omp/adr/` Default Location** — updated `resolveAdrDir` and `listAdrFiles` (`src/core/locators.ts`) to default to `.omp/adr/` (created automatically on first ADR write or setup), eliminating missing directory friction when ADRs haven't been written yet. `docs/adr/` remains fully supported as a legacy fallback.
+- **Documentation & Workflow Alignment** — updated `skills/domain-modeling/SKILL.md`, `skills/domain-modeling/ADR-FORMAT.md`, `commands/setup/command.md`, and `commands/setup/domain.md` to prioritize `.omp/adr/`.
+- **Selftest Coverage** — added unit tests in `scripts/selftest.ts` verifying automatic `.omp/adr/` creation and `listAdrFiles` listing.
+
 ## v0.54.0 — Zero-Records Knowledge Base UX & Actionable Empty States
 
 - **Actionable Knowledge Base Empty States** — updated `readKnowledge` (`src/knowledge/knowledge.ts`) and `runRecentCommand` (`src/features/recent-command.ts`) to present clear, helpful cards when `.omp/knowledge/` contains 0 records or pitfalls (`○ No records saved yet — use /record <title> to capture your first finding.`), guiding users on exact command usage instead of showing empty lines or generic warnings.

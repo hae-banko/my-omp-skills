@@ -7,7 +7,7 @@
 // command. All scans take `root` (the repo root) and return repo-relative
 // names/paths.
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 /** Dated research project dirs (`2026-08-07_<topic_slug>`). */
@@ -422,4 +422,45 @@ export function findFrontierTicket(root: string): FrontierTicket | null {
   }
 
   return null;
+}
+
+export interface AdrDirLocator {
+  dir: string;
+  relDir: string;
+  isNew: boolean;
+}
+
+/**
+ * Resolve the ADR directory for a repository.
+ * Primary: `<root>/.omp/adr/` (created automatically if neither exists).
+ * Fallback: `<root>/docs/adr/` (if it already exists in a legacy repo).
+ */
+export function resolveAdrDir(root: string): AdrDirLocator {
+  const ompAdr = join(root, ".omp", "adr");
+  const docsAdr = join(root, "docs", "adr");
+
+  if (existsSync(ompAdr) && statSync(ompAdr).isDirectory()) {
+    return { dir: ompAdr, relDir: ".omp/adr", isNew: false };
+  }
+  if (existsSync(docsAdr) && statSync(docsAdr).isDirectory()) {
+    return { dir: docsAdr, relDir: "docs/adr", isNew: false };
+  }
+
+  mkdirSync(ompAdr, { recursive: true });
+  return { dir: ompAdr, relDir: ".omp/adr", isNew: true };
+}
+
+/**
+ * List ADR markdown files in the repository's resolved ADR directory.
+ */
+export function listAdrFiles(root: string): string[] {
+  const { dir } = resolveAdrDir(root);
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir)
+      .filter((name) => name.endsWith(".md") && !name.startsWith("."))
+      .sort();
+  } catch {
+    return [];
+  }
 }

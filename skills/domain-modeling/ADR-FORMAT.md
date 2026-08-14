@@ -1,8 +1,8 @@
 # ADR Format
 
-ADRs live in `.omp/adr/` by default (or `docs/adr/` if it already exists in the repo) and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
+ADRs live in `.omp/adr/` by default (creating `.omp/adr/` if it does not exist) or `docs/adr/` if `docs/adr/` already exists in the repo, using sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
 
-Create the `.omp/adr/` directory (or `docs/adr/` if existing) lazily — only when the first ADR is needed.
+Create the `.omp/adr/` directory automatically when the first ADR is written.
 
 ## Template
 

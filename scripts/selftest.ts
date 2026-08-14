@@ -59,7 +59,7 @@ import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentComm
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge/knowledge.ts";
 import { formatTimelineLines, getUnifiedTimeline, parseTimelineLimit, runTimelineCommand, TIMELINE_CUSTOM_TYPE } from "../src/features/timeline.ts";
 import { extractDiscoveredReferences } from "../src/research/research-store.ts";
-import { findFrontierTicket } from "../src/core/locators.ts";
+import { findFrontierTicket, listAdrFiles, resolveAdrDir } from "../src/core/locators.ts";
 import {
   CLARIFY_PROMPT,
   installClarify,
@@ -3794,6 +3794,22 @@ print("PY_OK")
     fail(`readKnowledge: expected empty state text for 0 records, got: ${emptyRes.text}`);
   }
   rmSync(emptyDir, { recursive: true, force: true });
+
+  // ADR directory resolution & listAdrFiles unit check
+  const adrFixture = mkdtempSync(join(tmpdir(), "my-omp-adr-test-"));
+  try {
+    const resNew = resolveAdrDir(adrFixture);
+    if (!resNew.isNew || resNew.relDir !== ".omp/adr" || !existsSync(resNew.dir)) {
+      fail(`resolveAdrDir: expected new .omp/adr directory creation, got: ${JSON.stringify(resNew)}`);
+    }
+    writeFileSync(join(resNew.dir, "0001-test-decision.md"), "# ADR 1");
+    const files = listAdrFiles(adrFixture);
+    if (files.length !== 1 || files[0] !== "0001-test-decision.md") {
+      fail(`listAdrFiles: expected ['0001-test-decision.md'], got: ${JSON.stringify(files)}`);
+    }
+  } finally {
+    rmSync(adrFixture, { recursive: true, force: true });
+  }
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
