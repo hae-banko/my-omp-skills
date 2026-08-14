@@ -13,6 +13,10 @@ Preliminary research on a topic, producing a research **outline** — items (res
 - `/research add-items [slug]` — Add items to an existing research outline, update `research.md`, and re-emit `research-review`.
 - `/research add-fields [slug]` — Add field definitions to an existing research fields framework, update `research.md`, and re-emit `research-review`.
 - `/research run [slug]` — Start deep research phase for a project (equivalent to `/research 2 [slug]` / `/research-deep [slug]`).
+- `/research list [--archived | -a]` — List all active research projects (or archived projects in `.archive/`).
+- `/research archive [slug]` — Archive a research project: updates status to `ARCHIVED` and moves project folder to `.omp/knowledge/research/.archive/` (hides from active autocompletions & status).
+- `/research unarchive [slug]` — Restore an archived project from `.archive/` back to active research.
+- `/research remove [slug]` — Permanently delete a research project directory from disk.
 - `/research help [slug]` — Open the research help card: the full subcommand surface, shortcuts, and the recommended next step for the project. Emits `customType: "my-omp-research-help"` (namespaced `ResearchHelpPayload`).
 - `/research envcheck [slug]` — Terminal environment diagnostics for the research cards. Same help card plus `env` (`TERM`, `COLORTERM`, `NO_COLOR`, `CI`). Emits `customType: "my-omp-research-help"` with the `env` field populated.
 - `/research off` — Close/disable the Research Review Window.

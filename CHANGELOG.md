@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.59.0 — Research Project Lifecycle: Archiving, Unarchiving, Listing & Deletion
+
+- **Research Archiving (`/research archive [slug]`)** — added project archiving that updates frontmatter `status: ARCHIVED` and moves project directories into `.omp/knowledge/research/.archive/<slug>/`, instantly hiding them from active status checks, dashboards, and autocompletions without losing research data.
+- **Research Restoration (`/research unarchive [slug]`)** — added project unarchiving that restores archived projects from `.archive/` back to active research with intact outlines, JSON results, and reports.
+- **Research Listing (`/research list [--archived]`)** — added summary listing of all active (or archived) research projects with item/field completion metrics.
+- **Safe Project Deletion (`/research remove [slug]`)** — added permanent project deletion (`/research remove` / `/research delete`) with path traversal guards (`safeResearchTarget`), safely deleting project directories from disk.
+- **Locators & Autocompletions** — added `listArchivedResearchProjects`, `resolveArchivedResearchProjectDir`, and `safeResearchTarget` (`src/core/locators.ts`), wiring tab autocompletions for `/research archive <slug>`, `/research unarchive <slug>`, and `/research remove <slug>`.
+- **Selftest Assertions** — `scripts/selftest.ts` verifies the full lifecycle: active project creation, archive movement & status update, summary listing, unarchive restoration, path traversal rejection (`../escape`), and safe disk removal.
+
 ## v0.58.0 — Zero-Scrollback Research Status, True Compact View & Dynamic Status Styling
 
 - **Zero-Scrollback Research Status (`/research status`)** — updated `/research status [slug]` to emit a floating toast popup notification (`ctx.ui.notify`) with real-time items, fields, and next action, providing instant status inspection with **0 lines written to the session ledger** (does not push conversation history).

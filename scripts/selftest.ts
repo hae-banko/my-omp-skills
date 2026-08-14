@@ -100,12 +100,21 @@ import type {
   TriageStatusPayload,
 } from "../src/features/telemetry-renderer.ts";
 import {
+  archiveResearchProject,
   getResearchDashboardMetrics,
+  listResearchSummaries,
   readExecutionBlock,
   readFieldNames,
   readOutlineItems,
   readOutlineItemSpecs,
+  removeResearchProject,
+  unarchiveResearchProject,
 } from "../src/research/research-store.ts";
+import {
+  listArchivedResearchProjects,
+  listResearchProjects,
+  safeResearchTarget,
+} from "../src/core/locators.ts";
 import {
   buildResearchDag,
   computeEpistemicNodeHash,
@@ -4066,6 +4075,111 @@ items:
       fail(`fullCard: expected 76 display width, got ${w} for line: "${text}"`);
     }
   }
+}
+// --- Research Archive / Unarchive / Remove / List Unit Tests ---
+{
+  const fixture = mkdtempSync(join(tmpdir(), "my-omp-research-archive-test-"));
+  const researchDir = join(fixture, ".omp", "knowledge", "research");
+  const projectSlug = "2026-08-01_crypto-audit";
+  const projectPath = join(researchDir, projectSlug);
+  mkdirSync(projectPath, { recursive: true });
+
+  writeFileSync(
+    join(projectPath, "research.md"),
+    `---
+project: ${projectSlug}
+topic: "Crypto Audit"
+status: CONVERGED
+phase: 2
+created: 2026-08-01
+updated: 2026-08-01T00:00:00Z
+counts:
+  items: 5
+  fields: 4
+  filled: 5
+  partial: 0
+  pending: 0
+---
+# Living Outline
+`,
+  );
+
+  // 1. Initial listing (active)
+  const initialActive = listResearchProjects(fixture);
+  if (initialActive.length !== 1 || initialActive[0] !== projectSlug) {
+    fail(`listResearchProjects: expected [${projectSlug}], got: ${JSON.stringify(initialActive)}`);
+  }
+  const initialArchived = listArchivedResearchProjects(fixture);
+  if (initialArchived.length !== 0) {
+    fail(`listArchivedResearchProjects: expected empty array, got: ${JSON.stringify(initialArchived)}`);
+  }
+
+  // 2. Archive project
+  const archiveRes = archiveResearchProject(fixture, "crypto-audit");
+  if (!archiveRes.ok || archiveRes.slug !== projectSlug) {
+    fail(`archiveResearchProject: expected success, got: ${JSON.stringify(archiveRes)}`);
+  }
+
+  // Check state after archive
+  const activeAfterArchive = listResearchProjects(fixture);
+  if (activeAfterArchive.length !== 0) {
+    fail(`listResearchProjects after archive: expected empty active list, got: ${JSON.stringify(activeAfterArchive)}`);
+  }
+  const archivedAfterArchive = listArchivedResearchProjects(fixture);
+  if (archivedAfterArchive.length !== 1 || archivedAfterArchive[0] !== projectSlug) {
+    fail(`listArchivedResearchProjects after archive: expected [${projectSlug}], got: ${JSON.stringify(archivedAfterArchive)}`);
+  }
+
+  const archivedMd = readFileSync(join(researchDir, ".archive", projectSlug, "research.md"), "utf8");
+  if (!archivedMd.includes("status: ARCHIVED")) {
+    fail(`archived research.md: expected status: ARCHIVED, got: ${archivedMd}`);
+  }
+
+  // 3. Summaries listing
+  const activeSummaries = listResearchSummaries(fixture, false);
+  if (activeSummaries.length !== 0) {
+    fail(`listResearchSummaries(active): expected 0, got ${activeSummaries.length}`);
+  }
+  const archivedSummaries = listResearchSummaries(fixture, true);
+  if (archivedSummaries.length !== 1 || archivedSummaries[0].slug !== projectSlug || !archivedSummaries[0].archived) {
+    fail(`listResearchSummaries(archived): expected 1 archived summary, got: ${JSON.stringify(archivedSummaries)}`);
+  }
+
+  // 4. Unarchive project
+  const unarchiveRes = unarchiveResearchProject(fixture, "crypto-audit");
+  if (!unarchiveRes.ok || unarchiveRes.slug !== projectSlug) {
+    fail(`unarchiveResearchProject: expected success, got: ${JSON.stringify(unarchiveRes)}`);
+  }
+
+  const activeAfterUnarchive = listResearchProjects(fixture);
+  if (activeAfterUnarchive.length !== 1 || activeAfterUnarchive[0] !== projectSlug) {
+    fail(`listResearchProjects after unarchive: expected [${projectSlug}], got: ${JSON.stringify(activeAfterUnarchive)}`);
+  }
+  const archivedAfterUnarchive = listArchivedResearchProjects(fixture);
+  if (archivedAfterUnarchive.length !== 0) {
+    fail(`listArchivedResearchProjects after unarchive: expected empty, got: ${JSON.stringify(archivedAfterUnarchive)}`);
+  }
+
+  // 5. Safe removal & path traversal protection
+  if (safeResearchTarget(fixture, "../escape") !== null) {
+    fail(`safeResearchTarget: should reject path traversal ../escape`);
+  }
+  if (safeResearchTarget(fixture, projectSlug) !== projectPath) {
+    fail(`safeResearchTarget: expected valid project path, got ${safeResearchTarget(fixture, projectSlug)}`);
+  }
+
+  const removeRes = removeResearchProject(fixture, "crypto-audit");
+  if (!removeRes.ok || removeRes.slug !== projectSlug) {
+    fail(`removeResearchProject: expected success, got: ${JSON.stringify(removeRes)}`);
+  }
+  if (existsSync(projectPath)) {
+    fail(`removeResearchProject: directory still exists on disk: ${projectPath}`);
+  }
+  if (listResearchProjects(fixture).length !== 0) {
+    fail(`listResearchProjects after remove: expected empty`);
+  }
+
+  rmSync(fixture, { recursive: true, force: true });
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

@@ -28,6 +28,7 @@ import {
 import { installKnowledgeTool } from "./knowledge/knowledge-tool.ts";
 import {
   findFrontierTicket,
+  listArchivedResearchProjects,
   listAuditSlugs,
   listFeatureSpecs,
   listReferences,
@@ -41,7 +42,15 @@ import { installPolicy } from "./knowledge/policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./features/references.ts";
 import { runRecentCommand } from "./features/recent-command.ts";
 import { installTimelineRenderer, runTimelineCommand } from "./features/timeline.ts";
-import { getResearchDashboardMetrics, getResearchReviewPayload, readProject } from "./research/research-store.ts";
+import {
+  archiveResearchProject,
+  getResearchDashboardMetrics,
+  getResearchReviewPayload,
+  listResearchSummaries,
+  readProject,
+  removeResearchProject,
+  unarchiveResearchProject,
+} from "./research/research-store.ts";
 import { installKbIngestStatus } from "./knowledge/kb-ingest-status.ts";
 import { installKbIndexInjector } from "./knowledge/kb-index-injector.ts";
 import { installRoutinesTool } from "./features/routines.ts";
@@ -82,8 +91,12 @@ const RESEARCH_SUBCOMMANDS: Array<{ value: string; label: string; description: s
   { value: "review", label: "review", description: "Open/emit Research Review Window for a project" },
   { value: "add-items", label: "add-items", description: "Add research items to an existing outline" },
   { value: "add-fields", label: "add-fields", description: "Add field definitions to an existing outline" },
-  { value: "status", label: "status", description: "Show status of a research project" },
+  { value: "status", label: "status", description: "Show status of a research project (floating toast / --bar)" },
   { value: "run", label: "run", description: "Run deep research phase for a project" },
+  { value: "list", label: "list", description: "List all active research projects (--archived for archive)" },
+  { value: "archive", label: "archive", description: "Move project to .archive/ (hides from active lists)" },
+  { value: "unarchive", label: "unarchive", description: "Restore an archived project back to active research" },
+  { value: "remove", label: "remove", description: "Permanently delete a research project from disk" },
   { value: "help", label: "help", description: "Open the research help card (commands, shortcuts, next step)" },
   { value: "envcheck", label: "envcheck", description: "Show terminal environment diagnostics for research cards" },
   { value: "off", label: "off", description: "Close/disable Research Review Window" },
@@ -474,6 +487,72 @@ const COMMANDS: CommandSpec[] = [
         return;
       }
 
+      if (head === "archive") {
+        const root = findRepoRoot();
+        const result = archiveResearchProject(root, rest);
+        if (!result.ok) {
+          ctx.ui?.notify?.(result.error ?? "Failed to archive project", "warning");
+          return;
+        }
+        ctx.ui?.notify?.(`Archived research project ${result.slug}`, "info");
+        return;
+      }
+
+      if (head === "unarchive") {
+        const root = findRepoRoot();
+        const result = unarchiveResearchProject(root, rest);
+        if (!result.ok) {
+          ctx.ui?.notify?.(result.error ?? "Failed to unarchive project", "warning");
+          return;
+        }
+        ctx.ui?.notify?.(`Restored research project ${result.slug}`, "info");
+        return;
+      }
+
+      if (head === "remove" || head === "delete") {
+        const root = findRepoRoot();
+        const result = removeResearchProject(root, rest);
+        if (!result.ok) {
+          ctx.ui?.notify?.(result.error ?? "Failed to remove project", "warning");
+          return;
+        }
+        ctx.ui?.notify?.(`Removed research project ${result.slug}`, "info");
+        return;
+      }
+
+      if (head === "list") {
+        const root = findRepoRoot();
+        const isArchived = rest.includes("--archived") || rest.includes("-a");
+        const summaries = listResearchSummaries(root, isArchived);
+        if (summaries.length === 0) {
+          const msg = isArchived ? "No archived research projects found in .archive/" : "No active research projects found";
+          ctx.ui?.notify?.(msg, "info");
+          return;
+        }
+        const lines = summaries.map(
+          (s) => `• ${s.slug} [${s.status}] (${s.completedItems}/${s.totalItems} items) — ${s.topic}`,
+        );
+        pi.sendMessage({
+          customType: "research-dashboard",
+          display: true,
+          attribution: "user",
+          content: `${isArchived ? "Archived" : "Active"} research projects:\n${lines.join("\n")}`,
+          details: {
+            slug: isArchived ? "Archived Projects" : "Active Projects",
+            status: isArchived ? "ARCHIVE" : "PROJECTS",
+            topic: `${summaries.length} ${isArchived ? "archived" : "active"} project(s)`,
+            next_step_command: isArchived ? "/research unarchive <slug>" : "/research <slug>",
+            global_metrics: {
+              total_items: summaries.reduce((acc, s) => acc + s.totalItems, 0),
+              completed_items: summaries.reduce((acc, s) => acc + s.completedItems, 0),
+            },
+            detail: "compact",
+          },
+        });
+        ctx.ui?.notify?.(`Found ${summaries.length} ${isArchived ? "archived" : "active"} research project(s)`, "info");
+        return;
+      }
+
       if (head === "review") {
         const root = findRepoRoot();
         const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
@@ -599,21 +678,38 @@ const COMMANDS: CommandSpec[] = [
 
       const spaceIdx = argumentPrefix.indexOf(" ");
       const firstWord = lower.slice(0, spaceIdx);
-      const slugSubcommands = ["2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run", "help"];
+      const activeSlugSubcommands = ["2", "3", "dashboard", "review", "add-items", "add-fields", "status", "run", "help", "archive", "remove", "delete"];
       const rest = lower.slice(spaceIdx + 1).trimStart();
 
-      if (slugSubcommands.includes(firstWord)) {
+      if (activeSlugSubcommands.includes(firstWord)) {
         const slugs = listResearchProjects(findRepoRoot());
         const matches = slugs
           .filter((slug) => slug.toLowerCase().startsWith(rest))
           .map((slug) => ({
             value: `${firstWord} ${slug}`,
             label: slug,
-            description: "Research project directory",
+            description: "Active research project",
           }));
         return matches.length > 0 ? matches : null;
       }
 
+      if (firstWord === "unarchive") {
+        const slugs = listArchivedResearchProjects(findRepoRoot());
+        const matches = slugs
+          .filter((slug) => slug.toLowerCase().startsWith(rest))
+          .map((slug) => ({
+            value: `unarchive ${slug}`,
+            label: slug,
+            description: "Archived research project",
+          }));
+        return matches.length > 0 ? matches : null;
+      }
+
+      if (firstWord === "list") {
+        if ("--archived".startsWith(rest)) {
+          return [{ value: "list --archived", label: "--archived", description: "List archived research projects in .archive/" }];
+        }
+      }
       return null;
     },
   },

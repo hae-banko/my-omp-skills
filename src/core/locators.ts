@@ -38,6 +38,64 @@ export function listResearchProjects(root: string): string[] {
     return [];
   }
 }
+/**
+ * Archived research project directories under `<root>/.omp/knowledge/research/.archive/`.
+ */
+export function listArchivedResearchProjects(root: string): string[] {
+  const archiveDir = join(root, ".omp", "knowledge", "research", ".archive");
+  try {
+    return readdirSync(archiveDir, { withFileTypes: true })
+      .filter(
+        (ent) => ent.isDirectory() && !ent.name.startsWith(".") && DATED_SLUG_RE.test(ent.name),
+      )
+      .map((ent) => ent.name)
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve an archived research project slug argument against the .archive/ dir.
+ */
+export function resolveArchivedResearchProjectDir(root: string, slugArg: string): ResearchProjectLocator {
+  const archiveDir = join(root, ".omp", "knowledge", "research", ".archive");
+  let slug = slugArg.trim();
+  let projectDir = "";
+  const explicitSlug = slug.length > 0;
+  if (slug && existsSync(join(archiveDir, slug))) {
+    projectDir = join(archiveDir, slug);
+  } else {
+    const entries = listArchivedResearchProjects(root);
+    if (slug) {
+      const match = entries.find((e) => e === slug || e.includes(slug) || e.endsWith(slug));
+      if (match) {
+        slug = match;
+        projectDir = join(archiveDir, match);
+      }
+    }
+    if (!projectDir && !explicitSlug && entries.length > 0) {
+      slug = entries[0];
+      projectDir = join(archiveDir, entries[0]);
+    }
+  }
+  const notFound = explicitSlug && projectDir === "";
+  return { slug: (slug || slugArg || "unknown").trim(), projectDir, notFound };
+}
+
+/**
+ * Safe research target resolver preventing path traversal outside .omp/knowledge/research/.
+ */
+export function safeResearchTarget(root: string, slug: string): string | null {
+  const clean = slug.trim();
+  if (!clean || clean.includes("..") || clean.startsWith("/") || clean.startsWith("\\") || clean.includes("/") || clean.includes("\\")) {
+    return null;
+  }
+  const researchDir = join(root, ".omp", "knowledge", "research");
+  const target = join(researchDir, clean);
+  return existsSync(target) && statSync(target).isDirectory() ? target : null;
+}
 
 /**
  * Resolve a research project slug argument against the research dir.
@@ -70,7 +128,6 @@ export function resolveResearchProjectDir(root: string, slugArg: string): Resear
   const notFound = explicitSlug && projectDir === "";
   return { slug: (slug || slugArg || "unknown").trim(), projectDir, notFound };
 }
-
 /**
  * Spec markdown files: recursive `.md` under `.scratch/specs` and
  * `docs/specs`, plus each feature dir's `<dir>/spec.md` (the `.scratch`

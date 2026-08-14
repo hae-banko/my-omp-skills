@@ -16,7 +16,16 @@
 // The front-matter / outline / fields formats are narrow and workflow-owned,
 // so regex parsing lives HERE (locality) — never in index.ts.
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type {
   ExecutionSettingsSpec,
@@ -29,9 +38,14 @@ import type {
 } from "./research-renderer.ts";
 import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research-freshness.ts";
 import { derivePipelineStatus, phaseOf, type PipelineStatus } from "./research-status.ts";
-import { resolveResearchProjectDir } from "../core/locators.ts";
+import {
+  listArchivedResearchProjects,
+  listResearchProjects,
+  resolveArchivedResearchProjectDir,
+  resolveResearchProjectDir,
+  safeResearchTarget,
+} from "../core/locators.ts";
 import { buildResearchDag } from "./research-dag.ts";
-
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
 const GITHUB_REPO_RE = /https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/gi;
 const SYSTEM_OWNERS = new Set(["features", "topics", "collections", "trending", "events", "sponsor", "pricing", "orgs", "settings", "notifications"]);
@@ -667,11 +681,169 @@ export function getResearchReviewPayload(projectDir: string, slug: string): Rese
     fields,
     modules: [
       "general-web",
-      "github-debug",
-      "stackoverflow",
       "chinese-tech",
       "academic-papers",
     ],
     execution: readExecutionSettings(projectDir),
   };
+}
+
+/**
+ * Archive a research project: updates status to ARCHIVED and moves the project directory
+ * to `.omp/knowledge/research/.archive/<slug>/`.
+ */
+export function archiveResearchProject(root: string, slugArg: string): { ok: boolean; slug?: string; error?: string } {
+  const { slug, projectDir, notFound } = resolveResearchProjectDir(root, slugArg);
+  if (notFound || !projectDir || !existsSync(projectDir)) {
+    return { ok: false, error: `Research project "${slugArg}" not found under .omp/knowledge/research/` };
+  }
+
+  const archiveBase = join(root, ".omp", "knowledge", "research", ".archive");
+  mkdirSync(archiveBase, { recursive: true });
+  const destDir = join(archiveBase, slug);
+
+  if (existsSync(destDir)) {
+    return { ok: false, error: `An archive directory for "${slug}" already exists in .archive/` };
+  }
+
+  // Update research.md frontmatter if present
+  const researchMdPath = join(projectDir, "research.md");
+  if (existsSync(researchMdPath)) {
+    try {
+      let content = readFileSync(researchMdPath, "utf8");
+      if (/^status:\s*.+$/m.test(content)) {
+        content = content.replace(/^status:\s*.+$/m, "status: ARCHIVED");
+      }
+      if (/^updated:\s*.+$/m.test(content)) {
+        content = content.replace(/^updated:\s*.+$/m, `updated: ${new Date().toISOString()}`);
+      }
+      writeFileSync(researchMdPath, content, "utf8");
+    } catch {
+      // Best-effort frontmatter update
+    }
+  }
+
+  try {
+    renameSync(projectDir, destDir);
+    return { ok: true, slug };
+  } catch (err) {
+    return { ok: false, error: `Failed to move project to archive: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+/**
+ * Restore an archived research project: moves it from `.archive/<slug>/` back to active research.
+ */
+export function unarchiveResearchProject(root: string, slugArg: string): { ok: boolean; slug?: string; error?: string } {
+  const { slug, projectDir, notFound } = resolveArchivedResearchProjectDir(root, slugArg);
+  if (notFound || !projectDir || !existsSync(projectDir)) {
+    return { ok: false, error: `Archived research project "${slugArg}" not found under .omp/knowledge/research/.archive/` };
+  }
+
+  const activeDir = join(root, ".omp", "knowledge", "research", slug);
+  if (existsSync(activeDir)) {
+    return { ok: false, error: `An active research project "${slug}" already exists at .omp/knowledge/research/${slug}` };
+  }
+
+  // Update research.md frontmatter status
+  const researchMdPath = join(projectDir, "research.md");
+  if (existsSync(researchMdPath)) {
+    try {
+      let content = readFileSync(researchMdPath, "utf8");
+      const hasReport = existsSync(join(projectDir, "report.md"));
+      const targetStatus = hasReport ? "REPORT_READY" : "CONVERGED";
+      if (/^status:\s*.+$/m.test(content)) {
+        content = content.replace(/^status:\s*.+$/m, `status: ${targetStatus}`);
+      }
+      if (/^updated:\s*.+$/m.test(content)) {
+        content = content.replace(/^updated:\s*.+$/m, `updated: ${new Date().toISOString()}`);
+      }
+      writeFileSync(researchMdPath, content, "utf8");
+    } catch {
+      // Best-effort update
+    }
+  }
+
+  try {
+    renameSync(projectDir, activeDir);
+    return { ok: true, slug };
+  } catch (err) {
+    return { ok: false, error: `Failed to restore project from archive: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+/**
+ * Permanently delete a research project directory (from active or archived store).
+ */
+export function removeResearchProject(root: string, slugArg: string): { ok: boolean; slug?: string; error?: string } {
+  // First check active projects
+  const activeTarget = safeResearchTarget(root, slugArg);
+  let targetDir = activeTarget;
+  let resolvedSlug = slugArg.trim();
+
+  if (!targetDir) {
+    const { slug, projectDir, notFound } = resolveResearchProjectDir(root, slugArg);
+    if (!notFound && projectDir && existsSync(projectDir)) {
+      targetDir = projectDir;
+      resolvedSlug = slug;
+    }
+  }
+
+  // Fall back to check archived projects
+  if (!targetDir) {
+    const { slug, projectDir, notFound } = resolveArchivedResearchProjectDir(root, slugArg);
+    if (!notFound && projectDir && existsSync(projectDir)) {
+      targetDir = projectDir;
+      resolvedSlug = slug;
+    }
+  }
+
+  if (!targetDir || !existsSync(targetDir)) {
+    return { ok: false, error: `Research project "${slugArg}" not found` };
+  }
+
+  try {
+    rmSync(targetDir, { recursive: true, force: true });
+    return { ok: true, slug: resolvedSlug };
+  } catch (err) {
+    return { ok: false, error: `Failed to remove project: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+export interface ResearchProjectSummary {
+  slug: string;
+  topic: string;
+  status: string;
+  totalItems: number;
+  completedItems: number;
+  totalFields: number;
+  completedFields: number;
+  archived: boolean;
+}
+
+/**
+ * List summaries for active or archived research projects.
+ */
+export function listResearchSummaries(root: string, archived = false): ResearchProjectSummary[] {
+  const slugs = archived ? listArchivedResearchProjects(root) : listResearchProjects(root);
+  const baseDir = join(root, ".omp", "knowledge", "research", archived ? ".archive" : "");
+  const summaries: ResearchProjectSummary[] = [];
+
+  for (const slug of slugs) {
+    const projectDir = join(baseDir, slug);
+    const m = getResearchDashboardMetrics(projectDir, slug);
+    const g = m.global_metrics ?? {};
+    summaries.push({
+      slug,
+      topic: m.topic ?? slug,
+      status: String(m.status ?? "UNKNOWN"),
+      totalItems: g.total_items ?? 0,
+      completedItems: g.completed_items ?? 0,
+      totalFields: g.total_fields ?? 0,
+      completedFields: g.completed_fields ?? 0,
+      archived,
+    });
+  }
+
+  return summaries;
 }
