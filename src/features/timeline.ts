@@ -216,7 +216,7 @@ export function getUnifiedTimeline(root: string, limit: number): TimelineItem[] 
  */
 export function formatTimelineLines(items: TimelineItem[]): string[] {
   if (items.length === 0) {
-    return ["No project history events found in git, knowledge base, research, or tickets."];
+    return ["○ No history events found — start by running /record <title> or /omp-setup."];
   }
 
   const lines: string[] = [];

@@ -9,7 +9,7 @@
 
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
 import { findKnowledgeRoot, readKnowledge } from "../knowledge/knowledge.ts";
-import { toolResultCard } from "../research/research-format.ts";
+import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 
 /** Default number of entries shown when `--recent` is passed without a count. */
 export const DEFAULT_LIMIT = 10;
@@ -73,7 +73,11 @@ export async function runRecentCommand(args: RunRecentCommandArgs): Promise<{ ha
   if (!kbRoot) {
     const message = `No .omp/knowledge/ found from this working directory — run /record once (or /omp-setup) to create it.`;
     ctx.ui?.notify?.(message, "warn");
-    const card = toolResultCard(["no knowledge base here"], `${kindLabel} — not found`);
+    const card = toolResultCard(
+      [`○ No .omp/knowledge/ directory here — run /record <title> to create it.`],
+      `${kindLabel} — not found`,
+      BORDER_COLORS.cyan,
+    );
     pi.sendMessage({
       customType,
       content: stringifyCard(card),
@@ -87,17 +91,18 @@ export async function runRecentCommand(args: RunRecentCommandArgs): Promise<{ ha
   const result = readKnowledge(kbRoot, { type: kind === "record" ? "records" : "pitfalls", limit });
   const lines = result.text.split("\n").slice(0, MAX_LIMIT);
   const label = `${kindLabel} — ${kind.toUpperCase()}S (${result.details.count})`;
-  const card = toolResultCard(lines, label);
+  const card = toolResultCard(lines, label, BORDER_COLORS.cyan);
   pi.sendMessage({
     customType,
     content: stringifyCard(card),
     display: true,
     attribution: "user",
   });
-  ctx.ui?.notify?.(
-    `${result.details.count} recent ${kindNoun}${result.details.count === 1 ? "" : "s"}`,
-    "info",
-  );
+  const notifyMsg =
+    result.details.count === 0
+      ? `No ${kindNoun}s saved yet — use /${kind} to capture your first finding`
+      : `${result.details.count} recent ${kindNoun}${result.details.count === 1 ? "" : "s"}`;
+  ctx.ui?.notify?.(notifyMsg, "info");
   return { handled: true };
 }
 

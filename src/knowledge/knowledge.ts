@@ -423,9 +423,22 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
       lines.push(query.full ? `## ${f}\n${body}` : `- ${f} — ${firstLine(body)}`);
       validPaths.push(filePath);
     }
+    if (lines.length === 0) {
+      const cmd = type === "records" ? "/record <title>" : "/pitfall <description>";
+      return {
+        found: true,
+        text: `○ No ${type} saved yet — use ${cmd} to capture your first finding.`,
+        details: {
+          found: true,
+          type,
+          count: 0,
+          paths: [],
+        },
+      };
+    }
     return {
       found: true,
-      text: lines.join("\n") || `No ${type} entries yet.`,
+      text: lines.join("\n"),
       details: {
         found: true,
         type,

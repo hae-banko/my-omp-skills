@@ -3786,6 +3786,14 @@ print("PY_OK")
   if (!coloredBoxLine.includes("\x1b[36m│\x1b[0m")) {
     fail(`boxLine: vertical border should be colored with ANSI cyan sequence, got: ${coloredBoxLine}`);
   }
+  // Zero-records empty state check
+  const emptyDir = mkdtempSync(join(tmpdir(), "my-omp-empty-kb-test-"));
+  mkdirSync(join(emptyDir, ".omp", "knowledge", "records"), { recursive: true });
+  const emptyRes = readKnowledge(emptyDir, { type: "records" });
+  if (emptyRes.details.count !== 0 || !emptyRes.text.includes("○ No records saved yet")) {
+    fail(`readKnowledge: expected empty state text for 0 records, got: ${emptyRes.text}`);
+  }
+  rmSync(emptyDir, { recursive: true, force: true });
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

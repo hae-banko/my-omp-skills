@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.54.0 — Zero-Records Knowledge Base UX & Actionable Empty States
+
+- **Actionable Knowledge Base Empty States** — updated `readKnowledge` (`src/knowledge/knowledge.ts`) and `runRecentCommand` (`src/features/recent-command.ts`) to present clear, helpful cards when `.omp/knowledge/` contains 0 records or pitfalls (`○ No records saved yet — use /record <title> to capture your first finding.`), guiding users on exact command usage instead of showing empty lines or generic warnings.
+- **Timeline Empty State Refinement** — updated `formatTimelineLines` (`src/features/timeline.ts`) to emit `○ No history events found — start by running /record <title> or /omp-setup.` when a repository has 0 events across all 4 history streams.
+- **Selftest Coverage** — added unit tests in `scripts/selftest.ts` verifying empty state card formatting for 0-record repositories.
+
 ## v0.53.0 — Domain-Grouped Subdirectory Refactoring (`src/`)
 
 - **Domain-Grouped `src/` Directory Structure** — refactored 25 flat modules into logical domain subdirectories: `src/core/` (`api`, `bootstrap`, `locators`), `src/knowledge/` (`knowledge`, `knowledge-tool`, `policy`, `kb-index-injector`, `kb-ingest-status`, `kb-guard-status`), `src/research/` (`research-store`, `research-renderer`, `research-format`, `research-status`, `research-freshness`, `research-theme`), and `src/features/` (`timeline`, `references`, `recent-command`, `clarify`, `hindsight`, `herdr-tools`, `routines`, `telemetry-renderer`).
