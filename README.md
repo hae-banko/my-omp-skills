@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.55.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.56.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -17,13 +17,13 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.55.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.56.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.55.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.56.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
@@ -52,8 +52,8 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 - **/triage**: Filters and processes incoming issues/PRs into agent-ready execution briefs.
 
 ### 2. Multi-Agent Deep Research
-- **/research**: Phase 1 — Generates a research outline, field framework, and review dashboard.
-- **/research-deep**: Phase 2 — Spawns parallel background subagents operating in OODA waves to gather evidence into validated JSON outputs.
+- **/research**: Phase 1 — Generates a research outline (with optional `depends_on` DAG dependency edges), field framework, and review dashboard.
+- **/research-deep**: Phase 2 — Spawns parallel background subagents operating in topological OODA waves with upstream context injection (`<upstream-context>`) to gather evidence into validated JSON outputs.
 - **/research-report**: Phase 3 — Compiles JSON results into a summary-first markdown report (`report.md` and `summary.md`) with a table of contents, execution provenance, and cited source links.
 - **/research-add-items** & **/research-add-fields**: Extends existing research outlines and field frameworks.
 

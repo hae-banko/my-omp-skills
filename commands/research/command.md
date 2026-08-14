@@ -164,7 +164,15 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
 
 **`outline.yaml`** (items + config):
 - `topic`: research topic
-- `items`: research objects list
+- `items`: research objects list. Items can be flat strings or structured objects:
+  ```yaml
+  items:
+    - id: repo_discovery
+      name: "Find official repository and specs"
+    - id: cipher_audit
+      name: "Audit encryption cipher"
+      depends_on: [repo_discovery] # DAG dependency edge
+  ```
 - `execution`:
   - `preset`: optional execution scale — `small` | `medium` | `high` (default `medium`); explicit `batch_size`/`items_per_agent` values override it:
     - `small`: 1–2 parallel agents per wave, `items_per_agent` 1
@@ -173,7 +181,6 @@ Merge `{step1_output}`, the subagent's supplementary output, and the user's exis
   - `batch_size`: number of parallel agents per wave (optional — overrides `preset`; confirm the preset or the explicit number with `ask`)
   - `items_per_agent`: items per agent (optional — overrides `preset`; confirm the preset or the explicit number with `ask`)
   - `output_dir`: results output directory (default: `./results`, resolved relative to this project directory)
-
 **`fields.yaml`** (field definitions):
 - Field categories and definitions
 - Each field's `name`, `description`, `detail_level`

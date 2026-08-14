@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.56.0 — Research Directed Acyclic Graph (DAG) Engine & Upstream Context Injection
+
+- **Research DAG Engine (`src/research/research-dag.ts`)** — added dependency-aware execution graph for deep research outlines. Supports `depends_on: [...]` dependency edges on items in `outline.yaml`, topological frontier analysis, and automatic cycle detection via Kahn's algorithm.
+- **Topological Frontier Resolution** — `getReadyDagNodes` determines unblocked items whose dependencies are satisfied by completed result JSONs, allowing `/research-deep` waves to systematically dispatch prerequisite investigations before dependent downstream items.
+- **Upstream Context Extraction & Injection** — `getUpstreamEvidence` extracts verified sources, URLs, and key findings from completed upstream result JSONs. `formatUpstreamContextPrompt` formats them into an `<upstream-context>` block injected into downstream subagent prompts, ensuring agents build directly on verified upstream discoveries rather than re-searching from scratch.
+- **Outline Item Specs Parser (`readOutlineItemSpecs`)** — updated `src/research/research-store.ts` to parse item blocks (`id`, `name`, `category`, `depends_on`), computing DAG topology and frontier metrics for project dashboards.
+- **Dashboard & Wave Progress Integration** — exposed `ResearchDagSummary` metrics (`dag?: ResearchDagSummary`) on `ResearchDashboardPayload` and `ResearchWaveProgressPayload`, rendering live DAG frontier counts (`DAG Frontier: X ready · Y blocked · Z completed`) on TUI cards.
+- **Command & Agent Brief Alignment** — updated `commands/research/command.md`, `commands/research-deep/command.md`, and `commands/research/WEB-SEARCH-AGENT.md` with DAG item format and grounded `<upstream-context>` handling.
+- **Selftest Assertions** — `scripts/selftest.ts` verifies `slugifyItemId`, flat vs multi-tier DAG construction, result-file status transitions, upstream context injection formatting, Kahn's algorithm cycle detection, and `readOutlineItemSpecs` parsing.
+
 ## v0.55.0 — Self-Contained `.omp/adr/` Default Location & ADR Locators
 
 - **Self-Contained `.omp/adr/` Default Location** — updated `resolveAdrDir` and `listAdrFiles` (`src/core/locators.ts`) to default to `.omp/adr/` (created automatically on first ADR write or setup), eliminating missing directory friction when ADRs haven't been written yet. `docs/adr/` remains fully supported as a legacy fallback.

@@ -39,9 +39,12 @@ export type ResearchFreshness = Freshness;
 
 export interface ResearchItemSpec {
   name: string;
+  id?: string;
   category?: string;
   description?: string;
   status?: string;
+  depends_on?: string[] | string;
+  dependsOn?: string[] | string;
   yield?: string | number;
   sources_count?: number;
 }
@@ -52,6 +55,15 @@ export interface ResearchFieldSpec {
   description?: string;
   detail_level?: string;
   status?: string;
+}
+
+export interface ResearchDagSummary {
+  enabled: boolean;
+  total_nodes: number;
+  ready_nodes: number;
+  completed_nodes: number;
+  blocked_nodes: number;
+  has_cycles: boolean;
 }
 
 export interface ExecutionSettingsSpec {
@@ -102,6 +114,7 @@ export interface ResearchWaveProgressPayload {
   elapsed_seconds?: number;
   eta_seconds?: number;
   indeterminate?: boolean;
+  dag?: ResearchDagSummary;
   as_of?: string;
 }
 
@@ -159,11 +172,12 @@ export interface ResearchDashboardPayload {
   as_of?: string;
   freshness?: ResearchFreshness;
   expected_interval_seconds?: number;
-  waves_run?: number;
-  max_waves?: number;
   pending_items?: number;
   unresolved_fields_count?: number;
+  waves_run?: number;
+  max_waves?: number;
   discovered_references?: Array<{ name: string; url: string; count: number }>;
+  dag?: ResearchDagSummary;
   detail?: ResearchDetail;
   errors?: string[];
   project_path?: string;
@@ -669,8 +683,11 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
   if (wavesRun !== undefined || maxWaves !== undefined) {
     rawLines.push(boxLine(`   Waves: ${wavesRun ?? "?"}${maxWaves !== undefined ? ` / ${maxWaves}` : ""} run`));
   }
+  const dag = p.dag && typeof p.dag === "object" ? (p.dag as Partial<ResearchDagSummary>) : undefined;
+  if (dag && dag.enabled) {
+    rawLines.push(boxLine(`   DAG Frontier: ${dag.ready_nodes ?? 0} ready · ${dag.blocked_nodes ?? 0} blocked · ${dag.completed_nodes ?? 0} completed`));
+  }
   rawLines.push(DIVIDER);
-
   // Project artifacts status.
   rawLines.push(boxLine(" Project Artifacts Status:"));
   const art = p.artifacts;

@@ -20,6 +20,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type {
   ExecutionSettingsSpec,
+  ResearchDagSummary,
   ResearchDashboardPayload,
   ResearchFieldSpec,
   ResearchItemSpec,
@@ -29,6 +30,7 @@ import type {
 import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research-freshness.ts";
 import { derivePipelineStatus, phaseOf, type PipelineStatus } from "./research-status.ts";
 import { resolveResearchProjectDir } from "../core/locators.ts";
+import { buildResearchDag } from "./research-dag.ts";
 
 const FRONTMATTER_RE = /^---[\s\S]*?\n---\s*/;
 const GITHUB_REPO_RE = /https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/gi;
@@ -217,6 +219,101 @@ export function readOutlineItems(projectDir: string): string[] | undefined {
   }
 }
 
+/**
+ * Full item specifications (name, id, category, depends_on) from outline.yaml.
+ */
+export function readOutlineItemSpecs(projectDir: string): ResearchItemSpec[] | undefined {
+  const outlinePath = pickOutlinePath(projectDir);
+  if (!outlinePath) return undefined;
+  try {
+    const content = readFileSync(outlinePath, "utf8");
+    const lines = content.split("\n");
+    const items: ResearchItemSpec[] = [];
+    let inItems = false;
+    let currentItem: ResearchItemSpec | null = null;
+
+    const finalizeItem = (): void => {
+      if (currentItem && (currentItem.name || currentItem.id)) {
+        if (!currentItem.name && currentItem.id) {
+          currentItem.name = currentItem.id;
+        }
+        items.push(currentItem);
+      }
+      currentItem = null;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i];
+      const trimmed = rawLine.trim();
+
+      if (/^items:\s*$/i.test(trimmed)) {
+        inItems = true;
+        continue;
+      }
+
+      if (inItems && /^[a-z0-9_]+:/i.test(trimmed) && !trimmed.startsWith("-") && !rawLine.startsWith(" ") && !rawLine.startsWith("\t")) {
+        inItems = false;
+        finalizeItem();
+        continue;
+      }
+
+      if (!inItems) continue;
+
+      // New item block starts with "- "
+      if (/^\s*-\s*/.test(rawLine)) {
+        finalizeItem();
+
+        // Check if it's "- name: ..." or "- id: ..." or just "- item_name"
+        const afterDash = rawLine.replace(/^\s*-\s*/, "").replace(/#.*$/, "").trim();
+        if (/^name:\s*(.+)$/i.test(afterDash)) {
+          const nameVal = afterDash.replace(/^name:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+          currentItem = { name: nameVal };
+        } else if (/^id:\s*(.+)$/i.test(afterDash)) {
+          const idVal = afterDash.replace(/^id:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+          currentItem = { name: idVal, id: idVal };
+        } else if (!afterDash.includes(":")) {
+          // Plain string item
+          const val = afterDash.replace(/^['"]|['"]$/g, "");
+          if (val) items.push({ name: val });
+        } else {
+          currentItem = { name: "" };
+        }
+        continue;
+      }
+      // Inside a multi-line item block
+      if (currentItem) {
+        const cleanLine = trimmed.replace(/#.*$/, "").trim();
+        if (/^name:\s*(.+)$/i.test(cleanLine)) {
+          currentItem.name = cleanLine.replace(/^name:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+        } else if (/^id:\s*(.+)$/i.test(cleanLine)) {
+          currentItem.id = cleanLine.replace(/^id:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+        } else if (/^category:\s*(.+)$/i.test(cleanLine)) {
+          currentItem.category = cleanLine.replace(/^category:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+        } else if (/^depends_on:\s*\[(.*)\]/i.test(cleanLine)) {
+          const match = cleanLine.match(/^depends_on:\s*\[(.*)\]/i);
+          if (match) {
+            const rawDeps = match[1].split(",").map((d) => d.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
+            currentItem.depends_on = rawDeps;
+          }
+        } else if (/^depends_on:\s*$/i.test(cleanLine)) {
+          // Multi-line list under depends_on:
+          const deps: string[] = [];
+          while (i + 1 < lines.length && /^\s*-\s+/.test(lines[i + 1])) {
+            i++;
+            const depVal = lines[i].replace(/^\s*-\s+/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, "");
+            if (depVal) deps.push(depVal);
+          }
+          currentItem.depends_on = deps;
+        }
+      }
+    }
+
+    finalizeItem();
+    return items.length > 0 ? items : undefined;
+  } catch {
+    return undefined;
+  }
+}
 /**
  * Field names from fields.yaml. Counting rule is shared with
  * validate_json.py: `- name:` entries under `categories:` / `field_categories`
@@ -451,7 +548,6 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
     }
   }
   const pendingItems = Math.max(0, totalItems - completedItems);
-
   const next_step_command =
     current_phase === 3
       ? `View .omp/knowledge/research/${slug}/report.md for the full report`
@@ -462,6 +558,32 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
   const errors: string[] = [];
   if (invalidResults > 0) {
     errors.push(`${invalidResults} result file(s) in results/ could not be parsed.`);
+  }
+
+  let dagSummary: ResearchDagSummary | undefined;
+  const outlineSpecs = projectDir ? readOutlineItemSpecs(projectDir) : undefined;
+  if (outlineSpecs && outlineSpecs.length > 0) {
+    const hasAnyDep = outlineSpecs.some((s) => Boolean(s.depends_on || s.dependsOn));
+    const dag = buildResearchDag(outlineSpecs, resultsDir);
+    let readyCount = 0;
+    let completedCount = 0;
+    let blockedCount = 0;
+    for (const node of dag.nodes.values()) {
+      if (node.status === "completed") completedCount++;
+      else if (node.status === "ready") readyCount++;
+      else if (node.status === "pending") blockedCount++;
+    }
+    dagSummary = {
+      enabled: hasAnyDep,
+      total_nodes: dag.nodes.size,
+      ready_nodes: readyCount,
+      completed_nodes: completedCount,
+      blocked_nodes: blockedCount,
+      has_cycles: dag.hasCycles,
+    };
+    if (dag.hasCycles) {
+      errors.push(`Circular dependency detected in outline.yaml among items: ${(dag.cycleNodes ?? []).join(", ")}`);
+    }
   }
 
   return {
@@ -496,6 +618,7 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
     pending_items: pendingItems,
     unresolved_fields_count: unresolvedCount,
     discovered_references: extractDiscoveredReferences(projectDir),
+    dag: dagSummary,
     errors,
     project_path: projectDir || undefined,
   };
@@ -512,11 +635,19 @@ export function getResearchReviewPayload(projectDir: string, slug: string): Rese
   let hasResearchMd = false;
 
   if (projectDir) {
-    const outlineItems = readOutlineItems(projectDir);
-    if (outlineItems) {
+    const outlineSpecs = readOutlineItemSpecs(projectDir);
+    if (outlineSpecs && outlineSpecs.length > 0) {
       hasOutline = true;
-      for (const name of outlineItems) {
-        items.push({ name, status: "pending" });
+      for (const spec of outlineSpecs) {
+        items.push({ ...spec, status: spec.status ?? "pending" });
+      }
+    } else {
+      const outlineItems = readOutlineItems(projectDir);
+      if (outlineItems) {
+        hasOutline = true;
+        for (const name of outlineItems) {
+          items.push({ name, status: "pending" });
+        }
       }
     }
     const fieldNames = readFieldNames(projectDir);
@@ -527,7 +658,6 @@ export function getResearchReviewPayload(projectDir: string, slug: string): Rese
     }
     hasResearchMd = existsSync(join(projectDir, "research.md"));
   }
-
   return {
     slug,
     status: hasOutline || hasResearchMd ? "READY" : "DRAFT REVIEW",

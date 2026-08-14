@@ -92,7 +92,15 @@ import {
   readExecutionBlock,
   readFieldNames,
   readOutlineItems,
+  readOutlineItemSpecs,
 } from "../src/research/research-store.ts";
+import {
+  buildResearchDag,
+  formatUpstreamContextPrompt,
+  getReadyDagNodes,
+  getUpstreamEvidence,
+  slugifyItemId,
+} from "../src/research/research-dag.ts";
 
 interface HandlerContext {
   ui?: {
@@ -3810,6 +3818,115 @@ print("PY_OK")
   } finally {
     rmSync(adrFixture, { recursive: true, force: true });
   }
+}
+
+// --- Research DAG Engine Unit Tests ---
+{
+  // 1. Slugify helper
+  if (slugifyItemId("Protocol Specification", 0) !== "protocol_specification") {
+    fail(`slugifyItemId mismatch: ${slugifyItemId("Protocol Specification", 0)}`);
+  }
+  if (slugifyItemId("", 2) !== "item_03") {
+    fail(`slugifyItemId fallback mismatch: ${slugifyItemId("", 2)}`);
+  }
+
+  // 2. Flat outline items (all roots, all ready)
+  const flatItems = [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }];
+  const flatDag = buildResearchDag(flatItems);
+  if (flatDag.hasCycles || flatDag.roots.length !== 3 || flatDag.leaves.length !== 3) {
+    fail(`flatDag: expected 3 roots and 3 leaves, got roots=${flatDag.roots.length}, leaves=${flatDag.leaves.length}`);
+  }
+  const flatReady = getReadyDagNodes(flatDag);
+  if (flatReady.length !== 3) {
+    fail(`flatDag: expected all 3 nodes ready, got ${flatReady.length}`);
+  }
+
+  // 3. Multi-tier dependency graph (repo_discovery -> cipher_audit -> formal_proof)
+  const dagFixture = mkdtempSync(join(tmpdir(), "my-omp-research-dag-test-"));
+  const resultsDir = join(dagFixture, "results");
+  mkdirSync(resultsDir, { recursive: true });
+
+  const tieredItems = [
+    { id: "repo_discovery", name: "Find Repo" },
+    { id: "cipher_audit", name: "Audit Cipher", depends_on: ["repo_discovery"] },
+    { id: "formal_proof", name: "Generate Proof", depends_on: ["cipher_audit"] },
+  ];
+
+  // Before any results: only repo_discovery is ready
+  const initialDag = buildResearchDag(tieredItems, resultsDir);
+  const initialReady = getReadyDagNodes(initialDag);
+  if (initialReady.length !== 1 || initialReady[0].id !== "repo_discovery") {
+    fail(`tieredDag initial: expected 1 ready node (repo_discovery), got: ${JSON.stringify(initialReady.map((n) => n.id))}`);
+  }
+
+  // Complete repo_discovery by writing a result JSON
+  writeFileSync(
+    join(resultsDir, "01_find_repo.json"),
+    JSON.stringify({
+      repo_url: "https://github.com/example/cryptolib",
+      architecture: "AES-GCM custom engine",
+      sources: ["https://github.com/example/cryptolib/README.md"],
+    }),
+  );
+
+  const step2Dag = buildResearchDag(tieredItems, resultsDir);
+  const step2Ready = getReadyDagNodes(step2Dag);
+  if (step2Ready.length !== 1 || step2Ready[0].id !== "cipher_audit") {
+    fail(`tieredDag step 2: expected cipher_audit ready after repo_discovery completed, got: ${JSON.stringify(step2Ready.map((n) => n.id))}`);
+  }
+  const repoNode = step2Dag.nodes.get("repo_discovery");
+  if (repoNode?.status !== "completed") {
+    fail(`tieredDag step 2: repo_discovery should have status 'completed', got: ${repoNode?.status}`);
+  }
+
+  // Verify upstream context extraction for cipher_audit
+  const evidence = getUpstreamEvidence(step2Dag, "cipher_audit");
+  if (evidence.length !== 1 || evidence[0].id !== "repo_discovery") {
+    fail(`getUpstreamEvidence: expected 1 upstream evidence from repo_discovery, got: ${JSON.stringify(evidence)}`);
+  }
+  const promptInjection = formatUpstreamContextPrompt(evidence);
+  if (!promptInjection.includes("<upstream-context>") || !promptInjection.includes("https://github.com/example/cryptolib")) {
+    fail(`formatUpstreamContextPrompt: missing expected tags or repo URL, got: ${promptInjection}`);
+  }
+
+  // 4. Cycle detection (A -> B -> A)
+  const cyclicItems = [
+    { id: "node_a", name: "Node A", depends_on: ["node_b"] },
+    { id: "node_b", name: "Node B", depends_on: ["node_a"] },
+  ];
+  const cyclicDag = buildResearchDag(cyclicItems);
+  if (!cyclicDag.hasCycles || !cyclicDag.cycleNodes || cyclicDag.cycleNodes.length !== 2) {
+    fail(`cyclicDag: expected hasCycles=true with 2 cycle nodes, got: ${JSON.stringify(cyclicDag)}`);
+  }
+
+  // 5. readOutlineItemSpecs YAML parser verification
+  writeFileSync(
+    join(dagFixture, "outline.yaml"),
+    `topic: "DAG Test"
+items:
+  - id: discovery
+    name: "Discovery Item"
+    category: "discovery"
+  - id: analysis
+    name: "Analysis Item"
+    category: "deep"
+    depends_on: [discovery]
+`,
+  );
+  const parsedSpecs = readOutlineItemSpecs(dagFixture);
+  if (!parsedSpecs || parsedSpecs.length !== 2) {
+    fail(`readOutlineItemSpecs: expected 2 parsed specs, got: ${JSON.stringify(parsedSpecs)}`);
+  } else {
+    if (parsedSpecs[0].id !== "discovery" || parsedSpecs[1].id !== "analysis") {
+      fail(`readOutlineItemSpecs: id mismatch: ${JSON.stringify(parsedSpecs)}`);
+    }
+    const deps = parsedSpecs[1].depends_on;
+    if (!Array.isArray(deps) || deps[0] !== "discovery") {
+      fail(`readOutlineItemSpecs: depends_on mismatch: ${JSON.stringify(deps)}`);
+    }
+  }
+
+  rmSync(dagFixture, { recursive: true, force: true });
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
