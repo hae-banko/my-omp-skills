@@ -14,24 +14,28 @@ import {
   DIVIDER,
   INNER_WIDTH,
   TOP_BORDER,
+  bold,
   boxLine,
   clamp01,
+  colorize,
+  dim,
   displayWidth,
   extractPayload,
   formatDuration,
+  italic,
   makeBottomBorder,
   makeDivider,
   makeProgressBar,
   makeTopBorder,
   padToWidth,
   starsFor,
+  statusBorderColor,
   truncateMiddle,
   truncateToWidth,
 } from "./research-format.ts";
 import { PIPELINE_STATUSES, phaseOf, phaseStepper, type PipelineStatus } from "./research-status.ts";
 import { freshnessLabel, type Freshness } from "./research-freshness.ts";
-import { colorize, resolveResearchTheme, type ResearchTheme } from "./research-theme.ts";
-
+import { resolveResearchTheme, type ResearchTheme } from "./research-theme.ts";
 export type ResearchPreset = "small" | "medium" | "high";
 export type ResearchReviewStatus = "DRAFT REVIEW" | "READY";
 export type ResearchDetail = "compact" | "full";
@@ -248,11 +252,11 @@ function buildContainer(rawLines: string[]): Container {
  * is middle-truncated to whatever width the badge leaves over.
  * `plainBadge` is measured (no ANSI); `renderedBadge` is what gets drawn.
  */
-function cardHeader(prefix: string, slug: string, plainBadge: string, renderedBadge: string): string {
+function cardHeader(prefix: string, slug: string, plainBadge: string, renderedBadge: string, borderColor?: string): string {
   const prefixWidth = displayWidth(` ${prefix}`);
   const badgeWidth = displayWidth(plainBadge);
   const slugWidth = Math.max(8, INNER_WIDTH - prefixWidth - badgeWidth);
-  return boxLine(` ${prefix}${truncateMiddle(slug, slugWidth)}${renderedBadge}`);
+  return boxLine(` ${prefix}${truncateMiddle(slug, slugWidth)}${renderedBadge}`, borderColor);
 }
 
 // ---------------------------------------------------------------------------
@@ -627,71 +631,113 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
   const status = asString(p.status);
   const detail = asString(p.detail) === "compact" ? "compact" : "full";
   const theme = resolveResearchTheme(themeRaw);
-
-  const rawLines: string[] = [];
-  rawLines.push(TOP_BORDER);
+  const borderColor = statusBorderColor(status);
 
   const statusBadge = status ? colorize(`[${status}]`, theme.colors.badge, theme.monochrome) : "";
-  rawLines.push(cardHeader("RESEARCH DASHBOARD — ", slug, status ? ` [${status}]` : "", status ? ` ${statusBadge}` : ""));
-
   const topic = asString(p.topic);
-  if (topic) rawLines.push(boxLine(` Topic: ${topic}`));
+
+  // Compact View: 3-4 lines with high information density, 0 emojis, bold/italic text highlights
+  if (detail === "compact") {
+    const rawLines: string[] = [];
+    rawLines.push(makeTopBorder(borderColor));
+    rawLines.push(cardHeader(bold("RESEARCH DASHBOARD — "), slug, status ? ` [${status}]` : "", status ? ` ${statusBadge}` : "", borderColor));
+
+    if (topic) {
+      rawLines.push(boxLine(` ${bold("Topic:")} ${italic(topic)}`, borderColor));
+    }
+
+    const metrics = p.global_metrics && typeof p.global_metrics === "object" ? (p.global_metrics as Record<string, unknown>) : {};
+    const metricsCov = asNumber(metrics.coverage);
+    const compItems = asNumber(metrics.completed_items);
+    const totItems = asNumber(metrics.total_items);
+    const covRatio = ratioOf(metricsCov ?? (compItems !== undefined && totItems && totItems > 0 ? compItems / totItems : undefined));
+    const progressBar = makeProgressBar(covRatio, 8);
+    const compFields = asNumber(metrics.completed_fields) ?? 0;
+    const totFields = asNumber(metrics.total_fields);
+    const wavesRun = asNumber(p.waves_run);
+
+    const progressParts = [
+      `${bold("Progress:")} ${progressBar} ${Math.round(covRatio * 100)}%`,
+      totItems !== undefined ? `Items: ${bold(String(compItems ?? 0))}/${totItems}` : undefined,
+      totFields !== undefined ? `Fields: ${bold(String(compFields))}/${totFields}` : undefined,
+      wavesRun !== undefined ? `Waves: ${bold(String(wavesRun))}` : undefined,
+    ].filter(Boolean).join(" · ");
+
+    rawLines.push(boxLine(` ${progressParts}`, borderColor));
+
+    const nextCommand = asString(p.next_step_command) ?? asString(p.recommended_next_step);
+    if (nextCommand) {
+      rawLines.push(boxLine(` ${bold("Next:")} ${colorize(nextCommand, BORDER_COLORS.cyan)}`, borderColor));
+    }
+
+    rawLines.push(makeBottomBorder(borderColor));
+    return buildContainer(rawLines);
+  }
+
+  // Full View: Detailed multi-section breakdown
+  const rawLines: string[] = [];
+  rawLines.push(makeTopBorder(borderColor));
+  rawLines.push(cardHeader(bold("RESEARCH DASHBOARD — "), slug, status ? ` [${status}]` : "", status ? ` ${statusBadge}` : "", borderColor));
+
+  if (topic) rawLines.push(boxLine(` ${bold("Topic:")} ${italic(topic)}`, borderColor));
 
   const freshnessText = freshnessSuffix(p.freshness, p.as_of);
-  if (freshnessText) rawLines.push(boxLine(freshnessText));
-  rawLines.push(DIVIDER);
+  if (freshnessText) rawLines.push(boxLine(` ${dim(freshnessText)}`, borderColor));
+  rawLines.push(makeDivider(borderColor));
 
   // Action first: the concrete next command (with slug), then the stepper.
   const nextCommand = asString(p.next_step_command) ?? asString(p.recommended_next_step);
   if (nextCommand) {
-    rawLines.push(boxLine(" Next:"));
-    rawLines.push(boxLine(`   ${nextCommand}`));
-    rawLines.push(DIVIDER);
+    rawLines.push(boxLine(` ${bold("Next:")}`, borderColor));
+    rawLines.push(boxLine(`   ${colorize(nextCommand, BORDER_COLORS.cyan)}`, borderColor));
+    rawLines.push(makeDivider(borderColor));
   }
 
   // Phase stepper with completed/current/upcoming marks.
   const statusWord = (status && (PIPELINE_STATUSES as readonly string[]).includes(status) ? status : undefined) as PipelineStatus | undefined;
   const currentPhase = statusWord ? phaseOf(statusWord) : (asNumber(p.current_phase) as 1 | 2 | 3 | undefined) ?? 1;
-  rawLines.push(boxLine(` Pipeline: ${phaseStepper(currentPhase)}`));
-  rawLines.push(DIVIDER);
+  rawLines.push(boxLine(` ${bold("Pipeline:")} ${phaseStepper(currentPhase)}`, borderColor));
+  rawLines.push(makeDivider(borderColor));
 
   // Global completion metrics.
-  rawLines.push(boxLine(" Global Completion Metrics:"));
+  rawLines.push(boxLine(` ${bold("Global Completion Metrics:")}`, borderColor));
   const metrics = p.global_metrics && typeof p.global_metrics === "object" ? (p.global_metrics as Record<string, unknown>) : {};
   const metricsCov = asNumber(metrics.coverage);
   const compItems = asNumber(metrics.completed_items);
   const totItems = asNumber(metrics.total_items);
   const covRatio = ratioOf(metricsCov ?? (compItems !== undefined && totItems && totItems > 0 ? compItems / totItems : undefined));
   const progressBar = makeProgressBar(covRatio, 8);
-  rawLines.push(boxLine(`   Overall Progress: ${progressBar} ${Math.round(covRatio * 100)}%`));
+  rawLines.push(boxLine(`   Overall Progress: ${progressBar} ${bold(String(Math.round(covRatio * 100)) + "%")}`, borderColor));
   if (totItems !== undefined) {
-    rawLines.push(boxLine(`   Items Completed: ${compItems ?? 0} / ${totItems}`));
+    rawLines.push(boxLine(`   Items Completed: ${bold(String(compItems ?? 0))} / ${totItems}`, borderColor));
   }
   const pendingItems = asNumber(p.pending_items) ?? (totItems !== undefined && compItems !== undefined ? Math.max(0, totItems - compItems) : undefined);
-  if (pendingItems !== undefined) rawLines.push(boxLine(`   Pending Items: ${pendingItems}`));
+  if (pendingItems !== undefined) rawLines.push(boxLine(`   Pending Items: ${pendingItems}`, borderColor));
 
   const totFields = asNumber(metrics.total_fields);
   if (totFields !== undefined) {
-    // Fields ratio is capped at 1.0 — the numerator (fields found across result
-    // JSONs) could previously exceed the fields.yaml denominator (=> >100%).
     const compFields = Math.min(totFields, asNumber(metrics.completed_fields) ?? 0);
-    rawLines.push(boxLine(`   Fields Completed: ${compFields} / ${totFields}`));
+    rawLines.push(boxLine(`   Fields Completed: ${bold(String(compFields))} / ${totFields}`, borderColor));
   }
   const unresolvedCount = asNumber(p.unresolved_fields_count);
-  if (unresolvedCount !== undefined) rawLines.push(boxLine(`   Unresolved Fields: ${unresolvedCount}`));
+  if (unresolvedCount !== undefined) rawLines.push(boxLine(`   Unresolved Fields: ${unresolvedCount}`, borderColor));
 
   const wavesRun = asNumber(p.waves_run);
   const maxWaves = asNumber(p.max_waves);
   if (wavesRun !== undefined || maxWaves !== undefined) {
-    rawLines.push(boxLine(`   Waves: ${wavesRun ?? "?"}${maxWaves !== undefined ? ` / ${maxWaves}` : ""} run`));
+    rawLines.push(boxLine(`   Waves: ${bold(String(wavesRun ?? "?"))}${maxWaves !== undefined ? ` / ${maxWaves}` : ""} run`, borderColor));
   }
   const dag = p.dag && typeof p.dag === "object" ? (p.dag as Partial<ResearchDagSummary>) : undefined;
   if (dag && dag.enabled) {
-    rawLines.push(boxLine(`   DAG Frontier: ${dag.ready_nodes ?? 0} ready · ${dag.blocked_nodes ?? 0} blocked · ${dag.completed_nodes ?? 0} completed`));
+    const readyStr = colorize(String(dag.ready_nodes ?? 0) + " ready", BORDER_COLORS.cyan);
+    const blockedStr = colorize(String(dag.blocked_nodes ?? 0) + " blocked", BORDER_COLORS.yellow);
+    const compStr = colorize(String(dag.completed_nodes ?? 0) + " completed", BORDER_COLORS.green);
+    rawLines.push(boxLine(`   DAG Frontier: ${readyStr} · ${blockedStr} · ${compStr}`, borderColor));
   }
-  rawLines.push(DIVIDER);
+  rawLines.push(makeDivider(borderColor));
+
   // Project artifacts status.
-  rawLines.push(boxLine(" Project Artifacts Status:"));
+  rawLines.push(boxLine(` ${bold("Project Artifacts Status:")}`, borderColor));
   const art = p.artifacts;
   if (Array.isArray(art)) {
     const validArt = art.filter((a) => a !== null && a !== undefined);
@@ -700,9 +746,9 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
         const aObj = a as Record<string, unknown>;
         const aName = asString(aObj.name) ?? String(aObj.name ?? "artifact");
         const aStatus = asString(aObj.status) ?? String(aObj.status ?? "unknown");
-        rawLines.push(boxLine(`   - ${aName}: ${aStatus}`));
+        rawLines.push(boxLine(`   - ${aName}: ${aStatus}`, borderColor));
       } else {
-        rawLines.push(boxLine(`   - ${String(a)}: status unknown`));
+        rawLines.push(boxLine(`   - ${String(a)}: status unknown`, borderColor));
       }
     }
   } else if (art && typeof art === "object") {
@@ -716,42 +762,57 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
           : String(artObj.results_json)
         : "Pending";
     const report = artObj.report_md ? (asString(artObj.report_md) ?? "Generated") : "Pending";
-    rawLines.push(boxLine(`   - outline.yaml: ${outline}`));
-    rawLines.push(boxLine(`   - fields.yaml: ${fields}`));
-    rawLines.push(boxLine(`   - results/*.json: ${results}`));
-    rawLines.push(boxLine(`   - report.md: ${report}`));
+    rawLines.push(boxLine(`   - outline.yaml: ${outline === "Ready" ? colorize(outline, BORDER_COLORS.green) : outline}`, borderColor));
+    rawLines.push(boxLine(`   - fields.yaml: ${fields === "Ready" ? colorize(fields, BORDER_COLORS.green) : fields}`, borderColor));
+    rawLines.push(boxLine(`   - results/*.json: ${results !== "Pending" ? colorize(results, BORDER_COLORS.green) : results}`, borderColor));
+    rawLines.push(boxLine(`   - report.md: ${report === "Generated" ? colorize(report, BORDER_COLORS.green) : report}`, borderColor));
   } else {
-    rawLines.push(boxLine("   - outline.yaml: Pending"));
-    rawLines.push(boxLine("   - fields.yaml: Pending"));
-    rawLines.push(boxLine("   - results/*.json: Pending"));
-    rawLines.push(boxLine("   - report.md: Pending"));
+    rawLines.push(boxLine("   - outline.yaml: Pending", borderColor));
+    rawLines.push(boxLine("   - fields.yaml: Pending", borderColor));
+    rawLines.push(boxLine("   - results/*.json: Pending", borderColor));
+    rawLines.push(boxLine("   - report.md: Pending", borderColor));
   }
 
-  // Explicit error section (instead of silently rendering defaults).
+  // Explicit error section.
   const errors = Array.isArray(p.errors) ? p.errors.filter((e) => typeof e === "string") : [];
   if (errors.length > 0) {
-    rawLines.push(DIVIDER);
-    rawLines.push(boxLine(" Errors:"));
+    rawLines.push(makeDivider(borderColor));
+    rawLines.push(boxLine(` ${bold(colorize("Errors:", BORDER_COLORS.red))}`, borderColor));
     for (const err of errors.slice(0, 4)) {
-      rawLines.push(boxLine(`   ! ${err}`));
+      rawLines.push(boxLine(`   ! ${err}`, borderColor));
     }
   }
 
   if (detail === "full") {
     const path = asString(p.project_path);
     if (path) {
-      rawLines.push(DIVIDER);
-      rawLines.push(boxLine(` Path: ${truncateMiddle(path, INNER_WIDTH - 4)}`));
+      rawLines.push(makeDivider(borderColor));
+      rawLines.push(boxLine(` ${dim("Path:")} ${dim(truncateMiddle(path, INNER_WIDTH - 8))}`, borderColor));
     }
   }
 
-  rawLines.push(BOTTOM_BORDER);
+  rawLines.push(makeBottomBorder(borderColor));
   return buildContainer(rawLines);
 }
 
 export function installResearchDashboardRenderer(pi: ExtensionApi): void {
-  pi.registerMessageRenderer("research-dashboard", (message, _options, theme) => {
-    return renderResearchDashboardCard(extractPayload<ResearchDashboardPayload>(message), theme);
+  pi.registerMessageRenderer("research-dashboard", (message, options, theme) => {
+    const payload = extractPayload<ResearchDashboardPayload>(message);
+    const opts = options as { expanded?: boolean } | undefined;
+    if (opts && opts.expanded === false) {
+      const p = toRecord(payload);
+      const slug = asString(p.slug) ?? "research";
+      const status = asString(p.status) ?? "STATUS";
+      const metrics = p.global_metrics && typeof p.global_metrics === "object" ? (p.global_metrics as Record<string, unknown>) : {};
+      const compItems = asNumber(metrics.completed_items) ?? 0;
+      const totItems = asNumber(metrics.total_items) ?? 0;
+      const color = statusBorderColor(status);
+      const text = `▶ ${bold("RESEARCH")} — ${slug} [${colorize(status, color)}] (${compItems}/${totItems} items)`;
+      const c = new Container();
+      c.addChild(new Text(text, 0, 0));
+      return c;
+    }
+    return renderResearchDashboardCard(payload, theme);
   });
 }
 

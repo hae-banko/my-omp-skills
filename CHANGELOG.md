@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.58.0 — Zero-Scrollback Research Status, True Compact View & Dynamic Status Styling
+
+- **Zero-Scrollback Research Status (`/research status`)** — updated `/research status [slug]` to emit a floating toast popup notification (`ctx.ui.notify`) with real-time items, fields, and next action, providing instant status inspection with **0 lines written to the session ledger** (does not push conversation history).
+- **Footer Status Bar Integration (`--bar`)** — added `/research status [slug] --bar` to pin live research progress directly to the TUI footer status line (`ctx.ui.setStatus`), with `/research status off` to clear.
+- **True Compact 4-Line Dashboard Card** — updated `renderResearchDashboardCard` (`src/research/research-renderer.ts`) so `detail: "compact"` (the default for `/research dashboard` and `/research status --card`) renders a tight 4-line summary box showing topic, progress metrics, and next command rather than a 25-line screen-pushing block.
+- **Dynamic Status-Coded Borders & ANSI Text Highlights** — added `bold`, `italic`, `dim`, and `statusBorderColor` in `src/research/research-format.ts`, dynamically color-coding card borders (green for `REPORT_READY`/`CONVERGED`, blue for `RUNNING`, cyan for `OUTLINE`, yellow for `PAUSED`, red for `ERROR`) with bold/italic text highlights and zero emojis.
+- **Native TUI Folding Support** — `installResearchDashboardRenderer` checks `options.expanded === false` to render a 1-line chip (`▶ RESEARCH — <slug> [<status>] (<items> items)`).
+- **Selftest Assertions** — `scripts/selftest.ts` verifies ANSI text styling (`bold`, `italic`, `dim`), `statusBorderColor` mappings, 76-column box width preservation, and compact vs full rendering.
+
 ## v0.57.0 — Transitive Critical-Path Prioritization & Subgraph Epistemic Hashing
 
 - **Transitive Bottleneck Frontier Prioritization** — updated `getReadyDagNodes` and `buildResearchDag` (`src/research/research-dag.ts`) to prioritize ready frontier nodes by their transitive downstream impact (`priorityScore = transitive_descendants * 10 + height * 2 + depth`), ensuring bottleneck unblockers are dispatched before isolated leaf nodes in wave batches.

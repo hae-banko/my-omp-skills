@@ -87,13 +87,37 @@ export const BORDER_COLORS = {
   magenta: "35",
   green: "32",
   yellow: "33",
+  red: "31",
 } as const;
 
-export function colorize(text: string, colorCode: string): string {
-  if (!colorCode) return text;
+export function colorize(text: string, colorCode: string, monochrome = false): string {
+  if (monochrome || !colorCode) return text;
   return `\x1b[${colorCode}m${text}\x1b[0m`;
 }
 
+export function bold(text: string): string {
+  return `\x1b[1m${text}\x1b[0m`;
+}
+
+export function dim(text: string): string {
+  return `\x1b[2m${text}\x1b[0m`;
+}
+
+export function italic(text: string): string {
+  return `\x1b[3m${text}\x1b[0m`;
+}
+
+export function statusBorderColor(status?: string): string {
+  if (!status) return BORDER_COLORS.dim;
+  const s = status.toUpperCase();
+  if (s.includes("REPORT_READY") || s.includes("CONVERGED")) return BORDER_COLORS.green;
+  if (s.includes("RUNNING")) return BORDER_COLORS.blue;
+  if (s.includes("OUTLINE")) return BORDER_COLORS.cyan;
+  if (s.includes("PAUSED") || s.includes("WARN")) return BORDER_COLORS.yellow;
+  if (s.includes("ERROR") || s.includes("FAIL")) return BORDER_COLORS.red;
+  if (s.includes("CANCEL") || s.includes("STALE")) return BORDER_COLORS.dim;
+  return BORDER_COLORS.cyan;
+}
 const ELLIPSIS = "...";
 
 /** Truncate to `width` display cells, accounting for the ellipsis width. */

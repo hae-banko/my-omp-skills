@@ -71,17 +71,29 @@ import {
   shouldBypassClarify,
   stripClarifyBypassPrefix,
 } from "../src/features/clarify.ts";
-import type {
-  ResearchReviewPayload,
-  ResearchWaveProgressPayload,
-  ResearchReportPreviewPayload,
-  ResearchDashboardPayload,
-  ResearchHelpPayload,
-  ResearchErrorPayload,
+import {
+  type ResearchReviewPayload,
+  type ResearchWaveProgressPayload,
+  type ResearchReportPreviewPayload,
+  type ResearchDashboardPayload,
+  type ResearchHelpPayload,
+  type ResearchErrorPayload,
+  renderResearchDashboardCard,
 } from "../src/research/research-renderer.ts";
 // displayWidth is a pure display-cell measurement primitive (not part of the
 // renderer seam); the ≤76-cell budget checks below use it to verify lines.
-import { BORDER_COLORS, boxLine, colorize, displayWidth, makeTopBorder, stripAnsi } from "../src/research/research-format.ts";
+import {
+  BORDER_COLORS,
+  bold,
+  boxLine,
+  colorize,
+  dim,
+  displayWidth,
+  italic,
+  makeTopBorder,
+  statusBorderColor,
+  stripAnsi,
+} from "../src/research/research-format.ts";
 import type {
   AuditCardPayload,
   TicketBreakdownPayload,
@@ -4000,6 +4012,60 @@ items:
 
   rmSync(memoFixture, { recursive: true, force: true });
   rmSync(dagFixture, { recursive: true, force: true });
+
+  // 8. ANSI text styling & Status Border Colors
+  const boldText = bold("Bold Test");
+  const italicText = italic("Italic Test");
+  const dimText = dim("Dim Test");
+  if (!boldText.includes("\x1b[1m") || !italicText.includes("\x1b[3m") || !dimText.includes("\x1b[2m")) {
+    fail(`ANSI text styling: missing expected escape sequences`);
+  }
+  if (displayWidth(bold(italic("Hello World"))) !== 11) {
+    fail(`ANSI displayWidth: expected 11 for styled Hello World, got ${displayWidth(bold(italic("Hello World")))}`);
+  }
+  if (statusBorderColor("REPORT_READY") !== BORDER_COLORS.green || statusBorderColor("OUTLINE") !== BORDER_COLORS.cyan || statusBorderColor("ERROR") !== BORDER_COLORS.red) {
+    fail(`statusBorderColor: unexpected color mappings`);
+  }
+
+  // 9. Compact vs Full Research Dashboard Card Rendering & 76-column box width
+  const testPayload = {
+    slug: "2026-08-07_research-dashboard-ux",
+    status: "REPORT_READY",
+    topic: "Research Dashboard UX & Layout",
+    next_step_command: "/research-report 2026-08-07_research-dashboard-ux",
+    global_metrics: {
+      total_items: 21,
+      completed_items: 21,
+      total_fields: 18,
+      completed_fields: 18,
+      coverage: 1.0,
+    },
+    waves_run: 2,
+    detail: "compact" as const,
+  };
+
+  const compactCard = renderResearchDashboardCard(testPayload);
+  const compactChildren = (compactCard as any).children ?? [];
+  if (compactChildren.length < 4) {
+    fail(`renderResearchDashboardCard: expected at least 4 lines for compact view, got ${compactChildren.length}`);
+  }
+  for (const child of compactChildren) {
+    const text = child.text ?? "";
+    const w = displayWidth(text);
+    if (w !== 76) {
+      fail(`compactCard: expected 76 display width, got ${w} for line: "${text}"`);
+    }
+  }
+
+  const fullCard = renderResearchDashboardCard({ ...testPayload, detail: "full" as const });
+  const fullChildren = (fullCard as any).children ?? [];
+  for (const child of fullChildren) {
+    const text = child.text ?? "";
+    const w = displayWidth(text);
+    if (w !== 76) {
+      fail(`fullCard: expected 76 display width, got ${w} for line: "${text}"`);
+    }
+  }
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

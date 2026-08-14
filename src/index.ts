@@ -392,7 +392,49 @@ const COMMANDS: CommandSpec[] = [
         return;
       }
 
-      if (head === "dashboard" || head === "status") {
+      if (head === "status") {
+        if (rest.trim() === "off" || rest.includes("--bar off")) {
+          ctx.ui?.setStatus?.("research", undefined);
+          ctx.ui?.notify?.("Research status bar cleared", "info");
+          return;
+        }
+
+        const root = findRepoRoot();
+        const cleanRest = rest.replace(/\s+--(bar|card|full|compact)\b/g, "").trim();
+        const { slug, notFound, payload } = readProject(root, cleanRest);
+        if (notFound) {
+          ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+          return;
+        }
+
+        const statusWord = typeof payload.status === "string" ? payload.status : `Phase ${payload.current_phase ?? 1}`;
+        const m = payload.global_metrics ?? {};
+
+        if (/\s*--bar\b/.test(rest)) {
+          ctx.ui?.setStatus?.("research", `Research: ${slug} [${statusWord}] ${m.completed_items ?? 0}/${m.total_items ?? 0}`);
+          ctx.ui?.notify?.(`Research status bar enabled for ${slug}`, "info");
+          return;
+        }
+
+        if (/\s*--card\b/.test(rest)) {
+          pi.sendMessage({
+            customType: "research-dashboard",
+            display: true,
+            attribution: "user",
+            content: `Research dashboard — ${slug}: ${statusWord} · items ${m.completed_items ?? 0}/${m.total_items ?? 0} · fields ${m.completed_fields ?? 0}/${m.total_fields ?? 0}`,
+            details: { ...payload, detail: "compact" },
+          });
+          return;
+        }
+
+        // Default /research status: Zero-scrollback floating toast popup notification
+        const nextCmd = payload.next_step_command ?? payload.recommended_next_step ?? "ready";
+        const toastMsg = `${slug}: [${statusWord}] · items ${m.completed_items ?? 0}/${m.total_items ?? 0} · fields ${m.completed_fields ?? 0}/${m.total_fields ?? 0} · next: ${nextCmd}`;
+        ctx.ui?.notify?.(toastMsg, "info");
+        return;
+      }
+
+      if (head === "dashboard") {
         const root = findRepoRoot();
         const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
         const { slug, notFound, payload } = readProject(root, cleanRest);
@@ -412,7 +454,7 @@ const COMMANDS: CommandSpec[] = [
           });
           return;
         }
-        const compact = /\s--compact\b/.test(rest);
+        const full = /\s--full\b/.test(rest);
         const statusWord = typeof payload.status === "string" ? payload.status : `Phase ${payload.current_phase ?? 1}`;
         const m = payload.global_metrics ?? {};
         const reportReady =
@@ -426,7 +468,7 @@ const COMMANDS: CommandSpec[] = [
           display: true,
           attribution: "user",
           content: `Research dashboard — ${slug}: ${statusWord} · items ${m.completed_items ?? 0}/${m.total_items ?? 0} · fields ${m.completed_fields ?? 0}/${m.total_fields ?? 0} · report ${reportReady}`,
-          details: compact ? { ...payload, detail: "compact" } : payload,
+          details: full ? { ...payload, detail: "full" } : { ...payload, detail: "compact" },
         });
         ctx.ui?.notify?.("Research Dashboard loaded", "info");
         return;
