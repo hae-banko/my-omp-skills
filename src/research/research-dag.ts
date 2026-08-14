@@ -16,6 +16,7 @@
 //    into downstream subagent prompts (<upstream-context>).
 // 4. Backward compatible with flat lists (items without dependencies are all roots).
 
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ResearchItemSpec } from "./research-renderer.ts";
@@ -31,6 +32,12 @@ export interface ResearchDagNode {
   resultFile?: string;
   upstreamNodes: string[];
   downstreamNodes: string[];
+  depth: number;
+  height: number;
+  transitiveDescendantsCount: number;
+  priorityScore: number;
+  epistemicHash?: string;
+  isDirty?: boolean;
 }
 
 export interface ResearchDag {
@@ -39,8 +46,10 @@ export interface ResearchDag {
   leaves: string[];
   hasCycles: boolean;
   cycleNodes?: string[];
+  topoOrder: string[];
+  maxDepth: number;
+  criticalPathLength: number;
 }
-
 export interface UpstreamEvidence {
   id: string;
   name: string;
@@ -90,6 +99,36 @@ export function findItemResultFile(resultsDir: string, itemId: string, itemName:
 }
 
 /**
+ * Deterministically compute an epistemic hash for a node given its definition,
+ * category, dependencies, and upstream hashes (subgraph memoization).
+ */
+export function computeEpistemicNodeHash(
+  nodeId: string,
+  nodeName: string,
+  dependsOn: string[],
+  category?: string,
+  upstreamHashes?: Record<string, string>,
+): string {
+  const hash = createHash("sha256");
+  hash.update(`id:${nodeId.toLowerCase()}\n`);
+  hash.update(`name:${nodeName.trim()}\n`);
+  hash.update(`cat:${(category ?? "").trim()}\n`);
+
+  const sortedDeps = [...dependsOn].map((d) => d.toLowerCase()).sort();
+  hash.update(`deps:${sortedDeps.join(",")}\n`);
+
+  if (upstreamHashes) {
+    for (const dep of sortedDeps) {
+      if (upstreamHashes[dep]) {
+        hash.update(`upstream:${dep}:${upstreamHashes[dep]}\n`);
+      }
+    }
+  }
+
+  return hash.digest("hex").slice(0, 16);
+}
+
+/**
  * Build and validate the Research DAG from an outline's item list.
  */
 export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string): ResearchDag {
@@ -117,9 +156,12 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
       resultFile,
       upstreamNodes: [],
       downstreamNodes: [],
+      depth: 0,
+      height: 0,
+      transitiveDescendantsCount: 0,
+      priorityScore: 0,
     });
   });
-
   // 2. Second pass: wire dependencies
   items.forEach((item, idx) => {
     const id = (item.id ? item.id.trim() : slugifyItemId(item.name, idx)).toLowerCase();
@@ -150,7 +192,7 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
     }
   }
 
-  // 4. Cycle detection via Kahn's algorithm
+  // 4. Cycle detection & topological sort via Kahn's algorithm
   const inDegree = new Map<string, number>();
   for (const [id, node] of nodes.entries()) {
     inDegree.set(id, node.dependsOn.length);
@@ -161,10 +203,10 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
     if (deg === 0) queue.push(id);
   }
 
-  let visitedCount = 0;
+  const topoOrder: string[] = [];
   while (queue.length > 0) {
     const currId = queue.shift()!;
-    visitedCount++;
+    topoOrder.push(currId);
     const node = nodes.get(currId);
     if (!node) continue;
     for (const nextId of node.downstreamNodes) {
@@ -174,12 +216,89 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
     }
   }
 
-  const hasCycles = visitedCount < nodes.size;
+  const hasCycles = topoOrder.length < nodes.size;
   const cycleNodes = hasCycles
     ? [...nodes.keys()].filter((id) => (inDegree.get(id) ?? 0) > 0)
     : undefined;
 
-  // 5. Update statuses based on dependency resolution
+  // 5. Compute Transitive Descendants for each node
+  for (const [id, node] of nodes.entries()) {
+    const descendants = new Set<string>();
+    const stack = [...node.downstreamNodes];
+    while (stack.length > 0) {
+      const next = stack.pop()!;
+      if (!descendants.has(next) && next !== id) {
+        descendants.add(next);
+        const child = nodes.get(next);
+        if (child) {
+          for (const grandChild of child.downstreamNodes) {
+            if (!descendants.has(grandChild)) stack.push(grandChild);
+          }
+        }
+      }
+    }
+    node.transitiveDescendantsCount = descendants.size;
+  }
+
+  // 6. Compute Depth, Height, Epistemic Hash, and Priority Score along topological order
+  const upstreamHashes: Record<string, string> = {};
+
+  if (!hasCycles) {
+    // Forward pass for depth & epistemic hash
+    for (const id of topoOrder) {
+      const node = nodes.get(id);
+      if (!node) continue;
+      if (node.upstreamNodes.length === 0) {
+        node.depth = 0;
+      } else {
+        node.depth = Math.max(...node.upstreamNodes.map((u) => nodes.get(u)?.depth ?? 0)) + 1;
+      }
+
+      node.epistemicHash = computeEpistemicNodeHash(
+        node.id,
+        node.name,
+        node.dependsOn,
+        node.category,
+        upstreamHashes,
+      );
+      upstreamHashes[node.id] = node.epistemicHash;
+    }
+
+    // Backward pass for height (critical-path length to leaves)
+    for (let i = topoOrder.length - 1; i >= 0; i--) {
+      const id = topoOrder[i];
+      const node = nodes.get(id);
+      if (!node) continue;
+      if (node.downstreamNodes.length === 0) {
+        node.height = 0;
+      } else {
+        node.height = Math.max(...node.downstreamNodes.map((d) => nodes.get(d)?.height ?? 0)) + 1;
+      }
+    }
+  }
+
+  // Calculate priority score for all nodes:
+  // priority = (transitive_descendants * 10) + (height * 2) + depth
+  for (const [, node] of nodes.entries()) {
+    node.priorityScore = node.transitiveDescendantsCount * 10 + node.height * 2 + node.depth;
+
+    // Check if result JSON holds an epistemic hash and if it matches
+    if (node.resultFile && existsSync(node.resultFile)) {
+      try {
+        const raw = readFileSync(node.resultFile, "utf8");
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === "object" && parsed !== null && parsed._epistemic_hash) {
+          if (node.epistemicHash && parsed._epistemic_hash !== node.epistemicHash) {
+            node.isDirty = true;
+          }
+        }
+      } catch {
+        // Ignore JSON read errors
+      }
+    }
+  }
+
+  // 7. Update statuses based on dependency resolution
   for (const [id, node] of nodes.entries()) {
     if (node.status === "completed") continue;
     if (node.dependsOn.length === 0) {
@@ -195,6 +314,8 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
 
   const roots = [...nodes.values()].filter((n) => n.upstreamNodes.length === 0).map((n) => n.id);
   const leaves = [...nodes.values()].filter((n) => n.downstreamNodes.length === 0).map((n) => n.id);
+  const maxDepth = Math.max(0, ...[...nodes.values()].map((n) => n.depth));
+  const criticalPathLength = Math.max(0, ...[...nodes.values()].map((n) => n.height));
 
   return {
     nodes,
@@ -202,16 +323,32 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
     leaves,
     hasCycles,
     cycleNodes,
+    topoOrder,
+    maxDepth,
+    criticalPathLength,
   };
 }
 
 /**
- * Get all DAG nodes currently ready to be dispatched in the next wave.
+ * Get all DAG nodes currently ready to be dispatched in the next wave,
+ * prioritized by transitive bottleneck impact (descendants unblocked) and critical-path height.
  */
 export function getReadyDagNodes(dag: ResearchDag): ResearchDagNode[] {
-  return [...dag.nodes.values()].filter((node) => node.status === "ready");
+  return [...dag.nodes.values()]
+    .filter((node) => node.status === "ready")
+    .sort((a, b) => {
+      // 1. Descending priority score (bottleneck impact + critical-path length)
+      if (b.priorityScore !== a.priorityScore) {
+        return b.priorityScore - a.priorityScore;
+      }
+      // 2. Descending transitive descendants count
+      if (b.transitiveDescendantsCount !== a.transitiveDescendantsCount) {
+        return b.transitiveDescendantsCount - a.transitiveDescendantsCount;
+      }
+      // 3. Alphanumeric tiebreaker by ID
+      return a.id.localeCompare(b.id);
+    });
 }
-
 /**
  * Extract completed upstream evidence to pass to a downstream research agent.
  */

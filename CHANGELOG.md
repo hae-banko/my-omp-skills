@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.57.0 — Transitive Critical-Path Prioritization & Subgraph Epistemic Hashing
+
+- **Transitive Bottleneck Frontier Prioritization** — updated `getReadyDagNodes` and `buildResearchDag` (`src/research/research-dag.ts`) to prioritize ready frontier nodes by their transitive downstream impact (`priorityScore = transitive_descendants * 10 + height * 2 + depth`), ensuring bottleneck unblockers are dispatched before isolated leaf nodes in wave batches.
+- **Topological Metrics** — computed exact `depth` (distance from roots), `height` (critical-path length to leaves), `transitiveDescendantsCount` (total downstream nodes unblocked), `maxDepth`, and `criticalPathLength` across the Research DAG.
+- **Deterministic Epistemic Hashing (`computeEpistemicNodeHash`)** — implemented Merkle-style recursive subgraph hashing across node definitions, categories, sorted dependencies, and upstream dependency hashes, enabling zero-overhead change detection and subgraph memoization.
+- **Subgraph Invalidation & Dirty Detection** — `buildResearchDag` compares result JSON `_epistemic_hash` metadata against live graph hashes, tagging modified or upstream-invalidated nodes with `isDirty: true`.
+- **Selftest Assertions** — `scripts/selftest.ts` verifies transitive bottleneck prioritization (diamond graph with bottleneck unblocker vs isolated leaf), depth/height calculations, deterministic 16-hex epistemic hashing, and subgraph dirty state detection.
+
 ## v0.56.0 — Research Directed Acyclic Graph (DAG) Engine & Upstream Context Injection
 
 - **Research DAG Engine (`src/research/research-dag.ts`)** — added dependency-aware execution graph for deep research outlines. Supports `depends_on: [...]` dependency edges on items in `outline.yaml`, topological frontier analysis, and automatic cycle detection via Kahn's algorithm.

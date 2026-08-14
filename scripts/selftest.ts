@@ -96,6 +96,7 @@ import {
 } from "../src/research/research-store.ts";
 import {
   buildResearchDag,
+  computeEpistemicNodeHash,
   formatUpstreamContextPrompt,
   getReadyDagNodes,
   getUpstreamEvidence,
@@ -3926,6 +3927,78 @@ items:
     }
   }
 
+  // 6. Transitive Critical-Path Prioritization & Bottleneck Unblocking
+  // Diamond: root_bottleneck -> child_1 -> leaf_deep
+  //                         -> child_2 -> leaf_deep
+  // Independent: root_isolated (leads nowhere)
+  const priorityItems = [
+    { id: "root_isolated", name: "Isolated Leaf" },
+    { id: "root_bottleneck", name: "Bottleneck Root" },
+    { id: "child_1", name: "Child 1", depends_on: ["root_bottleneck"] },
+    { id: "child_2", name: "Child 2", depends_on: ["root_bottleneck"] },
+    { id: "leaf_deep", name: "Deep Leaf", depends_on: ["child_1", "child_2"] },
+  ];
+  const priorityDag = buildResearchDag(priorityItems);
+  const readyNodes = getReadyDagNodes(priorityDag);
+
+  if (readyNodes.length !== 2) {
+    fail(`priorityDag: expected 2 ready nodes, got ${readyNodes.length}`);
+  } else if (readyNodes[0].id !== "root_bottleneck") {
+    fail(`priorityDag: expected root_bottleneck first due to higher unblocking impact, got: ${readyNodes[0].id}`);
+  }
+
+  const bottleneckNode = priorityDag.nodes.get("root_bottleneck");
+  if (bottleneckNode?.transitiveDescendantsCount !== 3) {
+    fail(`priorityDag: expected 3 transitive descendants for root_bottleneck, got ${bottleneckNode?.transitiveDescendantsCount}`);
+  }
+  if (bottleneckNode?.height !== 2 || bottleneckNode?.depth !== 0) {
+    fail(`priorityDag: expected height=2 depth=0 for root_bottleneck, got height=${bottleneckNode?.height} depth=${bottleneckNode?.depth}`);
+  }
+  if (priorityDag.criticalPathLength !== 2 || priorityDag.maxDepth !== 2) {
+    fail(`priorityDag: expected criticalPathLength=2 maxDepth=2, got cpl=${priorityDag.criticalPathLength} maxDepth=${priorityDag.maxDepth}`);
+  }
+
+  // 7. Deterministic Epistemic Hashing & Subgraph Invalidation
+  const hash1 = computeEpistemicNodeHash("node_a", "Node A", ["dep_1"], "security");
+  const hash2 = computeEpistemicNodeHash("node_a", "Node A", ["dep_1"], "security");
+  const hash3 = computeEpistemicNodeHash("node_a", "Node A", ["dep_1"], "performance");
+  if (!hash1 || hash1.length !== 16 || hash1 !== hash2) {
+    fail(`computeEpistemicNodeHash: expected deterministic 16-hex hash, got ${hash1} vs ${hash2}`);
+  }
+  if (hash1 === hash3) {
+    fail(`computeEpistemicNodeHash: expected distinct hash for different category`);
+  }
+
+  // Verify node.epistemicHash population and dirty flag detection
+  const memoFixture = mkdtempSync(join(tmpdir(), "my-omp-memo-test-"));
+  const memoResultsDir = join(memoFixture, "results");
+  mkdirSync(memoResultsDir, { recursive: true });
+
+  const memoItems = [{ id: "memo_node", name: "Memo Node" }];
+  const cleanDag = buildResearchDag(memoItems);
+  const expectedHash = cleanDag.nodes.get("memo_node")?.epistemicHash;
+
+  // Matching result file (clean)
+  writeFileSync(
+    join(memoResultsDir, "01_memo_node.json"),
+    JSON.stringify({ _epistemic_hash: expectedHash, result: "valid" }),
+  );
+  const cleanRun = buildResearchDag(memoItems, memoResultsDir);
+  if (cleanRun.nodes.get("memo_node")?.isDirty) {
+    fail(`subgraph memoization: expected node to NOT be dirty when hash matches`);
+  }
+
+  // Stale result file (dirty)
+  writeFileSync(
+    join(memoResultsDir, "01_memo_node.json"),
+    JSON.stringify({ _epistemic_hash: "stale_hash_1234", result: "outdated" }),
+  );
+  const dirtyRun = buildResearchDag(memoItems, memoResultsDir);
+  if (!dirtyRun.nodes.get("memo_node")?.isDirty) {
+    fail(`subgraph memoization: expected node to be marked dirty when hash mismatches`);
+  }
+
+  rmSync(memoFixture, { recursive: true, force: true });
   rmSync(dagFixture, { recursive: true, force: true });
 }
 if (failures > 0) {

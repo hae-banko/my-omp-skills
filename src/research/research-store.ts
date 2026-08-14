@@ -580,6 +580,8 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
       completed_nodes: completedCount,
       blocked_nodes: blockedCount,
       has_cycles: dag.hasCycles,
+      max_depth: dag.maxDepth,
+      critical_path_length: dag.criticalPathLength,
     };
     if (dag.hasCycles) {
       errors.push(`Circular dependency detected in outline.yaml among items: ${(dag.cycleNodes ?? []).join(", ")}`);

@@ -64,6 +64,8 @@ export interface ResearchDagSummary {
   completed_nodes: number;
   blocked_nodes: number;
   has_cycles: boolean;
+  max_depth?: number;
+  critical_path_length?: number;
 }
 
 export interface ExecutionSettingsSpec {
