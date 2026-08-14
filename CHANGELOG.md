@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.61.0 — Unconditional Dashboard Card Rendering & Card Visibility Fix
+
+- **Unconditional Dashboard Rendering** — fixed `installResearchDashboardRenderer` (`src/research/research-renderer.ts`) to unconditionally render the bordered dashboard card. Removed premature `options.expanded === false` check that caused `oh-my-pi`'s default unexpanded view to collapse dashboard cards into a 1-line text chip.
+- **Clean Compact Box Output** — verified `/research dashboard` renders the complete 4-line compact box card with status-coded borders, bold/italic text highlights, and progress metrics.
+
 ## v0.60.0 — Action-Oriented Research Command Semantics & Descriptions Overhaul
 
 - **Action-Oriented Command Descriptions** — replaced abstract "Phase 1 / 2 / 3" phrasing across `/research`, `/research-deep`, and `/research-report` with direct, functional descriptions in `src/index.ts`, `README.md`, and command markdown bodies:

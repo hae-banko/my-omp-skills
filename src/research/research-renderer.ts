@@ -796,23 +796,8 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
 }
 
 export function installResearchDashboardRenderer(pi: ExtensionApi): void {
-  pi.registerMessageRenderer("research-dashboard", (message, options, theme) => {
-    const payload = extractPayload<ResearchDashboardPayload>(message);
-    const opts = options as { expanded?: boolean } | undefined;
-    if (opts && opts.expanded === false) {
-      const p = toRecord(payload);
-      const slug = asString(p.slug) ?? "research";
-      const status = asString(p.status) ?? "STATUS";
-      const metrics = p.global_metrics && typeof p.global_metrics === "object" ? (p.global_metrics as Record<string, unknown>) : {};
-      const compItems = asNumber(metrics.completed_items) ?? 0;
-      const totItems = asNumber(metrics.total_items) ?? 0;
-      const color = statusBorderColor(status);
-      const text = `▶ ${bold("RESEARCH")} — ${slug} [${colorize(status, color)}] (${compItems}/${totItems} items)`;
-      const c = new Container();
-      c.addChild(new Text(text, 0, 0));
-      return c;
-    }
-    return renderResearchDashboardCard(payload, theme);
+  pi.registerMessageRenderer("research-dashboard", (message, _options, theme) => {
+    return renderResearchDashboardCard(extractPayload<ResearchDashboardPayload>(message), theme);
   });
 }
 
