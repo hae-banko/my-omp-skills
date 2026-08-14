@@ -71,6 +71,15 @@ export interface ResearchDagSummary {
   max_depth?: number;
   critical_path_length?: number;
 }
+export interface ResearchFindingPreview {
+  name: string;
+  id?: string;
+  summary?: string;
+  key_fields?: Record<string, string>;
+  severity?: string;
+  priority?: string;
+  confidence?: string;
+}
 
 export interface ExecutionSettingsSpec {
   preset?: ResearchPreset;
@@ -183,6 +192,7 @@ export interface ResearchDashboardPayload {
   waves_run?: number;
   max_waves?: number;
   discovered_references?: Array<{ name: string; url: string; count: number }>;
+  findings_preview?: ResearchFindingPreview[];
   dag?: ResearchDagSummary;
   detail?: ResearchDetail;
   errors?: string[];
@@ -625,18 +635,23 @@ export function installResearchReportPreviewRenderer(pi: ExtensionApi): void {
 // Lifecycle dashboard
 // ---------------------------------------------------------------------------
 
-export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, themeRaw?: unknown): Container {
+export function renderResearchDashboardCard(
+  payload?: ResearchDashboardPayload,
+  themeRaw?: unknown,
+  optionsRaw?: unknown,
+): Container {
   const p = toRecord(payload);
   const slug = asString(p.slug) ?? "unknown";
   const status = asString(p.status);
-  const detail = asString(p.detail) === "compact" ? "compact" : "full";
+  const isExpanded = (optionsRaw as { expanded?: boolean } | undefined)?.expanded === true;
+  const detail = isExpanded ? "full" : asString(p.detail) === "compact" ? "compact" : "full";
   const theme = resolveResearchTheme(themeRaw);
   const borderColor = statusBorderColor(status);
 
   const statusBadge = status ? colorize(`[${status}]`, theme.colors.badge, theme.monochrome) : "";
   const topic = asString(p.topic);
 
-  // Compact View: 3-4 lines with high information density, 0 emojis, bold/italic text highlights
+  // Compact View: 3-4 lines with high information density, 0 emojis, bold/italic text highlights, and Ctrl+O hint
   if (detail === "compact") {
     const rawLines: string[] = [];
     rawLines.push(makeTopBorder(borderColor));
@@ -669,7 +684,7 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
     if (nextCommand) {
       rawLines.push(boxLine(` ${bold("Next:")} ${colorize(nextCommand, BORDER_COLORS.cyan)}`, borderColor));
     }
-
+    rawLines.push(boxLine(` ${dim("⟨Ctrl+O: Expand details⟩")}`, borderColor));
     rawLines.push(makeBottomBorder(borderColor));
     return buildContainer(rawLines);
   }
@@ -736,6 +751,43 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
   }
   rawLines.push(makeDivider(borderColor));
 
+  // Key Findings & Results Preview
+  rawLines.push(boxLine(` ${bold("Key Findings & Results Preview:")}`, borderColor));
+  const findings = Array.isArray(p.findings_preview) ? p.findings_preview : [];
+  if (findings.length > 0) {
+    for (const item of findings.slice(0, 4)) {
+      const badges: string[] = [];
+      if (item.priority) badges.push(item.priority);
+      if (item.severity) badges.push(item.severity);
+      if (item.confidence) badges.push(item.confidence);
+      const badgeStr = badges.length > 0 ? ` [${badges.join(" · ")}]` : "";
+
+      rawLines.push(boxLine(`   ● ${bold(item.name)}${dim(badgeStr)}`, borderColor));
+      if (item.summary) {
+        rawLines.push(boxLine(`     ${italic(truncateToWidth(item.summary, INNER_WIDTH - 6))}`, borderColor));
+      }
+      if (item.key_fields) {
+        for (const [k, v] of Object.entries(item.key_fields).slice(0, 2)) {
+          const fieldLine = `${dim(k)}: ${v}`;
+          rawLines.push(boxLine(`     ${truncateToWidth(fieldLine, INNER_WIDTH - 6)}`, borderColor));
+        }
+      }
+    }
+  } else {
+    rawLines.push(boxLine(`   ${dim("○ No item results recorded yet — run /research-deep to execute waves")}`, borderColor));
+  }
+
+  // Discovered Reference Repositories
+  const refs = Array.isArray(p.discovered_references) ? p.discovered_references : [];
+  if (refs.length > 0) {
+    rawLines.push(makeDivider(borderColor));
+    rawLines.push(boxLine(` ${bold("Discovered Reference Repositories:")}`, borderColor));
+    for (const ref of refs.slice(0, 3)) {
+      rawLines.push(boxLine(`   ★ ${ref.name} ${dim(`(${ref.count} mentions)`)}`, borderColor));
+    }
+  }
+  rawLines.push(makeDivider(borderColor));
+
   // Project artifacts status.
   rawLines.push(boxLine(` ${bold("Project Artifacts Status:")}`, borderColor));
   const art = p.artifacts;
@@ -772,7 +824,6 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
     rawLines.push(boxLine("   - results/*.json: Pending", borderColor));
     rawLines.push(boxLine("   - report.md: Pending", borderColor));
   }
-
   // Explicit error section.
   const errors = Array.isArray(p.errors) ? p.errors.filter((e) => typeof e === "string") : [];
   if (errors.length > 0) {
@@ -796,8 +847,8 @@ export function renderResearchDashboardCard(payload?: ResearchDashboardPayload, 
 }
 
 export function installResearchDashboardRenderer(pi: ExtensionApi): void {
-  pi.registerMessageRenderer("research-dashboard", (message, _options, theme) => {
-    return renderResearchDashboardCard(extractPayload<ResearchDashboardPayload>(message), theme);
+  pi.registerMessageRenderer("research-dashboard", (message, options, theme) => {
+    return renderResearchDashboardCard(extractPayload<ResearchDashboardPayload>(message), theme, options);
   });
 }
 

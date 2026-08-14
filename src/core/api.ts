@@ -24,6 +24,7 @@ export interface CustomMessagePayload {
   content?: string;
   display?: boolean;
   details?: unknown;
+  payload?: unknown;
   attribution?: "user" | "agent";
 }
 

@@ -42,6 +42,7 @@ import { installPolicy } from "./knowledge/policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./features/references.ts";
 import { runRecentCommand } from "./features/recent-command.ts";
 import { installTimelineRenderer, runTimelineCommand } from "./features/timeline.ts";
+import { installTilt, runTiltCommand } from "./features/tilt.ts";
 import {
   archiveResearchProject,
   getResearchDashboardMetrics,
@@ -1556,6 +1557,25 @@ const COMMANDS: CommandSpec[] = [
       await runTimelineCommand(pi, root, args, ctx);
     },
   },
+  {
+    name: "tilt",
+    description: "Inspect user tilt level, swear jar balance, and rage leaderboard — /tilt [reset|clear-all]. User-invoked: local, zero-agent execution.",
+    bodyPath: "commands/tilt.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const options = [
+        { value: "reset", label: "reset", description: "Reset session strikes to 0 (DEFCON 5)" },
+        { value: "clear-all", label: "clear-all", description: "Clear all local project tilt data" },
+      ];
+      const lower = argumentPrefix.toLowerCase().trim();
+      if (!lower) return options;
+      return options.filter((o) => o.value.startsWith(lower));
+    },
+    handler: (pi) => async (args: string, ctx: CommandContext) => {
+      const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+      const root = override && override.trim() ? override.trim() : findRepoRoot();
+      await runTiltCommand(pi, root, args, ctx);
+    },
+  },
 ];
 
 function loadBody(rel: string): string {
@@ -1647,6 +1667,7 @@ export default function (pi: ExtensionApi): void {
   installTriageStatusRenderer(pi);
   installReferenceResultRenderer(pi);
   installTimelineRenderer(pi);
+  installTilt(pi);
   installBootstrap(
     pi,
     COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),
@@ -1654,7 +1675,6 @@ export default function (pi: ExtensionApi): void {
   for (const spec of COMMANDS) {
     const body = loadBody(spec.bodyPath);
     const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));
-
     pi.registerCommand(spec.name, {
       description: spec.description,
       getArgumentCompletions: spec.getArgumentCompletions,

@@ -120,21 +120,41 @@ export function statusBorderColor(status?: string): string {
 }
 const ELLIPSIS = "...";
 
-/** Truncate to `width` display cells, accounting for the ellipsis width. */
+/** Truncate to `width` display cells, accounting for the ellipsis width (ANSI-aware). */
 export function truncateToWidth(text: string, width: number): string {
   if (displayWidth(text) <= width) return text;
   const budget = Math.max(0, width - displayWidth(ELLIPSIS));
   let w = 0;
   let out = "";
-  for (const ch of text) {
-    const cw = charDisplayWidth(ch.codePointAt(0) ?? 0);
+  let inEscape = false;
+  let escapeSeq = "";
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\x1b" && text[i + 1] === "[") {
+      inEscape = true;
+      escapeSeq = ch;
+      continue;
+    }
+    if (inEscape) {
+      escapeSeq += ch;
+      if (/[a-zA-Z]/.test(ch)) {
+        inEscape = false;
+        out += escapeSeq;
+        escapeSeq = "";
+      }
+      continue;
+    }
+
+    const code = ch.codePointAt(0) ?? 0;
+    const cw = charDisplayWidth(code);
     if (w + cw > budget) break;
     out += ch;
     w += cw;
   }
-  return out + ELLIPSIS;
-}
 
+  return out + "\x1b[0m" + ELLIPSIS;
+}
 /** Truncate keeping head and tail (for slugs/paths): `head...tail`. */
 export function truncateMiddle(text: string, width: number): string {
   if (displayWidth(text) <= width) return text;

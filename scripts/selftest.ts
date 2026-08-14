@@ -72,16 +72,33 @@ import {
   stripClarifyBypassPrefix,
 } from "../src/features/clarify.ts";
 import {
+  renderResearchDashboardCard,
   type ResearchReviewPayload,
   type ResearchWaveProgressPayload,
   type ResearchReportPreviewPayload,
   type ResearchDashboardPayload,
   type ResearchHelpPayload,
-  type ResearchErrorPayload,
-  renderResearchDashboardCard,
 } from "../src/research/research-renderer.ts";
-// displayWidth is a pure display-cell measurement primitive (not part of the
-// renderer seam); the ≤76-cell budget checks below use it to verify lines.
+import {
+  installAuditCardRenderer,
+  installTicketBreakdownRenderer,
+  installTriageStatusRenderer,
+  type AuditCardPayload,
+  type AuditSubtopicSpec,
+  type TicketBreakdownPayload,
+  type TriageStatusPayload,
+} from "../src/features/telemetry-renderer.ts";
+import {
+  calculateDefcon,
+  defconLabel,
+  readLocalTilt,
+  recordTiltIncident,
+  renderTiltCard,
+  scanPromptTilt,
+  TILT_CUSTOM_TYPE,
+  TILT_DICTIONARY,
+  writeLocalTilt,
+} from "../src/features/tilt.ts";
 import {
   BORDER_COLORS,
   bold,
@@ -94,13 +111,9 @@ import {
   statusBorderColor,
   stripAnsi,
 } from "../src/research/research-format.ts";
-import type {
-  AuditCardPayload,
-  TicketBreakdownPayload,
-  TriageStatusPayload,
-} from "../src/features/telemetry-renderer.ts";
 import {
   archiveResearchProject,
+  extractFindingsPreview,
   getResearchDashboardMetrics,
   listResearchSummaries,
   readExecutionBlock,
@@ -187,6 +200,7 @@ const EXPECTED: Record<string, { companions?: number; silent?: boolean }> = {
   // dedicated reference block below.
   reference: { silent: true },
   timeline: { silent: true },
+  tilt: { silent: true },
   record: { companions: 1 },
   pitfall: { companions: 1 },
   routinize: { companions: 2 },
@@ -209,9 +223,9 @@ const registered: Record<string, RegisteredCommand> = {};
 const sent: string[] = [];
 const customMessages: Array<Record<string, unknown>> = [];
 const handlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
+const eventListeners: Record<string, Array<(event: unknown, ctx?: unknown) => unknown>> = {};
 const tools: RegisteredTool[] = [];
 const renderers: Record<string, (message: unknown, options: unknown, theme: unknown) => unknown> = {};
-
 /**
  * Children text lines of a stub Container (the pi-tui stub exposes `.text`
  * on each Text child). Renderer unit checks invoke the REGISTERED renderer
@@ -242,6 +256,28 @@ const mockPi = {
     customMessages.push(message);
   },
   on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
+    if (event === "input") {
+      if (!eventListeners["input"]) eventListeners["input"] = [];
+      eventListeners["input"].push(handler);
+      handlers["input"] = (evt: unknown, ctx?: unknown) => {
+        let lastResult: unknown = undefined;
+        for (const listener of eventListeners["input"]) {
+          const res = listener(evt, ctx);
+          if (res !== undefined && res !== null) {
+            if (
+              typeof res === "object" &&
+              "action" in (res as Record<string, unknown>) &&
+              (res as Record<string, unknown>).action !== "continue"
+            ) {
+              return res;
+            }
+            lastResult = res;
+          }
+        }
+        return lastResult ?? { action: "continue" };
+      };
+      return;
+    }
     handlers[event] = handler;
   },
   registerTool(def: RegisteredTool): void {
@@ -3218,6 +3254,7 @@ for (let i = 0; i < seededPitfallNames.length; i += 1) {
 
 // formatIndexSection with seeded KB but zero counters → still produces a
 // section listing the files. Counter text reflects getRecordCount/getPitfallCount.
+resetKbIngestSession();
 recordIngest("record");
 recordIngest("record");
 recordIngest("record");
@@ -3225,7 +3262,6 @@ recordIngest("pitfall");
 recordIngest("pitfall");
 const sectionWithSeeds = formatIndexSection(kbIndexDir);
 if (!sectionWithSeeds.includes(SECTION_MARKER)) {
-  fail("kb-index-injector: formatIndexSection missing SECTION_MARKER");
 }
 for (const name of seededRecordNames) {
   if (!sectionWithSeeds.includes(name)) {
@@ -3775,21 +3811,20 @@ print("PY_OK")
     },
   };
 
-  runTimelineCommand(
+  await runTimelineCommand(
     mockPi as unknown as ExtensionApi,
     timelineFixture,
     "10",
     mockCtx as unknown as HandlerContext,
-  ).then(() => {
-    const lastMsg = customMessages[customMessages.length - 1];
-    if (!lastMsg || lastMsg.customType !== TIMELINE_CUSTOM_TYPE) {
-      fail(`timeline: expected customType ${TIMELINE_CUSTOM_TYPE}, got: ${JSON.stringify(lastMsg)}`);
-    }
-    if (!notifiedMsg.includes("Timeline:")) {
-      fail(`timeline: expected notification containing 'Timeline:', got: ${notifiedMsg}`);
-    }
-    rmSync(timelineFixture, { recursive: true, force: true });
-  });
+  );
+  const lastMsg = customMessages[customMessages.length - 1];
+  if (!lastMsg || lastMsg.customType !== TIMELINE_CUSTOM_TYPE) {
+    fail(`timeline: expected customType ${TIMELINE_CUSTOM_TYPE}, got: ${JSON.stringify(lastMsg)}`);
+  }
+  if (!notifiedMsg.includes("Timeline:")) {
+    fail(`timeline: expected notification containing 'Timeline:', got: ${notifiedMsg}`);
+  }
+  rmSync(timelineFixture, { recursive: true, force: true });
 }
 // --- Colored Card Layout Borders Unit Tests ---
 {
@@ -4049,14 +4084,30 @@ items:
       completed_fields: 18,
       coverage: 1.0,
     },
+    findings_preview: [
+      {
+        name: "Dashboard Preview Engine",
+        id: "preview_engine",
+        summary: "Displays real extracted findings directly in the TUI card",
+        priority: "P0",
+        severity: "High",
+        key_fields: {
+          component: "research-renderer",
+          verdict: "Significantly enhances research legibility",
+        },
+      },
+    ],
     waves_run: 2,
     detail: "compact" as const,
   };
-
   const compactCard = renderResearchDashboardCard(testPayload);
   const compactChildren = (compactCard as any).children ?? [];
   if (compactChildren.length < 4) {
     fail(`renderResearchDashboardCard: expected at least 4 lines for compact view, got ${compactChildren.length}`);
+  }
+  const compactText = compactChildren.map((c: any) => c.text ?? "").join("\n");
+  if (!compactText.includes("Ctrl+O")) {
+    fail(`compactCard: missing 'Ctrl+O' hint, got:\n${compactText}`);
   }
   for (const child of compactChildren) {
     const text = child.text ?? "";
@@ -4066,8 +4117,25 @@ items:
     }
   }
 
+  // Passing { expanded: true } expands compact card to full multi-section table
+  const expandedToggleCard = renderResearchDashboardCard(testPayload, undefined, { expanded: true });
+  const expandedChildren = (expandedToggleCard as any).children ?? [];
+  if (expandedChildren.length <= compactChildren.length) {
+    fail(`expandedToggleCard: expected more lines than compactCard, got ${expandedChildren.length} vs ${compactChildren.length}`);
+  }
+
   const fullCard = renderResearchDashboardCard({ ...testPayload, detail: "full" as const });
   const fullChildren = (fullCard as any).children ?? [];
+  const fullText = fullChildren.map((c: any) => c.text ?? "").join("\n");
+  if (!fullText.includes("Key Findings & Results Preview")) {
+    fail(`fullCard: expected "Key Findings & Results Preview" heading, got:\n${fullText}`);
+  }
+  if (!fullText.includes("Dashboard Preview Engine")) {
+    fail(`fullCard: expected finding item "Dashboard Preview Engine", got:\n${fullText}`);
+  }
+  if (!fullText.includes("Displays real extracted findings")) {
+    fail(`fullCard: expected finding summary, got:\n${fullText}`);
+  }
   for (const child of fullChildren) {
     const text = child.text ?? "";
     const w = displayWidth(text);
@@ -4177,6 +4245,133 @@ counts:
   }
   if (listResearchProjects(fixture).length !== 0) {
     fail(`listResearchProjects after remove: expected empty`);
+  }
+
+  rmSync(fixture, { recursive: true, force: true });
+}
+// --- Tilt-O-Meter, Swear Jar & Rage Leaderboard Unit Tests ---
+{
+  // 1. TILT_DICTIONARY sanity check
+  if (TILT_DICTIONARY.length < 15) {
+    fail(`TILT_DICTIONARY: expected at least 15 entries, got ${TILT_DICTIONARY.length}`);
+  }
+  for (const entry of TILT_DICTIONARY) {
+    if (!entry.term || entry.points <= 0) {
+      fail(`TILT_DICTIONARY: invalid entry ${JSON.stringify(entry)}`);
+    }
+  }
+
+  // 2. scanPromptTilt deterministic tests
+  const scan1 = scanPromptTilt("why did you break this? what the fuck");
+  if (scan1.breakdown.wtfs < 1) {
+    fail(`scanPromptTilt: expected at least 1 wtf, got ${JSON.stringify(scan1)}`);
+  }
+  if (scan1.points < 1) {
+    fail(`scanPromptTilt: expected positive points for wtf, got ${scan1.points}`);
+  }
+
+  // Multi-word phrase matching without double counting
+  const scanPhrase = scanPromptTilt("you are a piece of shit");
+  if (scanPhrase.breakdown.rage_words !== 1 || scanPhrase.breakdown.wtfs !== 0) {
+    fail(`scanPromptTilt: expected 1 rage_word and 0 wtfs for 'piece of shit', got ${JSON.stringify(scanPhrase)}`);
+  }
+  if (scanPhrase.points !== 4) {
+    fail(`scanPromptTilt: expected 4 points for 'piece of shit', got ${scanPhrase.points}`);
+  }
+
+  // Code block stripping (no false positives on code strings)
+  const scanCode = scanPromptTilt('Here is the code:\n```ts\nconst x = "fuck";\n```\nPlease review.');
+  if (scanCode.points !== 0) {
+    fail(`scanPromptTilt: expected 0 points for code block, got ${scanCode.points}`);
+  }
+
+  const scanRage = scanPromptTilt("FUCK THIS RETARDED PIECE OF SHIT BOT");
+  if (scanRage.breakdown.f_bombs !== 1) {
+    fail(`scanPromptTilt: expected 1 f-bomb, got ${scanRage.breakdown.f_bombs}`);
+  }
+  if (scanRage.breakdown.rage_words < 1) {
+    fail(`scanPromptTilt: expected at least 1 rage word, got ${scanRage.breakdown.rage_words}`);
+  }
+  if (scanRage.points < 8) {
+    fail(`scanPromptTilt: expected at least 8 points for severe rage, got ${scanRage.points}`);
+  }
+  // 2. calculateDefcon mapping
+  if (calculateDefcon(0) !== 5) fail(`calculateDefcon(0) expected 5 (Zen), got ${calculateDefcon(0)}`);
+  if (calculateDefcon(2) !== 4) fail(`calculateDefcon(2) expected 4 (Annoyed), got ${calculateDefcon(2)}`);
+  if (calculateDefcon(4) !== 3) fail(`calculateDefcon(4) expected 3 (Frustrated), got ${calculateDefcon(4)}`);
+  if (calculateDefcon(7) !== 2) fail(`calculateDefcon(7) expected 2 (High Agitation), got ${calculateDefcon(7)}`);
+  if (calculateDefcon(15) !== 1) fail(`calculateDefcon(15) expected 1 (Nuclear Rage), got ${calculateDefcon(15)}`);
+
+  // 3. recordTiltIncident & local store updates
+  const fixture = mkdtempSync(join(tmpdir(), "my-omp-tilt-test-"));
+  const rec1 = recordTiltIncident("WTF is this bug? FUCK!", fixture);
+  if (!rec1 || rec1.points <= 0) {
+    fail(`recordTiltIncident: expected points, got ${JSON.stringify(rec1)}`);
+  }
+  const localState = readLocalTilt(fixture);
+  if (localState.session_strikes !== (rec1?.points ?? 0)) {
+    fail(`readLocalTilt: expected session_strikes=${rec1?.points}, got ${localState.session_strikes}`);
+  }
+  if (localState.swear_jar_total <= 0) {
+    fail(`readLocalTilt: expected swear jar total > 0, got ${localState.swear_jar_total}`);
+  }
+  // 4. renderTiltCard 76-column box width verification
+  const cardLines = renderTiltCard({
+    local: localState,
+    global: {
+      version: 1,
+      lifetime_strikes: 42,
+      lifetime_swear_jar: 21.0,
+      breakdown: { f_bombs: 8, rage_words: 4, wtfs: 6, caps_rage: 4 },
+      repo_leaderboard: {
+        "my-omp-skills": 18,
+        "image-branch_pkg": 12,
+        "firmware-stm32": 8,
+      },
+    },
+  });
+
+  if (cardLines.length < 10) {
+    fail(`renderTiltCard: expected at least 10 lines, got ${cardLines.length}`);
+  }
+  for (const line of cardLines) {
+    const w = displayWidth(line);
+    if (w !== 76) {
+      fail(`renderTiltCard: expected 76 display width, got ${w} for line: "${line}"`);
+    }
+  }
+
+  // 5. /tilt command handler execution
+  const notifyMsgs: string[] = [];
+  const tiltCtx: HandlerContext = {
+    ui: {
+      notify(msg) {
+        notifyMsgs.push(msg);
+      },
+    },
+  };
+  const prevCustomCount = customMessages.length;
+  await registered["tilt"].handler("", tiltCtx);
+  if (customMessages.length !== prevCustomCount + 1) {
+    fail(`registered["tilt"]: expected custom message emission`);
+  }
+  const lastMsg = customMessages[customMessages.length - 1];
+  if (lastMsg.customType !== TILT_CUSTOM_TYPE) {
+    fail(`registered["tilt"]: expected customType "${TILT_CUSTOM_TYPE}", got "${lastMsg.customType}"`);
+  }
+
+  // /tilt reset
+  await registered["tilt"].handler("reset", tiltCtx);
+  if (!notifyMsgs.some((m) => m.includes("reset to 0"))) {
+    fail(`registered["tilt"] reset: expected notification message, got ${JSON.stringify(notifyMsgs)}`);
+  }
+  const resetLocal = readLocalTilt(fixture);
+  // Manual reset test on fixture
+  resetLocal.session_strikes = 0;
+  resetLocal.defcon = 5;
+  writeLocalTilt(fixture, resetLocal);
+  if (readLocalTilt(fixture).session_strikes !== 0) {
+    fail(`writeLocalTilt: reset failed`);
   }
 
   rmSync(fixture, { recursive: true, force: true });

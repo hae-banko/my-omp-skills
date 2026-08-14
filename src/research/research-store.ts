@@ -32,6 +32,7 @@ import type {
   ResearchDagSummary,
   ResearchDashboardPayload,
   ResearchFieldSpec,
+  ResearchFindingPreview,
   ResearchItemSpec,
   ResearchPreset,
   ResearchReviewPayload,
@@ -103,6 +104,101 @@ export function extractDiscoveredReferences(projectDir: string): DiscoveredRefer
     count,
   }));
 }
+
+export function extractFindingsPreview(projectDir: string, limit = 5): ResearchFindingPreview[] {
+  if (!projectDir || !existsSync(projectDir)) return [];
+  const resultsDir = join(projectDir, "results");
+  if (!existsSync(resultsDir) || !statSync(resultsDir).isDirectory()) return [];
+
+  const findings: ResearchFindingPreview[] = [];
+  try {
+    const files = readdirSync(resultsDir).filter((f) => f.endsWith(".json")).sort();
+    for (const f of files) {
+      if (findings.length >= limit) break;
+      try {
+        const raw = readFileSync(join(resultsDir, f), "utf8");
+        const json = JSON.parse(raw);
+        if (!json || typeof json !== "object") continue;
+
+        const slug = f.replace(/\.json$/, "");
+        const name = typeof json.name === "string" && json.name.trim() ? json.name.trim() : slug;
+        const id = typeof json.id === "string" ? json.id.trim() : slug;
+
+        // Extract summary / one-liner
+        const summaryCandidates = [
+          json.summary,
+          json.ux_issue,
+          json.finding,
+          json.problem,
+          json.verdict,
+          json.overview,
+          json.description,
+        ];
+        let summary: string | undefined;
+        for (const cand of summaryCandidates) {
+          if (typeof cand === "string" && cand.trim()) {
+            summary = cand.trim();
+            break;
+          }
+        }
+
+        const severity = typeof json.severity === "string" ? json.severity.trim() : undefined;
+        const priority = typeof json.priority === "string" ? json.priority.trim() : undefined;
+        const confidence = typeof json.confidence === "string" ? json.confidence.trim() : undefined;
+
+        // Extract 2-3 key non-metadata fields
+        const keyFields: Record<string, string> = {};
+        const skipKeys = new Set([
+          "name",
+          "id",
+          "summary",
+          "ux_issue",
+          "finding",
+          "problem",
+          "verdict",
+          "overview",
+          "description",
+          "severity",
+          "priority",
+          "confidence",
+          "uncertain",
+          "evidence",
+          "sources",
+          "_sources",
+          "_attempts",
+        ]);
+
+        for (const [k, v] of Object.entries(json)) {
+          if (k.startsWith("_") || skipKeys.has(k)) continue;
+          if (typeof v === "string" && v.trim()) {
+            keyFields[k] = v.trim();
+            if (Object.keys(keyFields).length >= 3) break;
+          } else if (typeof v === "number" || typeof v === "boolean") {
+            keyFields[k] = String(v);
+            if (Object.keys(keyFields).length >= 3) break;
+          }
+        }
+
+        findings.push({
+          name,
+          id,
+          summary,
+          key_fields: Object.keys(keyFields).length > 0 ? keyFields : undefined,
+          severity,
+          priority,
+          confidence,
+        });
+      } catch {
+        // ignore individual parse errors
+      }
+    }
+  } catch {
+    // ignore readdir errors
+  }
+
+  return findings;
+}
+
 export interface ResearchProjectRead {
   slug: string;
   projectDir: string;
@@ -634,8 +730,8 @@ export function getResearchDashboardMetrics(projectDir: string, slug: string): R
     pending_items: pendingItems,
     unresolved_fields_count: unresolvedCount,
     discovered_references: extractDiscoveredReferences(projectDir),
+    findings_preview: extractFindingsPreview(projectDir),
     dag: dagSummary,
-    errors,
     project_path: projectDir || undefined,
   };
 }

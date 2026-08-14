@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.62.0 — Research Findings Preview & Zero-Token Tilt-O-Meter / Swear Jar
+
+- **Research Findings & Results Preview** — added `findings_preview` (`extractFindingsPreview` in `src/research/research-store.ts`) and card rendering (`src/research/research-renderer.ts`) to the Research Dashboard, displaying actual extracted findings, key fields, and severity/priority badges from `results/*.json`.
+- **User Tilt-O-Meter & Swear Jar (`/tilt`)** — added zero-token local telemetry command (`src/features/tilt.ts`, `commands/tilt.md`) tracking user frustration, profanity intensity, Swear Jar balances ($0.50/pt), and DEFCON safety levels (1–5).
+- **Deterministic Profanity Dictionary (`TILT_DICTIONARY`)** — replaced ad-hoc regex with an explicit, immutable dictionary of weighted terms across F-bombs, rage words, and WTFs, complete with fenced code block stripping to eliminate false positives in code snippets and diffs.
+- **ANSI Bar Charts & Rage Leaderboard** — added visual bar charts for profanity category intensity and a global machine-wide repository rage leaderboard (`~/.omp/tilt.json`).
+- **Defensive Harness Policy** — automatically locks autonomous release/push operations and engages maximum caution mode under DEFCON 1–2.
 ## v0.61.0 — Unconditional Dashboard Card Rendering & Card Visibility Fix
 
 - **Unconditional Dashboard Rendering** — fixed `installResearchDashboardRenderer` (`src/research/research-renderer.ts`) to unconditionally render the bordered dashboard card. Removed premature `options.expanded === false` check that caused `oh-my-pi`'s default unexpanded view to collapse dashboard cards into a 1-line text chip.

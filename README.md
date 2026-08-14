@@ -1,14 +1,13 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.61.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.62.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
-  <img src="https://img.shields.io/badge/skills-14-teal" alt="14 model-invoked skills" />
+  <img src="https://img.shields.io/badge/commands-29-orange" alt="29 slash commands" />
 </p>
 
-An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **28 user-invoked slash commands**, **14 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **29 user-invoked slash commands**, **14 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
@@ -17,13 +16,13 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.61.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.62.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.61.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.62.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
@@ -74,7 +73,7 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 
 ---
 
-## Slash Commands (28 User-Invoked Commands)
+## Slash Commands (29 User-Invoked Commands)
 
 | Command | Category | Description |
 | --- | --- | --- |
@@ -105,6 +104,7 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 | `/omp-handoff` | Knowledge & Upkeep | Compacts current conversation into a handoff document for another agent session. |
 | `/plugin-issue` | Knowledge & Upkeep | Submits a bug report or feature request on this repository. |
 | `/teach` | Knowledge & Upkeep | Teaches a skill or concept over multiple sessions using current directory as a workspace. |
+| `/tilt` | Quality & Controls | Inspects user tilt level, swear jar balance, and global rage leaderboard in a zero-token TUI card. |
 | `/writing-great-skills` | Knowledge & Upkeep | Reference guide for writing and editing agent skills. |
 
 ---
