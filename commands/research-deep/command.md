@@ -1,4 +1,4 @@
-Deep research phase: read the research outline, launch independent background subagents per item in repeated OODA waves until convergence, collect structured JSON results. Phase 2 of the deep-research workflow (after `/research`).
+Execute parallel web research waves: investigate outline items with background search agents in topological OODA waves until convergence, outputting verified JSON evidence per item. Followed by `/research-report`.
 
 > Adapted from [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) (MIT).
 

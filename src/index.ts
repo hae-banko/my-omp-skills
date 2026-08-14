@@ -84,22 +84,22 @@ const ARGUMENTS_RE = /\$ARGUMENTS/g;
 
 /** Single source of truth for /research subcommands (completions + help card). */
 const RESEARCH_SUBCOMMANDS: Array<{ value: string; label: string; description: string }> = [
-  { value: "1", label: "1", description: "Phase 1: generate an outline for a new topic" },
-  { value: "2", label: "2", description: "Phase 2: run deep research (alias for /research-deep)" },
-  { value: "3", label: "3", description: "Phase 3: generate the final report (alias for /research-report)" },
-  { value: "dashboard", label: "dashboard", description: "Open the research dashboard" },
-  { value: "review", label: "review", description: "Open/emit Research Review Window for a project" },
-  { value: "add-items", label: "add-items", description: "Add research items to an existing outline" },
-  { value: "add-fields", label: "add-fields", description: "Add field definitions to an existing outline" },
-  { value: "status", label: "status", description: "Show status of a research project (floating toast / --bar)" },
-  { value: "run", label: "run", description: "Run deep research phase for a project" },
-  { value: "list", label: "list", description: "List all active research projects (--archived for archive)" },
-  { value: "archive", label: "archive", description: "Move project to .archive/ (hides from active lists)" },
-  { value: "unarchive", label: "unarchive", description: "Restore an archived project back to active research" },
-  { value: "remove", label: "remove", description: "Permanently delete a research project from disk" },
-  { value: "help", label: "help", description: "Open the research help card (commands, shortcuts, next step)" },
-  { value: "envcheck", label: "envcheck", description: "Show terminal environment diagnostics for research cards" },
-  { value: "off", label: "off", description: "Close/disable Research Review Window" },
+  { value: "1", label: "1", description: "Plan research: scaffold outline topics, comparison dimensions & dependencies" },
+  { value: "2", label: "2", description: "Execute research: run parallel background search waves (alias for /research-deep)" },
+  { value: "3", label: "3", description: "Compile report: synthesize findings into comparative markdown (alias for /research-report)" },
+  { value: "dashboard", label: "dashboard", description: "Display lifecycle dashboard card (--compact for 4-line summary, --full for tables)" },
+  { value: "review", label: "review", description: "Inspect and edit research outline & field definitions" },
+  { value: "add-items", label: "add-items", description: "Add research items/topics to an existing outline.yaml" },
+  { value: "add-fields", label: "add-fields", description: "Add comparison field dimensions to an existing fields.yaml" },
+  { value: "status", label: "status", description: "Quick status check via floating toast popup (use --bar for footer, --card for chat)" },
+  { value: "run", label: "run", description: "Execute parallel web research waves (alias for /research 2)" },
+  { value: "list", label: "list", description: "List all active research projects (use --archived for archive)" },
+  { value: "archive", label: "archive", description: "Move project to .archive/ (hides from active lists while preserving data)" },
+  { value: "unarchive", label: "unarchive", description: "Restore an archived research project back to active research" },
+  { value: "remove", label: "remove", description: "Permanently delete a research project directory from disk" },
+  { value: "help", label: "help", description: "Display command reference, shortcuts, and recommended next steps" },
+  { value: "envcheck", label: "envcheck", description: "Run terminal environment diagnostics for research cards" },
+  { value: "off", label: "off", description: "Close the Research Review window" },
 ];
 
 const repoRootCache = new Map<string, string>();
@@ -341,7 +341,7 @@ const RESEARCH_ASSETS: string[] = [
 const COMMANDS: CommandSpec[] = [
   {
     name: "research",
-    description: "Phase 1 of deep research: generate a research outline (items + field framework) for a topic, human-in-the-loop. Follow with /research-deep and /research-report.",
+    description: "Create a structured research plan (scaffold outline topics, comparison dimensions & dependencies). Follow with /research-deep and /research-report.",
     bodyPath: "commands/research/command.md",
     companions: RESEARCH_ASSETS,
     handler: (pi, { body, companionPaths }) => async (args, ctx) => {
@@ -715,20 +715,20 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "research-add-items",
-    description: "Add research items to an existing outline.yaml.",
+    description: "Add research items/topics to an existing outline.yaml.",
     bodyPath: "commands/research-add-items/command.md",
     companions: ["commands/research/WEB-SEARCH-AGENT.md"],
   },
   {
     name: "research-add-fields",
-    description: "Add field definitions to an existing fields.yaml.",
+    description: "Add comparison field dimensions to an existing fields.yaml.",
     bodyPath: "commands/research-add-fields/command.md",
     companions: ["commands/research/WEB-SEARCH-AGENT.md"],
   },
   {
     name: "research-deep",
     description:
-      "Phase 2 of deep research ([preset] [slug]): research each outline item with parallel background agents, outputting validated JSON per item.",
+      "Execute parallel web research waves: investigate outline items with background agents, outputting verified JSON per item.",
     bodyPath: "commands/research-deep/command.md",
     companions: RESEARCH_ASSETS,
     getArgumentCompletions: (argumentPrefix: string) => {
@@ -774,12 +774,11 @@ const COMMANDS: CommandSpec[] = [
   {
     name: "research-report",
     description:
-      "Phase 3 of deep research ([slug]): convert the deep-research JSON results into a markdown report with table of contents.",
+      "Compile deep research into a markdown report with comparative tradeoff tables, execution provenance & source links.",
     bodyPath: "commands/research-report/command.md",
     companions: ["commands/research-report/generate_report.py"],
     getArgumentCompletions: (argumentPrefix: string) => {
       if (argumentPrefix.includes(" ")) return null;
-
       const slugs = listResearchProjects(findRepoRoot());
 
       const lower = argumentPrefix.toLowerCase();

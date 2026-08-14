@@ -1,12 +1,12 @@
-Preliminary research on a topic, producing a research **outline** — items (research objects) and a field framework (what to collect about each). This is Phase 1 of the deep-research workflow: outline → `/research-deep` → `/research-report`. Human-in-the-loop at every step.
+Structured research planning: scaffold outline topics (`outline.yaml`), comparison dimensions (`fields.yaml`), and dependency edges before executing deep research. Follow with `/research-deep` and `/research-report`. Human-in-the-loop at every step.
 
 > Adapted from [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) (MIT), inspired by the RhinoInsight paper (arXiv:2511.18743).
 
 ## Trigger & Subcommands
 
-- `/research 1 [topic]` — Phase 1: Outline Generation. Produce the research outline (items + field framework) for `{topic}`. The handler emits a draft Research Review Window immediately; the workflow body replaces it with the real outline payload.
-- `/research 2 [slug]` — Phase 2: Deep Research OODA Waves. Run deep research phase for a project (equivalent to `/research-deep [slug]`).
-- `/research 3 [slug]` — Phase 3: Summary Report Generation. Convert deep-research JSON results into a markdown report (equivalent to `/research-report [slug]`).
+- `/research 1 [topic]` — Plan research: generate outline topics, comparison dimensions, and DAG dependencies for `{topic}`. Emits a draft Research Review Window immediately and populates it with the structured outline.
+- `/research 2 [slug]` — Execute research: launch parallel background search waves (equivalent to `/research-deep [slug]`).
+- `/research 3 [slug]` — Compile report: synthesize findings into comparative markdown tables (equivalent to `/research-report [slug]`).
 - `/research status [slug] [--bar | --card]` — Quick status check. Defaults to a zero-scrollback floating toast notification (`ctx.ui.notify`). `--bar` pins live progress to the footer status bar (`ctx.ui.setStatus`); `/research status off` clears it. `--card` emits the compact card into chat.
 - `/research dashboard [slug] [--compact | --full]` — Research Lifecycle Dashboard. Emits the lifecycle dashboard card into chat. Defaults to a clean 4-line compact summary card (`detail: "compact"`); `--full` renders the full detailed breakdown. Supports native TUI folding (`options.expanded === false`).
 - `/research review [slug] [--full | --compact]` — Open/emit the Research Review Window (`pi.sendMessage({ customType: "research-review", display: true, details: payload })`) for an existing research project slug (or the most recent if omitted). `--full` sets `detail: "full"` (lists more items/fields, shows detailed field levels); `--compact` (default) caps previews.

@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.59.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.60.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-28-orange" alt="28 slash commands" />
@@ -17,13 +17,13 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.59.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.60.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.59.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.60.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
@@ -52,9 +52,9 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 - **/triage**: Filters and processes incoming issues/PRs into agent-ready execution briefs.
 
 ### 2. Multi-Agent Deep Research
-- **/research**: Phase 1 — Generates a research outline (with optional `depends_on` DAG dependency edges), field framework, and review dashboard.
-- **/research-deep**: Phase 2 — Spawns parallel background subagents operating in topological OODA waves with upstream context injection (`<upstream-context>`) to gather evidence into validated JSON outputs.
-- **/research-report**: Phase 3 — Compiles JSON results into a summary-first markdown report (`report.md` and `summary.md`) with a table of contents, execution provenance, and cited source links.
+- **/research**: Scaffolds a structured research plan (`outline.yaml`, comparison `fields.yaml`, and DAG dependencies) with live review dashboard.
+- **/research-deep**: Executes parallel background search waves in topological OODA loops with `<upstream-context>` prompt injection to collect verified JSON evidence.
+- **/research-report**: Compiles verified JSON results into a comparative markdown report (`report.md`) with tradeoff matrices, execution provenance, and cited source links.
 - **/research-add-items** & **/research-add-fields**: Extends existing research outlines and field frameworks.
 
 ### 3. Knowledge Base & History
@@ -88,11 +88,11 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 | `/implement` | Shipping | Builds work described by tickets/specs, driving TDD and closing with code review. |
 | `/triage` | Shipping | Processes issues and PRs through specialized triage roles into execution briefs. |
 | `/audit` | Audit | Conducts an independent audit of a codebase area under `.omp/audits/<slug>/`. |
-| `/research` | Research | Phase 1 of deep research: generates research outline, field framework, and dashboard. |
+| `/research` | Research | Creates a structured research plan (scaffold outline topics, comparison dimensions & dependencies). |
 | `/research-add-items` | Research | Appends research items to an existing `outline.yaml`. |
 | `/research-add-fields` | Research | Appends field definitions to an existing `fields.yaml`. |
-| `/research-deep` | Research | Phase 2 of deep research: gathers evidence via parallel background agents in OODA waves. |
-| `/research-report` | Research | Phase 3 of deep research: compiles JSON results into a summary-first markdown report. |
+| `/research-deep` | Research | Executes parallel web research waves to gather facts, citations & codebase evidence into JSON. |
+| `/research-report` | Research | Compiles research into a comparative report with tradeoff tables, provenance & source links. |
 | `/timeline` | Knowledge & Upkeep | Generates a zero-turn unified project digest (git log, KB, research, tickets) in a TUI card. |
 | `/record` | Knowledge & Upkeep | Saves a durable lesson, audit, or note to `.omp/knowledge/`. `--recent` resolves instantly in TS. |
 | `/pitfall` | Knowledge & Upkeep | Captures a runtime mistake into `.omp/knowledge/`. `--recent` resolves instantly in TS. |

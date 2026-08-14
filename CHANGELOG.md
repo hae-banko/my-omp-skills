@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.60.0 — Action-Oriented Research Command Semantics & Descriptions Overhaul
+
+- **Action-Oriented Command Descriptions** — replaced abstract "Phase 1 / 2 / 3" phrasing across `/research`, `/research-deep`, and `/research-report` with direct, functional descriptions in `src/index.ts`, `README.md`, and command markdown bodies:
+  - `/research`: *Create a structured research plan (scaffold outline topics, comparison dimensions & dependencies).*
+  - `/research-deep`: *Execute parallel web research waves: investigate outline items with background agents, outputting verified JSON per item.*
+  - `/research-report`: *Compile deep research into a markdown report with comparative tradeoff tables, execution provenance & source links.*
+- **Subcommand Semantic Alignment (`RESEARCH_SUBCOMMANDS`)** — updated all 16 `/research` subcommands in `src/index.ts` with crisp, purpose-driven help text and tab completions.
+- **Documentation Alignment** — updated `commands/research/command.md`, `commands/research-deep/command.md`, `commands/research-report/command.md`, and `README.md` to reflect unified action-oriented semantics.
+
 ## v0.59.0 — Research Project Lifecycle: Archiving, Unarchiving, Listing & Deletion
 
 - **Research Archiving (`/research archive [slug]`)** — added project archiving that updates frontmatter `status: ARCHIVED` and moves project directories into `.omp/knowledge/research/.archive/<slug>/`, instantly hiding them from active status checks, dashboards, and autocompletions without losing research data.

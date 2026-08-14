@@ -1,4 +1,4 @@
-Summarize deep-research results into a markdown report: table of contents plus detailed content by field category, skipping uncertain values. Phase 3 of the deep-research workflow (after `/research-deep`).
+Compile deep research into a comparative markdown report: table of contents, head-to-head comparison tables, execution provenance, and cited source links.
 
 > Adapted from [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) (MIT).
 
