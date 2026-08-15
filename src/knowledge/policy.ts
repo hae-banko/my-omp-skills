@@ -107,7 +107,8 @@ function isAuditSubpath(cwd: string, raw: unknown): boolean {
   return !!sub && sub[0] === "audits";
 }
 
-function getPathList(input: Record<string, unknown>): string[] {
+function getPathList(input?: Record<string, unknown>): string[] {
+  if (!input || typeof input !== "object") return [];
   const res: string[] = [];
   if (typeof input.path === "string" && input.path.length > 0) res.push(input.path);
   if (Array.isArray(input.paths)) {
@@ -115,7 +116,7 @@ function getPathList(input: Record<string, unknown>): string[] {
       if (typeof p === "string" && p.length > 0) res.push(p);
     }
   }
-  if (typeof input.input === "string") {
+  if (typeof input.input === "string" && input.input.length > 0) {
     const matches = input.input.matchAll(/^\[([^#\]\r\n]+)(?:#[^\]\r\n]+)?\]/gm);
     for (const match of matches) {
       const p = match[1].trim();

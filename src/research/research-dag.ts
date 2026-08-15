@@ -528,14 +528,17 @@ export function synthesizeEnvelopesForDag(dag: ResearchDag, resultsDir: string):
   const envelopes: AgentEnvelope[] = [];
 
   for (const node of dag.nodes.values()) {
-    if (node.resultFile && existsSync(node.resultFile)) {
+    const resultFile = node.resultFile || findItemResultFile(resultsDir, node.id, node.name);
+    if (resultFile && existsSync(resultFile)) {
       try {
-        const fileContent = readFileSync(node.resultFile, "utf8");
+        const fileContent = readFileSync(resultFile, "utf8");
         const env = synthesizeCompletedEnvelope({
-          filePath: node.resultFile,
+          filePath: resultFile,
           fileContent,
           senderName: node.id,
         });
+        node.resultFile = resultFile;
+        node.status = "completed";
         node.lastEnvelope = env;
         envelopes.push(env);
       } catch {

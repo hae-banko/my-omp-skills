@@ -1,14 +1,11 @@
 // Locators — every filesystem scan that feeds argument completions (and the
 // research project resolver) lives here, behind small named functions.
-//
-// index.ts keeps only the omp registration seam: each completion becomes a
-// thin consumer of one locator, so slug/spec/audit/reference/routine listing
-// has a single implementation instead of a bespoke readdirSync+filter+sort per
-// command. All scans take `root` (the repo root) and return repo-relative
-// names/paths.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { findRepoRoot, getWorkspaceContext, type KnowledgePaths, type RoutinesPaths, type WorkspaceContext } from "./workspace.ts";
+
+export { findRepoRoot, getWorkspaceContext, type WorkspaceContext };
 
 /** Dated research project dirs (`2026-08-07_<topic_slug>`). */
 const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
@@ -21,11 +18,11 @@ export interface ResearchProjectLocator {
 
 /**
  * Research project directories under `<root>/.omp/knowledge/research/`:
- * dated dirs only, dot-dirs excluded, newest first (ISO dates sort
- * lexicographically, so sort().reverse() == newest first).
+ * dated dirs only, dot-dirs excluded, newest first.
  */
-export function listResearchProjects(root: string): string[] {
-  const researchDir = join(root, ".omp", "knowledge", "research");
+export function listResearchProjects(root?: string | null): string[] {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const researchDir = ws.knowledge.research;
   try {
     return readdirSync(researchDir, { withFileTypes: true })
       .filter(
@@ -38,11 +35,13 @@ export function listResearchProjects(root: string): string[] {
     return [];
   }
 }
+
 /**
  * Archived research project directories under `<root>/.omp/knowledge/research/.archive/`.
  */
-export function listArchivedResearchProjects(root: string): string[] {
-  const archiveDir = join(root, ".omp", "knowledge", "research", ".archive");
+export function listArchivedResearchProjects(root?: string | null): string[] {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const archiveDir = ws.knowledge.archive;
   try {
     return readdirSync(archiveDir, { withFileTypes: true })
       .filter(
@@ -59,15 +58,16 @@ export function listArchivedResearchProjects(root: string): string[] {
 /**
  * Resolve an archived research project slug argument against the .archive/ dir.
  */
-export function resolveArchivedResearchProjectDir(root: string, slugArg: string): ResearchProjectLocator {
-  const archiveDir = join(root, ".omp", "knowledge", "research", ".archive");
+export function resolveArchivedResearchProjectDir(root: string | null | undefined, slugArg: string): ResearchProjectLocator {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const archiveDir = ws.knowledge.archive;
   let slug = slugArg.trim();
   let projectDir = "";
   const explicitSlug = slug.length > 0;
   if (slug && existsSync(join(archiveDir, slug))) {
     projectDir = join(archiveDir, slug);
   } else {
-    const entries = listArchivedResearchProjects(root);
+    const entries = listArchivedResearchProjects(ws.root);
     if (slug) {
       const match = entries.find((e) => e === slug || e.includes(slug) || e.endsWith(slug));
       if (match) {
@@ -92,27 +92,24 @@ export function safeResearchTarget(root: string, slug: string): string | null {
   if (!clean || clean.includes("..") || clean.startsWith("/") || clean.startsWith("\\") || clean.includes("/") || clean.includes("\\")) {
     return null;
   }
-  const researchDir = join(root, ".omp", "knowledge", "research");
-  const target = join(researchDir, clean);
+  const ws = getWorkspaceContext(root);
+  const target = join(ws.knowledge.research, clean);
   return existsSync(target) && statSync(target).isDirectory() ? target : null;
 }
 
 /**
- * Resolve a research project slug argument against the research dir.
- * Semantics (kept from the original index.ts implementation):
- * - explicit slug: exact directory match wins; otherwise fuzzy match
- *   (contains/ends-with) against the dated listing; no match → notFound
- * - empty argument: most recent dated project directory
+ * Resolve a research project directory by slug.
  */
-export function resolveResearchProjectDir(root: string, slugArg: string): ResearchProjectLocator {
-  const researchDir = join(root, ".omp", "knowledge", "research");
+export function resolveResearchProjectDir(root: string | null | undefined, slugArg: string): ResearchProjectLocator {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const researchDir = ws.knowledge.research;
   let slug = slugArg.trim();
   let projectDir = "";
   const explicitSlug = slug.length > 0;
   if (slug && existsSync(join(researchDir, slug))) {
     projectDir = join(researchDir, slug);
   } else {
-    const entries = listResearchProjects(root);
+    const entries = listResearchProjects(ws.root);
     if (slug) {
       const match = entries.find((e) => e === slug || e.includes(slug) || e.endsWith(slug));
       if (match) {
@@ -128,12 +125,12 @@ export function resolveResearchProjectDir(root: string, slugArg: string): Resear
   const notFound = explicitSlug && projectDir === "";
   return { slug: (slug || slugArg || "unknown").trim(), projectDir, notFound };
 }
+
 /**
- * Spec markdown files: recursive `.md` under `.scratch/specs` and
- * `docs/specs`, plus each feature dir's `<dir>/spec.md` (the `.scratch`
- * `specs` dir itself and dot-dirs are excluded). Repo-relative, sorted.
+ * Spec markdown files under .scratch/specs and docs/specs.
  */
-export function listSpecFiles(root: string): string[] {
+export function listSpecFiles(root?: string | null): string[] {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
   const files: string[] = [];
   const collect = (currentDir: string) => {
     try {
@@ -143,7 +140,7 @@ export function listSpecFiles(root: string): string[] {
           if (entry.name.startsWith(".")) continue;
           collect(fullPath);
         } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          files.push(relative(root, fullPath));
+          files.push(relative(safeRoot, fullPath));
         }
       }
     } catch {
@@ -151,20 +148,20 @@ export function listSpecFiles(root: string): string[] {
     }
   };
   for (const dir of [
-    join(root, ".omp", "scratch", "specs"),
-    join(root, ".scratch", "specs"),
-    join(root, "docs", "specs"),
+    join(safeRoot, ".omp", "scratch", "specs"),
+    join(safeRoot, ".scratch", "specs"),
+    join(safeRoot, "docs", "specs"),
   ]) {
     collect(dir);
   }
-  for (const scratchDir of [join(root, ".omp", "scratch"), join(root, ".scratch")]) {
+  for (const scratchDir of [join(safeRoot, ".omp", "scratch"), join(safeRoot, ".scratch")]) {
     if (existsSync(scratchDir)) {
       try {
         for (const entry of readdirSync(scratchDir, { withFileTypes: true })) {
           if (entry.isDirectory() && entry.name !== "specs" && !entry.name.startsWith(".")) {
             const specFile = join(scratchDir, entry.name, "spec.md");
             if (existsSync(specFile) && statSync(specFile).isFile()) {
-              files.push(relative(root, specFile));
+              files.push(relative(safeRoot, specFile));
             }
           }
         }
@@ -177,10 +174,10 @@ export function listSpecFiles(root: string): string[] {
 }
 
 /**
- * Recursive `.md` under `.scratch` plus any extra roots (e.g. `docs/specs`
- * for /implement), dot-dirs skipped, deduped, repo-relative, sorted.
+ * Recursive `.md` under `.scratch` plus any extra roots.
  */
-export function listScratchMarkdown(root: string, extraRoots: string[] = []): string[] {
+export function listScratchMarkdown(root?: string | null, extraRoots: string[] = []): string[] {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
   const files: string[] = [];
   const collect = (currentDir: string) => {
     try {
@@ -190,26 +187,25 @@ export function listScratchMarkdown(root: string, extraRoots: string[] = []): st
           if (entry.name.startsWith(".")) continue;
           collect(fullPath);
         } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          files.push(relative(root, fullPath));
+          files.push(relative(safeRoot, fullPath));
         }
       }
     } catch {
       // ignore missing dirs
     }
   };
-  collect(join(root, ".omp", "scratch"));
-  collect(join(root, ".scratch"));
+  collect(join(safeRoot, ".omp", "scratch"));
+  collect(join(safeRoot, ".scratch"));
   for (const extra of extraRoots) collect(extra);
   return Array.from(new Set(files)).sort();
 }
 
 /**
- * Audit report slugs under `<root>/.omp/audits/`: directories carrying
- * `overview.md`/`report.md`, plus bare `.md` report files (ext stripped).
- * readdir order preserved (matches the original completion behavior).
+ * Audit report slugs under `<root>/.omp/audits/`.
  */
-export function listAuditSlugs(root: string): string[] {
-  const auditsDir = join(root, ".omp", "audits");
+export function listAuditSlugs(root?: string | null): string[] {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const auditsDir = ws.audits;
   const slugs: string[] = [];
   if (!existsSync(auditsDir)) return slugs;
   try {
@@ -232,14 +228,15 @@ export function listAuditSlugs(root: string): string[] {
   return slugs;
 }
 
-/** Installed reference repos under `<root>/.omp/references/` (dirs with `.git`), sorted. */
-export function listReferences(root: string): string[] {
-  const dir = join(root, ".omp", "references");
+/**
+ * Installed reference repos under `<root>/.omp/references/`.
+ */
+export function listReferences(root?: string | null): string[] {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const dir = ws.references;
   try {
     return readdirSync(dir, { withFileTypes: true })
-      .filter(
-        (ent) => ent.isDirectory() && !ent.name.startsWith(".") && existsSync(join(dir, ent.name, ".git")),
-      )
+      .filter((ent) => ent.isDirectory() && existsSync(join(dir, ent.name, ".git")))
       .map((ent) => ent.name)
       .sort();
   } catch {
@@ -247,81 +244,106 @@ export function listReferences(root: string): string[] {
   }
 }
 
-/** Routine ids from `scripts/routines/manifest.json` plus `*.sh` files, sorted. */
-export function listRoutines(root: string): string[] {
-  const routinesDir = join(root, "scripts", "routines");
+/**
+ * Routine ids from `scripts/routines/manifest.json` plus `*.sh` files.
+ */
+export function listRoutines(root?: string | null): string[] {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const routinesDir = ws.routines.root;
   const ids = new Set<string>();
-  const manifestPath = join(routinesDir, "manifest.json");
+  const manifestPath = ws.routines.manifest;
   if (existsSync(manifestPath)) {
     try {
-      const parsed: { routines?: Array<{ id?: string; file?: string }> } = JSON.parse(
-        readFileSync(manifestPath, "utf8"),
-      );
-      if (parsed && Array.isArray(parsed.routines)) {
-        for (const r of parsed.routines) {
-          if (r && typeof r.id === "string") ids.add(r.id);
-          else if (r && typeof r.file === "string") ids.add(r.file);
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      if (Array.isArray(manifest?.routines)) {
+        for (const r of manifest.routines) {
+          if (typeof r?.id === "string" && r.id.length > 0) {
+            ids.add(r.id);
+          }
+          if (typeof r?.file === "string" && r.file.length > 0) {
+            ids.add(r.file);
+          }
         }
       }
     } catch {
-      // ignore parse errors
+      // ignore JSON parse error
     }
   }
-  try {
-    for (const entry of readdirSync(routinesDir, { withFileTypes: true })) {
-      if (entry.isFile() && entry.name.endsWith(".sh")) {
-        ids.add(entry.name.slice(0, -3));
-        ids.add(entry.name);
+  if (existsSync(routinesDir)) {
+    try {
+      for (const name of readdirSync(routinesDir)) {
+        if (name.endsWith(".sh") || name.endsWith(".ts") || name.endsWith(".js")) {
+          ids.add(name.replace(/\.(sh|ts|js)$/, ""));
+          ids.add(name);
+        }
       }
+    } catch {
+      // ignore readdir error
     }
-  } catch {
-    // ignore missing routines directory
   }
   return Array.from(ids).sort();
 }
 
 export interface FeatureDirSpec {
   name: string;
-  /** relBase of the first occurrence (feature dirs dedupe by name across roots). */
   relBase: string;
-}
-
-export interface FeatureSpecSurface {
-  dirs: FeatureDirSpec[];
-  files: string[];
+  dir: string;
 }
 
 /**
- * Feature/spec surface for grill-style completions: directory names under
- * `.scratch` + `docs` (deduped by name, dot-dirs skipped) and `.md` file
- * paths (repo-relative). Feeds /grill-me and /grill-with-docs.
+ * Feature/spec surface for grill-style completions.
  */
-export function listFeatureSpecs(root: string): FeatureSpecSurface {
-  const dirs = new Map<string, string>();
-  const files = new Set<string>();
-  const scan = (baseDir: string, relBase: string) => {
-    if (!existsSync(baseDir)) return;
+export function listFeatureSpecs(root?: string | null): { dirs: FeatureDirSpec[]; files: string[] } {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
+  const dirs: FeatureDirSpec[] = [];
+  const files: Set<string> = new Set();
+  const docsDir = join(safeRoot, "docs");
+
+  const scanDocs = (currentDir: string) => {
     try {
-      for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-          if (entry.name.startsWith(".")) continue;
-          if (!dirs.has(entry.name)) dirs.set(entry.name, relBase);
-          scan(join(baseDir, entry.name), join(relBase, entry.name));
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          files.add(join(relBase, entry.name));
+      for (const ent of readdirSync(currentDir, { withFileTypes: true })) {
+        if (ent.name.startsWith(".")) continue;
+        const full = join(currentDir, ent.name);
+        if (ent.isDirectory()) {
+          dirs.push({ name: ent.name, relBase: "docs", dir: full });
+          scanDocs(full);
+        } else if (ent.isFile() && ent.name.endsWith(".md")) {
+          files.add(relative(safeRoot, full));
+        }
+      }
+    } catch {
+      // ignore missing dirs
+    }
+  };
+
+  if (existsSync(docsDir)) {
+    scanDocs(docsDir);
+  }
+
+  for (const scratchDir of [join(safeRoot, ".omp", "scratch"), join(safeRoot, ".scratch")]) {
+    if (!existsSync(scratchDir)) continue;
+    try {
+      for (const ent of readdirSync(scratchDir, { withFileTypes: true })) {
+        if (!ent.isDirectory() || ent.name.startsWith(".")) continue;
+        const full = join(scratchDir, ent.name);
+        dirs.push({ name: ent.name, relBase: relative(safeRoot, scratchDir), dir: full });
+        try {
+          for (const sub of readdirSync(full, { withFileTypes: true })) {
+            if (sub.isFile() && sub.name.endsWith(".md")) {
+              files.add(relative(safeRoot, join(full, sub.name)));
+            }
+          }
+        } catch {
+          // ignore
         }
       }
     } catch {
       // ignore
     }
-  };
-  scan(join(root, ".omp", "scratch"), join(".omp", "scratch"));
-  scan(join(root, ".scratch"), ".scratch");
-  scan(join(root, "docs"), "docs");
+  }
+
   return {
-    dirs: Array.from(dirs, ([name, relBase]) => ({ name, relBase })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    ),
+    dirs,
     files: Array.from(files).sort((a, b) => a.localeCompare(b)),
   };
 }
@@ -344,10 +366,11 @@ interface ParsedTicket {
   isResolved: boolean;
 }
 
-export function findFrontierTicket(root: string): FrontierTicket | null {
+export function findFrontierTicket(root?: string | null): FrontierTicket | null {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
   const scratchBases = [
-    { abs: join(root, ".omp", "scratch"), rel: join(".omp", "scratch") },
-    { abs: join(root, ".scratch"), rel: ".scratch" },
+    { abs: join(safeRoot, ".omp", "scratch"), rel: join(".omp", "scratch") },
+    { abs: join(safeRoot, ".scratch"), rel: ".scratch" },
   ];
 
   const allTickets: ParsedTicket[] = [];
@@ -355,120 +378,88 @@ export function findFrontierTicket(root: string): FrontierTicket | null {
   for (const { abs: scratchAbs, rel: scratchRel } of scratchBases) {
     if (!existsSync(scratchAbs) || !statSync(scratchAbs).isDirectory()) continue;
     try {
-      const featEntries = readdirSync(scratchAbs, { withFileTypes: true });
-      for (const featEnt of featEntries) {
-        if (!featEnt.isDirectory() || featEnt.name.startsWith(".")) continue;
-        const feature = featEnt.name;
+      const featEntries = readdirSync(scratchAbs);
+      for (const featName of featEntries) {
+        if (featName.startsWith(".")) continue;
+        const featurePath = join(scratchAbs, featName);
+        if (!existsSync(featurePath) || !statSync(featurePath).isDirectory()) continue;
+        const feature = featName;
         const issuesDir = join(scratchAbs, feature, "issues");
         if (!existsSync(issuesDir) || !statSync(issuesDir).isDirectory()) continue;
 
-        const issueFiles = readdirSync(issuesDir, { withFileTypes: true });
-        for (const fileEnt of issueFiles) {
-          if (!fileEnt.isFile() || !fileEnt.name.endsWith(".md")) continue;
-          const filename = fileEnt.name;
+        const issueFiles = readdirSync(issuesDir);
+        for (const filename of issueFiles) {
+          if (filename.startsWith(".") || !filename.endsWith(".md")) continue;
           const filePath = join(issuesDir, filename);
+          if (!existsSync(filePath) || !statSync(filePath).isFile()) continue;
           const relPath = join(scratchRel, feature, "issues", filename);
-
-          let body = "";
           try {
-            body = readFileSync(filePath, "utf8");
-          } catch {
-            continue;
-          }
+            const content = readFileSync(filePath, "utf8");
+            const slug = filename.replace(/\.md$/, "");
 
-          const titleMatch = body.match(/^(?:title|Title):\s*["']?([^"'\r\n]+)["']?/m);
-          const headerMatch = body.match(/^#\s+(.+)$/m);
-          const title =
-            titleMatch?.[1]?.trim() ??
-            headerMatch?.[1]?.trim() ??
-            filename.replace(/\.md$/, "");
+            const titleMatch = content.match(/^(?:title|Title):\s*["']?([^"'\r\n]+)["']?/m);
+            const headerMatch = content.match(/^#\s+(.+)$/m);
+            const title =
+              titleMatch?.[1]?.trim() ??
+              headerMatch?.[1]?.trim() ??
+              slug;
 
-          const statusMatch = body.match(/^(?:status|Status):\s*["']?([^"'\r\n]+)["']?/m);
-          const status = (statusMatch?.[1]?.trim() ?? "open").toLowerCase();
+            const statusMatch = content.match(/^(?:status|Status):\s*["']?([^"'\r\n]+)["']?/m);
+            const status = (statusMatch?.[1]?.trim() ?? "open").toLowerCase();
 
-          const isResolved =
-            status === "resolved" ||
-            status === "done" ||
-            status === "closed" ||
-            status === "completed";
+            const isResolved =
+              status === "resolved" ||
+              status === "done" ||
+              status === "closed" ||
+              status === "completed";
 
-          const blockedBy: string[] = [];
-          const arrayMatch = body.match(/^(?:blocked_by|blockedBy|Blocked by|Blocked-By):\s*\[(.*?)\]/m);
-          if (arrayMatch) {
-            const rawItems = arrayMatch[1].split(",");
-            for (const item of rawItems) {
-              const cleaned = item.trim().replace(/^["']|["']$/g, "");
-              if (cleaned.length > 0) blockedBy.push(cleaned);
-            }
-          } else {
-            const lineMatch = body.match(/^(?:blocked_by|blockedBy|Blocked by|Blocked-By):\s*(.+)$/m);
-            if (lineMatch) {
-              const rawItems = lineMatch[1].split(",");
+            const blockedBy: string[] = [];
+            const arrayMatch = content.match(/^(?:blocked_by|blockedBy|Blocked by|Blocked-By):\s*\[(.*?)\]/im);
+            if (arrayMatch) {
+              const rawItems = arrayMatch[1].split(",");
               for (const item of rawItems) {
                 const cleaned = item.trim().replace(/^["']|["']$/g, "");
-                if (cleaned.length > 0 && cleaned !== "[]" && cleaned !== "none") {
-                  blockedBy.push(cleaned);
+                if (cleaned.length > 0) blockedBy.push(cleaned);
+              }
+            } else {
+              const lineMatch = content.match(/^(?:blocked_by|blockedBy|Blocked by|Blocked-By):\s*(.+)$/im);
+              if (lineMatch) {
+                const rawItems = lineMatch[1].split(",");
+                for (const item of rawItems) {
+                  const cleaned = item.trim().replace(/^["']|["']$/g, "");
+                  if (cleaned.length > 0 && cleaned !== "[]" && cleaned !== "none") {
+                    blockedBy.push(cleaned);
+                  }
                 }
               }
             }
+            allTickets.push({
+              feature,
+              relPath,
+              filename,
+              slug,
+              title,
+              status,
+              blockedBy,
+              isResolved,
+            });
+          } catch {
+            // Ignore parse errors on individual ticket files
           }
-
-          const slug = filename.replace(/\.md$/, "");
-          allTickets.push({
-            feature,
-            relPath,
-            filename,
-            slug,
-            title,
-            status,
-            blockedBy,
-            isResolved,
-          });
         }
       }
     } catch {
-      // ignore
+      // Ignore scratch directory access errors
     }
   }
 
   if (allTickets.length === 0) return null;
-
-  const isBlockerResolved = (blockerStr: string, currentFeature: string): boolean => {
-    const bLower = blockerStr.toLowerCase().replace(/\.md$/, "");
-    const matches = allTickets.filter((t) => {
-      if (t.feature !== currentFeature) return false;
-      const tSlug = t.slug.toLowerCase();
-      const tFile = t.filename.toLowerCase();
-      const tTitle = t.title.toLowerCase();
-      return (
-        tSlug === bLower ||
-        tSlug.startsWith(bLower) ||
-        bLower.startsWith(tSlug) ||
-        tFile === bLower ||
-        tTitle.includes(bLower)
-      );
-    });
-
-    if (matches.length === 0) {
-      return true;
-    }
-    return matches.every((m) => m.isResolved);
-  };
-
-  allTickets.sort((a, b) => a.filename.localeCompare(b.filename));
+  const resolvedSlugs = new Set(allTickets.filter((t) => t.isResolved).map((t) => t.slug));
 
   for (const t of allTickets) {
     if (t.isResolved) continue;
-    const isOpenStatus =
-      t.status === "open" ||
-      t.status === "ready-for-agent" ||
-      t.status === "unclaimed" ||
-      !t.status;
-
-    if (!isOpenStatus) continue;
-
-    const unblocked = t.blockedBy.every((b) => isBlockerResolved(b, t.feature));
-    if (unblocked) {
+    const isUnblocked = t.blockedBy.every((dep) => resolvedSlugs.has(dep));
+    if (isUnblocked) {
       return {
         feature: t.feature,
         file: t.relPath,
@@ -487,31 +478,16 @@ export interface AdrDirLocator {
   isNew: boolean;
 }
 
-/**
- * Resolve the ADR directory for a repository.
- * Primary: `<root>/.omp/adr/` (created automatically if neither exists).
- * Fallback: `<root>/docs/adr/` (if it already exists in a legacy repo).
- */
-export function resolveAdrDir(root: string): AdrDirLocator {
-  const ompAdr = join(root, ".omp", "adr");
-  const docsAdr = join(root, "docs", "adr");
-
-  if (existsSync(ompAdr) && statSync(ompAdr).isDirectory()) {
-    return { dir: ompAdr, relDir: ".omp/adr", isNew: false };
-  }
-  if (existsSync(docsAdr) && statSync(docsAdr).isDirectory()) {
-    return { dir: docsAdr, relDir: "docs/adr", isNew: false };
-  }
-
-  mkdirSync(ompAdr, { recursive: true });
-  return { dir: ompAdr, relDir: ".omp/adr", isNew: true };
+export function resolveAdrDir(root?: string | null): AdrDirLocator {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
+  const ws = getWorkspaceContext(safeRoot);
+  ws.ensureAdrDir();
+  return { dir: ws.adr.root, relDir: ws.adr.relDir, isNew: !ws.adr.isLegacy };
 }
 
-/**
- * List ADR markdown files in the repository's resolved ADR directory.
- */
-export function listAdrFiles(root: string): string[] {
-  const { dir } = resolveAdrDir(root);
+export function listAdrFiles(root?: string | null): string[] {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
+  const { dir } = resolveAdrDir(safeRoot);
   if (!existsSync(dir)) return [];
   try {
     return readdirSync(dir)
@@ -519,33 +495,6 @@ export function listAdrFiles(root: string): string[] {
       .sort();
   } catch {
     return [];
-  }
-}
-const repoRootCache = new Map<string, string | null>();
-
-/**
- * Locate the nearest repository root (.git, .omp, or .scratch) walking up from startDir.
- * Returns null if no repository root is found.
- */
-export function findRepoRoot(startDir: string = process.cwd()): string | null {
-  const cached = repoRootCache.get(startDir);
-  if (cached !== undefined) return cached;
-  let dir = startDir;
-  for (;;) {
-    if (
-      existsSync(join(dir, ".git")) ||
-      existsSync(join(dir, ".omp")) ||
-      existsSync(join(dir, ".scratch"))
-    ) {
-      repoRootCache.set(startDir, dir);
-      return dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) {
-      repoRootCache.set(startDir, null);
-      return null;
-    }
-    dir = parent;
   }
 }
 
@@ -556,30 +505,18 @@ export interface KnowledgeDirs {
   researchDir: string;
   indexPath: string;
 }
-/**
- * Ensure all knowledge base directories and INDEX.md exist lazily.
- */
-export function ensureKnowledgeDirs(root: string): KnowledgeDirs {
-  const safeRoot = root && root !== "/" && root !== "\\" ? root : process.cwd();
-  const rootDir = join(safeRoot, ".omp", "knowledge");
-  const recordsDir = join(rootDir, "records");
-  const pitfallsDir = join(rootDir, "pitfalls");
-  const researchDir = join(rootDir, "research");
-  const indexPath = join(rootDir, "INDEX.md");
 
-  try {
-    mkdirSync(recordsDir, { recursive: true });
-    mkdirSync(pitfallsDir, { recursive: true });
-    mkdirSync(researchDir, { recursive: true });
-
-    if (!existsSync(indexPath)) {
-      writeFileSync(indexPath, "# Knowledge Base Index\n\n", "utf8");
-    }
-  } catch {
-    // Ignore permissions or write errors on restricted roots
-  }
-
-  return { rootDir, recordsDir, pitfallsDir, researchDir, indexPath };
+export function ensureKnowledgeDirs(root?: string | null): KnowledgeDirs {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
+  const ws = getWorkspaceContext(safeRoot);
+  const kb = ws.ensureKnowledgeDirs();
+  return {
+    rootDir: kb.root,
+    recordsDir: kb.records,
+    pitfallsDir: kb.pitfalls,
+    researchDir: kb.research,
+    indexPath: kb.index,
+  };
 }
 
 export interface RoutinesDirs {
@@ -587,37 +524,15 @@ export interface RoutinesDirs {
   manifestPath: string;
 }
 
-/**
- * Ensure the routines directory and manifest exist lazily.
- */
-export function ensureRoutinesDirs(root: string): RoutinesDirs {
-  const safeRoot = root && root !== "/" && root !== "\\" ? root : process.cwd();
-  const routinesDir = join(safeRoot, "scripts", "routines");
-  const manifestPath = join(routinesDir, "manifest.json");
-
-  try {
-    mkdirSync(routinesDir, { recursive: true });
-
-    if (!existsSync(manifestPath)) {
-      writeFileSync(manifestPath, JSON.stringify({ routines: [] }, null, 2) + "\n", "utf8");
-    }
-  } catch {
-    // Ignore permissions or write errors
-  }
-
-  return { routinesDir, manifestPath };
+export function ensureRoutinesDirs(root?: string | null): RoutinesDirs {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
+  const ws = getWorkspaceContext(safeRoot);
+  const r = ws.ensureRoutinesDirs();
+  return { routinesDir: r.root, manifestPath: r.manifest };
 }
 
-/**
- * Ensure the scratch directory exists lazily.
- */
-export function ensureScratchDirs(root: string): string {
-  const safeRoot = root && root !== "/" && root !== "\\" ? root : process.cwd();
-  const scratchDir = join(safeRoot, ".omp", "scratch");
-  try {
-    mkdirSync(scratchDir, { recursive: true });
-  } catch {
-    // Ignore permissions errors
-  }
-  return scratchDir;
+export function ensureScratchDirs(root?: string | null): string {
+  const safeRoot = typeof root === "string" && root ? root : process.cwd();
+  const ws = getWorkspaceContext(safeRoot);
+  return ws.ensureScratchDirs();
 }

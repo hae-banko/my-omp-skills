@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.65.0 — Modular Test Architecture, Unified Workspace & Zero-Dependency Report Synthesizer
+
+- **Modular Test Suite Architecture (`tests/`, `scripts/selftest.ts`)** — Decoupled the monolithic 4,800-line test script into domain-grouped test suites under `tests/`: `test-utils.ts`, `commands.test.ts`, `knowledge.test.ts`, `research.test.ts`, `features.test.ts`, and `protocol.test.ts`. Converted `scripts/selftest.ts` into a fast, lightweight master runner aggregator executing the full suite in under 1 second.
+- **Unified Workspace Context (`src/core/workspace.ts`)** — Consolidated all directory paths (`knowledge`, `routines`, `scratch`, `adr`, `audits`, `references`) into an immutable, memoized `getWorkspaceContext(startDir)` object, eliminating redundant path-resolution boilerplate across codebase modules.
+- **Zero-Dependency TypeScript Report Synthesizer (`src/research/research-report.ts`)** — Added pure TypeScript research report synthesizer compiling `results/*.json`, `fields.yaml`, and `outline.yaml` directly into `report.md` and `summary.md`, eliminating Python / `pyyaml` host dependency requirements with automatic fallback.
+- **Declarative Autocomplete Routing (`src/core/completions.ts`)** — Replaced repetitive argument prefix-filtering across slash commands in `src/index.ts` with clean declarative completion pipelines (`filterCompletions`, `completeStrings`, `createSubcommandCompleter`).
+- **Policy Guard & DAG Synthesis Hardening (`src/knowledge/policy.ts`, `src/research/research-dag.ts`)** — Guarded `getPathList(input)` against `undefined` inputs in tool-call policies and made `synthesizeEnvelopesForDag` dynamically resolve and attach on-disk result files.
 ## v0.64.0 — File-First DAG Engine, Subagent File Contract & Lazy Directory Creation
 
 - **Lazy Directory Auto-Creation (`src/core/locators.ts`, `src/knowledge/knowledge.ts`)** — added `ensureKnowledgeDirs`, `ensureRoutinesDirs`, and `ensureScratchDirs` with automatic directory scaffolding. Updated `findKnowledgeRoot` to resolve to the repo root and lazily create `.omp/knowledge/` and `INDEX.md` when invoked from uninitialized workspaces, eliminating `ENOENT` / `Path not found` errors in `/record`, `/pitfall`, and `/audit`.

@@ -23,7 +23,7 @@ Use the `ask` tool:
 
 ### Step 3: Generate Report
 
-Run the canonical conversion script **`commands/research-report/generate_report.py`** (companion file) against the project — **do not copy it into `{project_dir}` and do not write your own script**:
+Run report synthesis using the canonical script **`commands/research-report/generate_report.py`** (companion file) or the native TypeScript report generator against `{project_dir}`:
 
 ```bash
 python3 {absolute_path_of_generate_report_py} {project_dir}

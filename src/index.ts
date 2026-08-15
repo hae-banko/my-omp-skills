@@ -28,6 +28,7 @@ import {
 import { installKnowledgeTool } from "./knowledge/knowledge-tool.ts";
 import {
   findFrontierTicket,
+  findRepoRoot,
   listArchivedResearchProjects,
   listAuditSlugs,
   listFeatureSpecs,
@@ -38,6 +39,12 @@ import {
   listSpecFiles,
   resolveResearchProjectDir,
 } from "./core/locators.ts";
+import {
+  completeStrings,
+  createSubcommandCompleter,
+  filterCompletions,
+  type CompletionOption,
+} from "./core/completions.ts";
 import { installPolicy } from "./knowledge/policy.ts";
 import { installReferenceResultRenderer, runReferenceCommand } from "./features/references.ts";
 import { runRecentCommand } from "./features/recent-command.ts";
@@ -103,29 +110,7 @@ const RESEARCH_SUBCOMMANDS: Array<{ value: string; label: string; description: s
   { value: "off", label: "off", description: "Close the Research Review window" },
 ];
 
-const repoRootCache = new Map<string, string>();
-function findRepoRoot(startDir: string = process.cwd()): string {
-  const cached = repoRootCache.get(startDir);
-  if (cached !== undefined) return cached;
-  let dir = startDir;
-  for (;;) {
-    if (
-      existsSync(join(dir, ".git")) ||
-      existsSync(join(dir, ".omp")) ||
-      existsSync(join(dir, ".scratch"))
-    ) {
-      repoRootCache.set(startDir, dir);
-      return dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) {
-      repoRootCache.set(startDir, startDir);
-      return startDir;
-    }
-    dir = parent;
-  }
-}
-
+// findRepoRoot is imported from ./core/locators.ts
 
 function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
   const auditsDir = join(root, ".omp", "audits");
@@ -281,36 +266,24 @@ function getTriageStatusPayload(root: string): TriageStatusPayload {
 
 function getSpecAndFeatureCompletions(argumentPrefix: string): Array<{ value: string; label: string; description?: string }> | null {
   if (argumentPrefix.includes(" ")) return null;
-  const { dirs, files } = listFeatureSpecs(findRepoRoot());
-  const options: Array<{ value: string; label: string; description?: string }> = [];
-  for (const dir of dirs) {
-    options.push({
+  const root = findRepoRoot() ?? process.cwd();
+  const { dirs, files } = listFeatureSpecs(root);
+  const options: CompletionOption[] = [
+    ...dirs.map((dir) => ({
       value: dir.name,
       label: dir.name,
       description: `Feature directory under ${dir.relBase}/`,
-    });
-  }
-  for (const file of files) {
-    options.push({
+    })),
+    ...files.map((file) => ({
       value: file,
       label: file,
       description: "Spec markdown file",
-    });
-  }
+    })),
+  ].sort((a, b) => a.label.localeCompare(b.label));
 
-  options.sort((a, b) => a.label.localeCompare(b.label));
-
-  const lower = argumentPrefix.toLowerCase();
-  const matches = options.filter(
-    (o) =>
-      o.label.toLowerCase().startsWith(lower) ||
-      o.label.toLowerCase().includes(lower) ||
-      o.value.toLowerCase().startsWith(lower),
-  );
-
-  return matches.length > 0 ? matches : null;
+  const filtered = filterCompletions(options, argumentPrefix);
+  return filtered.length > 0 ? filtered : null;
 }
-
 interface CommandSpec {
   name: string;
   description: string;

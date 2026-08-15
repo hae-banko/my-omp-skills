@@ -196,7 +196,7 @@ export interface KnowledgeReadResult {
 const knowledgeRootCache = new Map<string, string | null>();
 export function findKnowledgeRoot(startDir: string): string | null {
   const cached = knowledgeRootCache.get(startDir);
-  if (cached !== undefined && cached !== null) return cached;
+  if (cached !== undefined) return cached;
   let dir = startDir;
   for (;;) {
     const candidateKb = join(dir, ".omp", "knowledge");
@@ -210,13 +210,11 @@ export function findKnowledgeRoot(startDir: string): string | null {
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      break;
+      knowledgeRootCache.set(startDir, null);
+      return null;
     }
     dir = parent;
   }
-  const fallback = findRepoRoot(startDir);
-  knowledgeRootCache.set(startDir, fallback);
-  return fallback;
 }
 
 function listMarkdownFiles(dir: string): string[] {
