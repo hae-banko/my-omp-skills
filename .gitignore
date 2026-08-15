@@ -1,7 +1,8 @@
 node_modules/
 dist/
 *.log
-.omp/
+.omp/*
+!.omp/adr/
 .scratch/
 __pycache__/
 *.pyc

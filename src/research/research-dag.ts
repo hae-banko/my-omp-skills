@@ -20,9 +20,10 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ResearchItemSpec } from "./research-renderer.ts";
+import type { AgentEnvelope } from "../protocol/iap.ts";
+import { synthesizeBlockedEnvelope, synthesizeCompletedEnvelope, synthesizeFailedEnvelope } from "../protocol/iap-hub.ts";
 
 export type DagNodeStatus = "pending" | "ready" | "running" | "completed" | "blocked" | "failed";
-
 export interface ResearchDagNode {
   id: string;
   name: string;
@@ -38,8 +39,10 @@ export interface ResearchDagNode {
   priorityScore: number;
   epistemicHash?: string;
   isDirty?: boolean;
+  blockedReason?: string;
+  waitingFor?: string;
+  lastEnvelope?: AgentEnvelope;
 }
-
 export interface ResearchDag {
   nodes: Map<string, ResearchDagNode>;
   roots: string[];
@@ -429,4 +432,94 @@ export function formatUpstreamContextPrompt(evidenceList: UpstreamEvidence[]): s
 
   lines.push("</upstream-context>\n");
   return lines.join("\n");
+}
+/**
+ * Ingest an incoming IAP envelope into the active Research DAG.
+ * Reactively updates node states, suspends blocked nodes, and unblocks downstream children.
+ */
+export function ingestIapEnvelope(
+  dag: ResearchDag,
+  envelope: AgentEnvelope,
+): { updated: boolean; unblockedNodes: string[]; suspendedNodes: string[] } {
+  const senderId = (envelope.sender.name || "").toLowerCase().trim();
+  const node = dag.nodes.get(senderId);
+  const unblockedNodes: string[] = [];
+  const suspendedNodes: string[] = [];
+
+  if (!node) {
+    return { updated: false, unblockedNodes, suspendedNodes };
+  }
+
+  node.lastEnvelope = envelope;
+
+  switch (envelope.performative) {
+    case "COMPLETED":
+    case "INFORM": {
+      node.status = "completed";
+      node.blockedReason = undefined;
+      node.waitingFor = undefined;
+
+      // Check downstream nodes for newly satisfied dependencies
+      for (const nextId of node.downstreamNodes) {
+        const nextNode = dag.nodes.get(nextId);
+        if (!nextNode || nextNode.status === "completed" || nextNode.status === "running") continue;
+
+        const allDepsMet = nextNode.dependsOn.every((depId) => {
+          const dep = dag.nodes.get(depId);
+          return dep && dep.status === "completed";
+        });
+
+        if (allDepsMet && nextNode.status !== "ready") {
+          nextNode.status = "ready";
+          unblockedNodes.push(nextId);
+        }
+      }
+      return { updated: true, unblockedNodes, suspendedNodes };
+    }
+
+    case "BLOCKED": {
+      node.status = "blocked";
+      const payload = (envelope.payload && typeof envelope.payload === "object" ? envelope.payload : {}) as Record<string, unknown>;
+      node.waitingFor = typeof payload.waiting_for === "string" ? payload.waiting_for : undefined;
+      node.blockedReason = typeof payload.reason === "string" ? payload.reason : "MISSING_PREREQUISITE";
+      suspendedNodes.push(node.id);
+      return { updated: true, unblockedNodes, suspendedNodes };
+    }
+
+    case "FAILED": {
+      node.status = "failed";
+      const payload = (envelope.payload && typeof envelope.payload === "object" ? envelope.payload : {}) as Record<string, unknown>;
+      node.blockedReason = typeof payload.error === "string" ? payload.error : "TERMINAL_ERROR";
+      return { updated: true, unblockedNodes, suspendedNodes };
+    }
+
+    default:
+      return { updated: false, unblockedNodes, suspendedNodes };
+  }
+}
+
+/**
+ * Synthesize IAP envelopes for all completed nodes in a DAG from disk blackboard files.
+ */
+export function synthesizeEnvelopesForDag(dag: ResearchDag, resultsDir: string): AgentEnvelope[] {
+  const envelopes: AgentEnvelope[] = [];
+
+  for (const node of dag.nodes.values()) {
+    if (node.resultFile && existsSync(node.resultFile)) {
+      try {
+        const fileContent = readFileSync(node.resultFile, "utf8");
+        const env = synthesizeCompletedEnvelope({
+          filePath: node.resultFile,
+          fileContent,
+          senderName: node.id,
+        });
+        node.lastEnvelope = env;
+        envelopes.push(env);
+      } catch {
+        // Ignore read errors
+      }
+    }
+  }
+
+  return envelopes;
 }

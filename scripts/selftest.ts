@@ -134,9 +134,26 @@ import {
   formatUpstreamContextPrompt,
   getReadyDagNodes,
   getUpstreamEvidence,
+  ingestIapEnvelope,
   slugifyItemId,
+  synthesizeEnvelopesForDag,
 } from "../src/research/research-dag.ts";
-
+import {
+  buildEnvelope,
+  computeSha256,
+  isPointerEnvelope,
+  parseEnvelope,
+  resolveEnvelopePayload,
+  validateEnvelope,
+  IAP_PROTOCOL_VERSION,
+} from "../src/protocol/iap.ts";
+import {
+  extractEnvelopesFromHubInbox,
+  serializeEnvelopeForHub,
+  synthesizeBlockedEnvelope,
+  synthesizeCompletedEnvelope,
+  synthesizeFailedEnvelope,
+} from "../src/protocol/iap-hub.ts";
 interface HandlerContext {
   ui?: {
     notify?(message: string, level?: string): void;
@@ -4372,6 +4389,202 @@ counts:
   writeLocalTilt(fixture, resetLocal);
   if (readLocalTilt(fixture).session_strikes !== 0) {
     fail(`writeLocalTilt: reset failed`);
+  }
+
+  rmSync(fixture, { recursive: true, force: true });
+}
+
+// --- OMP-IAP/v1 Protocol & Live DAG Coordination Unit Tests ---
+{
+  // 1. Envelope Construction & Hashing
+  const hashTest = computeSha256("test artifact payload content");
+  if (!hashTest.startsWith("sha256:") || hashTest.length !== 71) {
+    fail(`computeSha256: invalid format, got ${hashTest}`);
+  }
+
+  const env1 = buildEnvelope({
+    performative: "INFORM",
+    sender: { name: "Worker-01", agent_type: "scout" },
+    payload: { repo_url: "https://github.com/example/cryptolib", architecture: "AES-GCM" },
+  });
+
+  if (env1.protocol !== IAP_PROTOCOL_VERSION) {
+    fail(`buildEnvelope: expected protocol '${IAP_PROTOCOL_VERSION}', got '${env1.protocol}'`);
+  }
+  if (env1.performative !== "INFORM") {
+    fail(`buildEnvelope: expected performative 'INFORM', got '${env1.performative}'`);
+  }
+  if (!env1.id || !env1.timestamp) {
+    fail(`buildEnvelope: missing id or timestamp`);
+  }
+
+  // 2. Validation
+  const valValid = validateEnvelope(env1);
+  if (!valValid.valid || !valValid.envelope) {
+    fail(`validateEnvelope: expected valid, got ${JSON.stringify(valValid)}`);
+  }
+
+  const valInvalid = validateEnvelope({ protocol: "wrong", performative: "INVALID" });
+  if (valInvalid.valid) {
+    fail(`validateEnvelope: expected invalid for malformed protocol`);
+  }
+
+  // 3. Pointer Envelope Resolution & Digest Verification
+  const fixture = mkdtempSync(join(tmpdir(), "my-omp-iap-test-"));
+  const artifactPath = join(fixture, "spec.json");
+  const artifactContent = JSON.stringify({ spec_version: "2.1", cipher: "AES-256-GCM" });
+  writeFileSync(artifactPath, artifactContent, "utf8");
+
+  const pointerEnv = buildEnvelope({
+    performative: "COMPLETED",
+    sender: "Worker-Spec",
+    payload: { summary: "Spec extraction completed" },
+    artifacts: [
+      {
+        uri: artifactPath,
+        digest: computeSha256(artifactContent),
+      },
+    ],
+  });
+
+  if (!isPointerEnvelope(pointerEnv)) {
+    fail(`isPointerEnvelope: expected true for envelope with artifacts`);
+  }
+
+  const resolved = await resolveEnvelopePayload<{ spec_version: string }>(pointerEnv);
+  if (!resolved.verified || resolved.payload.spec_version !== "2.1") {
+    fail(`resolveEnvelopePayload: resolution failed, got ${JSON.stringify(resolved)}`);
+  }
+
+  // Corrupted digest verification
+  const corruptedEnv = buildEnvelope({
+    performative: "COMPLETED",
+    sender: "Worker-Spec",
+    payload: { summary: "Corrupted" },
+    artifacts: [
+      {
+        uri: artifactPath,
+        digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      },
+    ],
+  });
+  const corruptedRes = await resolveEnvelopePayload(corruptedEnv);
+  if (corruptedRes.verified) {
+    fail(`resolveEnvelopePayload: expected verification failure for mismatched digest`);
+  }
+
+  // 4. Parsing from embedded Markdown code blocks
+  const markdownResponse = `
+Here are the findings from my investigation.
+
+\`\`\`iap
+{
+  "protocol": "omp-iap/v1",
+  "id": "msg_001",
+  "sender": { "name": "Worker-02", "agent_type": "scout" },
+  "performative": "COMPLETED",
+  "payload": {
+    "verdict": "VULNERABLE",
+    "severity": "High"
+  }
+}
+\`\`\`
+Hope this helps!
+`;
+  const parsedMd = parseEnvelope(markdownResponse);
+  if (!parsedMd.parsed || parsedMd.envelope?.performative !== "COMPLETED") {
+    fail(`parseEnvelope: markdown block parsing failed, got ${JSON.stringify(parsedMd)}`);
+  }
+
+  // 5. Hub Ingestion & Synthesis
+  const hubMsgs = [
+    { from: "Worker-A", message: serializeEnvelopeForHub(env1) },
+    { from: "Worker-B", message: "plain text message without envelope" },
+  ];
+  const extractedEnvelopes = extractEnvelopesFromHubInbox(hubMsgs);
+  if (extractedEnvelopes.length !== 1) {
+    fail(`extractEnvelopesFromHubInbox: expected 1 extracted envelope, got ${extractedEnvelopes.length}`);
+  }
+
+  const synthComp = synthesizeCompletedEnvelope({
+    filePath: artifactPath,
+    fileContent: artifactContent,
+    senderName: "synth-worker",
+  });
+  if (!synthComp.synthesized || synthComp.performative !== "COMPLETED" || !synthComp.artifacts?.[0].digest) {
+    fail(`synthesizeCompletedEnvelope: invalid synthetic envelope`);
+  }
+
+  const synthBlocked = synthesizeBlockedEnvelope({
+    senderName: "Worker-Blocked",
+    waitingFor: "item_01#repo_url",
+    reason: "NEED_REPO_URL",
+  });
+  if (synthBlocked.performative !== "BLOCKED" || (synthBlocked.payload as any).waiting_for !== "item_01#repo_url") {
+    fail(`synthesizeBlockedEnvelope: invalid blocked envelope`);
+  }
+
+  const synthFailed = synthesizeFailedEnvelope({
+    senderName: "Worker-Failed",
+    error: "Network timeout fetching repository",
+  });
+  if (synthFailed.performative !== "FAILED") {
+    fail(`synthesizeFailedEnvelope: invalid failed envelope`);
+  }
+
+  // 6. Live DAG Ingestion & Reactive Suspension / Unblocking
+  const items = [
+    { id: "node_a", name: "Node A" },
+    { id: "node_b", name: "Node B", depends_on: ["node_a"] },
+    { id: "node_c", name: "Node C", depends_on: ["node_b"] },
+  ];
+  const dag = buildResearchDag(items);
+
+  // Initial state: node_a ready, node_b pending, node_c pending
+  if (dag.nodes.get("node_a")?.status !== "ready") fail("node_a should be ready initially");
+  if (dag.nodes.get("node_b")?.status !== "pending") fail("node_b should be pending initially");
+
+  // Ingest BLOCKED for node_a
+  const blockEnv = buildEnvelope({
+    performative: "BLOCKED",
+    sender: "node_a",
+    payload: { waiting_for: "manual_api_key", reason: "MISSING_KEY" },
+  });
+  const blockRes = ingestIapEnvelope(dag, blockEnv);
+  if (!blockRes.updated || dag.nodes.get("node_a")?.status !== "blocked") {
+    fail(`ingestIapEnvelope: expected node_a to transition to blocked status`);
+  }
+  if (dag.nodes.get("node_a")?.waitingFor !== "manual_api_key") {
+    fail(`ingestIapEnvelope: node_a missing waitingFor metadata`);
+  }
+
+  // Ingest COMPLETED for node_a -> should reactively unblock node_b!
+  const compEnvA = buildEnvelope({
+    performative: "COMPLETED",
+    sender: "node_a",
+    payload: { result: "ok" },
+  });
+  const compResA = ingestIapEnvelope(dag, compEnvA);
+  if (!compResA.updated || !compResA.unblockedNodes.includes("node_b")) {
+    fail(`ingestIapEnvelope: expected node_b to be unblocked after node_a completed`);
+  }
+  if (dag.nodes.get("node_b")?.status !== "ready") {
+    fail(`dag: node_b should be ready after node_a completed`);
+  }
+  if (dag.nodes.get("node_c")?.status !== "pending") {
+    fail(`dag: node_c should remain pending until node_b completes`);
+  }
+
+  // Synthesize envelopes from on-disk DAG results
+  const resultsDir = join(fixture, "results");
+  mkdirSync(resultsDir, { recursive: true });
+  writeFileSync(join(resultsDir, "node_a.json"), JSON.stringify({ item: "node_a", evidence: "found" }), "utf8");
+  writeFileSync(join(resultsDir, "node_b.json"), JSON.stringify({ item: "node_b", evidence: "audited" }), "utf8");
+
+  const dagWithFiles = buildResearchDag(items, resultsDir);
+  const synthEnvelopes = synthesizeEnvelopesForDag(dagWithFiles, resultsDir);
+  if (synthEnvelopes.length < 2) {
+    fail(`synthesizeEnvelopesForDag: expected at least 2 synthetic envelopes, got ${synthEnvelopes.length}`);
   }
 
   rmSync(fixture, { recursive: true, force: true });

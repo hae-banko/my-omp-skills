@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.63.0 — OMP-IAP/v1 Inter-Agent Communication Protocol & Reactive DAG Live Engine
+
+- **OMP-IAP/v1 Core Protocol (`src/protocol/iap.ts`)** — implemented application-layer Inter-Agent Protocol featuring explicit performatives (`INFORM`, `QUERY`, `PROPOSE`, `BLOCKED`, `COMPLETED`, `FAILED`), structured `AgentEnvelope<T>` typing, markdown block extraction (` ```iap ... ``` `), and strict envelope validation.
+- **Dual Transport & Pointer Envelopes** — added hybrid live `hub` messaging + persistent blackboard file handoff. Envelopes automatically offload payloads $>2\text{ KB}$ to `local://` or workspace URI references with cryptographic SHA-256 epistemic digests (`computeSha256`, `resolveEnvelopePayload`).
+- **Hub Message Bus Adapter (`src/protocol/iap-hub.ts`)** — added envelope serialization, inbox extraction (`extractEnvelopesFromHubInbox`), and synthetic envelope generators for seamless coordination over `oh-my-pi`'s native actor layer.
+- **Reactive DAG Live Engine (`src/research/research-dag.ts`)** — integrated `ingestIapEnvelope` into topological research DAGs: reactively unblocks downstream child nodes upon incoming `COMPLETED`/`INFORM` messages and marks `BLOCKED` nodes as suspended without polling or busy-waiting. Added `synthesizeEnvelopesForDag` for 100% backward-compatible blackboard fallback from `results/*.json`.
+- **Subagent Brief & Command Alignment** — updated `commands/research/WEB-SEARCH-AGENT.md` and `commands/research-deep/command.md` with explicit IAP exit contracts, peer performatives, and blocker signaling rules.
+- **Architectural Documentation & Ubiquitous Language** — authored **ADR 0001** (`.omp/adr/0001-omp-iap-v1-inter-agent-protocol.md`) and updated `CONTEXT.md` with IAP domain definitions.
 ## v0.62.0 — Research Findings Preview & Zero-Token Tilt-O-Meter / Swear Jar
 
 - **Research Findings & Results Preview** — added `findings_preview` (`extractFindingsPreview` in `src/research/research-store.ts`) and card rendering (`src/research/research-renderer.ts`) to the Research Dashboard, displaying actual extracted findings, key fields, and severity/priority badges from `results/*.json`.

@@ -48,4 +48,42 @@ Caller's requested format takes priority (must include **Sources and References*
 ## Recommendations & Notes
 [Best approach, caveats, version constraints]
 ```
+## Inter-Agent Communication Protocol (OMP-IAP/v1)
+
+When operating as part of a multi-agent wave or research DAG, follow the **`omp-iap/v1`** protocol contract:
+
+1. **Terminal Completion (`COMPLETED`)**:
+   - Write the validated JSON output to `results/<item_id>.json` (validated via `validate_json.py`).
+   - Emit an `OMP-IAP/v1` terminal envelope in your final response:
+     ```iap
+     {
+       "protocol": "omp-iap/v1",
+       "performative": "COMPLETED",
+       "sender": { "name": "<your_item_id>", "agent_type": "scout" },
+       "payload": {
+         "summary": "<one-line executive summary of key finding>",
+         "confidence": "high"
+       },
+       "artifacts": [
+         { "uri": "results/<your_item_id>.json" }
+       ]
+     }
+     ```
+
+2. **Signaling Missing Dependencies (`BLOCKED`)**:
+   - If you cannot complete your investigation because an upstream dependency or specification is missing, do NOT hallucinate or guess. Emit a `BLOCKED` envelope:
+     ```iap
+     {
+       "protocol": "omp-iap/v1",
+       "performative": "BLOCKED",
+       "sender": { "name": "<your_item_id>", "agent_type": "scout" },
+       "payload": {
+         "waiting_for": "<upstream_item_id_or_field>",
+         "reason": "MISSING_PREREQUISITE"
+       }
+     }
+     ```
+
+3. **Live Peer Fact Sharing (`INFORM`)**:
+   - When you discover a critical repository URL, canonical specification, or shared constraint needed across multiple items, send an `INFORM` envelope via `hub` (`op: "send"`, `to: "Main"`) to unblock peers in real time.
 

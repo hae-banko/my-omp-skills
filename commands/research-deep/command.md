@@ -38,13 +38,15 @@ Phase 2 runs repeated waves until convergence (replaces single-pass batch execut
 
 - **Orient** — gap & dependency analysis: inspect `outline.yaml` for item dependencies (`depends_on`). For each item, evaluate whether its upstream dependencies have finished result JSONs. List what remains unfilled — unblocked items ready for research (`status == ready`), items with `[uncertain]` or empty fields, and items currently blocked waiting on upstream dependencies (`status == pending/blocked`).
 - **Decide** — build the next-wave plan: select unblocked ready items (frontier nodes in the Research DAG) and follow-up items with remaining uncertain fields. For items with completed upstream dependencies, prepare upstream context payloads. By default no user approval is needed before a wave; with `--approve-each`, use the `ask` tool to confirm the plan before Act.
-- **Act** — dispatch the batch in **parallel** (task subagents, background), each running the `WEB-SEARCH-AGENT.md` brief (companion file listed below — include its absolute path and the modules directory path so the subagent loads the strategy modules). For items that depend on upstream nodes, inject the `<upstream-context>` block (extracted verified URLs, repository sources, and facts from completed upstream JSONs) into the task description so the agent grounds its investigation directly on upstream discoveries. Dispatch up to `batch_size` agents per the wave scale, each handling `items_per_agent` items. Subagent output goes to its JSON file.
-- **Observe** — collect the wave's results and update every item the wave touched:
-  - Resolve `[uncertain]` values **in place** when the wave confirms them
-  - Prune resolved entries from the item's `uncertain` array
-  - Append one entry to `_attempts` per touching wave: `{wave, angles, modules, outcome}` — `angles`/`modules` list what this wave tried (the agent records which strategies/angles returned nothing, per the template below); `outcome` is a short result (e.g. `filled`, `partial`, `failed`). If the agent left no valid entry, append one from the wave plan.
-  - Set `_wave` to the last wave number
-  - `_attempts` and `_wave` are internal underscore fields (the report script already filters `_source_file`-style fields)
+- **Act** — dispatch the batch in **parallel** (task subagents, background), each running the `WEB-SEARCH-AGENT.md` brief (companion file listed below — include its absolute path and the modules directory path so the subagent loads the strategy modules). Instruct subagents to speak `omp-iap/v1` (emitting `COMPLETED` exit envelopes and `BLOCKED` blocker signals). For items that depend on upstream nodes, inject the `<upstream-context>` block (extracted verified URLs, repository sources, and facts from completed upstream JSONs) into the task description so the agent grounds its investigation directly on upstream discoveries. Dispatch up to `batch_size` agents per the wave scale, each handling `items_per_agent` items. Subagent output goes to its JSON file.
+- **Observe** — collect the wave's results via Dual Transport:
+  - Check incoming peer messages via `hub` (`op: "inbox"`) for live `INFORM`, `BLOCKED`, and `COMPLETED` envelopes from running subagents.
+  - For subagents that yielded without an explicit envelope, apply **Heuristic Envelope Synthesis** against `results/*.json` (validated via `validate_json.py`).
+  - If a worker emitted `BLOCKED`, mark its node as suspended in the DAG and do not retry until its named dependency resolves.
+  - Resolve `[uncertain]` values **in place** when the wave confirms them.
+  - Prune resolved entries from the item's `uncertain` array.
+  - Append one entry to `_attempts` per touching wave: `{wave, angles, modules, outcome}` — `angles`/`modules` list what this wave tried; `outcome` is a short result (e.g. `filled`, `partial`, `failed`).
+  - Set `_wave` to the last wave number.
 - **Wave Progress Emission** — at the end of each wave iteration (after Observe and the per-item updates above), emit the wave progress custom message so the TUI updates between waves:
   ```ts
   pi.sendMessage({
