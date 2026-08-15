@@ -58,7 +58,7 @@ If `/audit` is invoked as the sole purpose of the turn (e.g. wrapping up or perf
 1. **Identify Scope & Slug**: Determine the subject of the audit, extract a kebab-case `<slug>`, and check if an existing report exists at `.omp/audits/<slug>/overview.md` or `.omp/audits/<slug>/report.md`.
 2. **Execute Critical Evaluation**: Examine codebase, trace execution paths, evaluate architecture, test hypotheses, and gather concrete evidence across topics and subtopics.
 3. **Compose Formal Report & Subtopics**: Format `overview.md` matching `AUDIT-FORMAT.md` with YAML frontmatter, all required sections, and relative links `[Subtopic Title](./subtopics/<subtopic-name>.md)` to subtopic breakdown files when auditing multi-component topics.
-4. **Write or Revise**: Save main report to `.omp/audits/<slug>/overview.md` (and subtopic files under `subtopics/`). When revising, bump the frontmatter `version` per SemVer policy, update `updated` date, update `## Revision History`, and optionally write snapshot to `.omp/audits/<slug>/archive/vX.Y.Z.md`.
+4. **Write or Revise**: Ensure directory exists (`mkdir -p .omp/audits/<slug>/subtopics/`), then save main report to `.omp/audits/<slug>/overview.md` (and subtopic files under `subtopics/`). When revising, bump the frontmatter `version` per SemVer policy, update `updated` date, update `## Revision History`, and optionally write snapshot to `.omp/audits/<slug>/archive/vX.Y.Z.md`.
 5. **Report Back**: Summarize the audit verdict and report path back to the user.
 
 ## Telemetry Card & Receipt

@@ -5,7 +5,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
+import { ensureKnowledgeDirs, findRepoRoot, listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
 import { readOutlineItems, readProject } from "../research/research-store.ts";
 
 export type KnowledgeType = "index" | "records" | "pitfalls" | "research" | "audits";
@@ -196,7 +196,7 @@ export interface KnowledgeReadResult {
 const knowledgeRootCache = new Map<string, string | null>();
 export function findKnowledgeRoot(startDir: string): string | null {
   const cached = knowledgeRootCache.get(startDir);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined && cached !== null) return cached;
   let dir = startDir;
   for (;;) {
     const candidateKb = join(dir, ".omp", "knowledge");
@@ -210,11 +210,13 @@ export function findKnowledgeRoot(startDir: string): string | null {
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      knowledgeRootCache.set(startDir, null);
-      return null;
+      break;
     }
     dir = parent;
   }
+  const fallback = findRepoRoot(startDir);
+  knowledgeRootCache.set(startDir, fallback);
+  return fallback;
 }
 
 function listMarkdownFiles(dir: string): string[] {
@@ -238,7 +240,7 @@ function firstLine(body: string): string {
 }
 
 export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeReadResult {
-  const base = join(root, ".omp", "knowledge");
+  const { rootDir: base } = ensureKnowledgeDirs(root);
   const type = query.type;
   const limit = query.limit ?? 10;
 

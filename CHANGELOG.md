@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.64.0 — File-First DAG Engine, Subagent File Contract & Lazy Directory Creation
+
+- **Lazy Directory Auto-Creation (`src/core/locators.ts`, `src/knowledge/knowledge.ts`)** — added `ensureKnowledgeDirs`, `ensureRoutinesDirs`, and `ensureScratchDirs` with automatic directory scaffolding. Updated `findKnowledgeRoot` to resolve to the repo root and lazily create `.omp/knowledge/` and `INDEX.md` when invoked from uninitialized workspaces, eliminating `ENOENT` / `Path not found` errors in `/record`, `/pitfall`, and `/audit`.
+- **File-First Research DAG Engine (`src/research/research-dag.ts`)** — anchored task readiness directly to disk state (`existsSync`). Replaced multi-regex fuzzy matching with canonical deterministic paths (`canonicalResultPath`: `results/<slug>.json`) and direct $O(1)$ lookups.
+- **Subagent Context & File Contract Injector (`src/features/subagent-contract.ts`)** — added `generateSubagentFileContract` and `parseFileContract`, injecting standardized `<file-contract>` blocks (target item, exact output JSON path, absolute path, schema) into `/research-deep` and `WEB-SEARCH-AGENT.md` task prompts.
+- **Pruned Weightless Code & Heuristics (`src/features/routines.ts`)** — streamlined TypeScript syntax validation and simplified skill candidate qualification to transparent CLI/shell block detection.
 ## v0.63.1 — Routinize Extension Evolution & Strictly Local Documentation
 
 - **Routinize Extension Evolution & Skill Graduation** — expanded `/routinize` (`src/features/routines.ts`, `commands/routinize/`) to support three-tier functional graduation: Script Routines (`scripts/routines/`), Local TypeScript Extensions (`.omp/extensions/<slug>.ts`), and Skill Graduation (pruning purely procedural markdown skills into zero-token extensions/routines to eliminate prompt bloat).

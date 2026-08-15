@@ -59,7 +59,19 @@ import { DEFAULT_LIMIT, isRecentArgs, MAX_LIMIT, parseRecentCount, runRecentComm
 import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge/knowledge.ts";
 import { formatTimelineLines, getUnifiedTimeline, parseTimelineLimit, runTimelineCommand, TIMELINE_CUSTOM_TYPE } from "../src/features/timeline.ts";
 import { extractDiscoveredReferences } from "../src/research/research-store.ts";
-import { findFrontierTicket, listAdrFiles, resolveAdrDir } from "../src/core/locators.ts";
+import {
+  ensureKnowledgeDirs,
+  ensureRoutinesDirs,
+  ensureScratchDirs,
+  findFrontierTicket,
+  findRepoRoot,
+  listAdrFiles,
+  resolveAdrDir,
+} from "../src/core/locators.ts";
+import {
+  generateSubagentFileContract,
+  parseFileContract,
+} from "../src/features/subagent-contract.ts";
 import {
   CLARIFY_PROMPT,
   installClarify,
@@ -137,6 +149,7 @@ import {
 } from "../src/core/locators.ts";
 import {
   buildResearchDag,
+  canonicalResultPath,
   computeEpistemicNodeHash,
   formatUpstreamContextPrompt,
   getReadyDagNodes,
@@ -4694,6 +4707,71 @@ pytest tests/
   if (!gradCheck.valid) {
     fail(`graduateSkillToExtension: generated extension failed syntax validation: ${gradCheck.error}`);
   }
+}
+// --- Lazy Directory Creation, Canonical Paths, & Subagent File Contract Unit Tests ---
+{
+  const fixture = mkdtempSync(join(tmpdir(), "omp-file-first-test-"));
+
+  // 1. ensureKnowledgeDirs
+  const kbDirs = ensureKnowledgeDirs(fixture);
+  if (!existsSync(kbDirs.recordsDir) || !existsSync(kbDirs.pitfallsDir) || !existsSync(kbDirs.researchDir)) {
+    fail(`ensureKnowledgeDirs: directories were not created properly`);
+  }
+  if (!existsSync(kbDirs.indexPath)) {
+    fail(`ensureKnowledgeDirs: INDEX.md was not initialized`);
+  }
+
+  // 2. ensureRoutinesDirs & ensureScratchDirs
+  const routDirs = ensureRoutinesDirs(fixture);
+  if (!existsSync(routDirs.routinesDir) || !existsSync(routDirs.manifestPath)) {
+    fail(`ensureRoutinesDirs: routines directory or manifest not created`);
+  }
+  const scratchDir = ensureScratchDirs(fixture);
+  if (!existsSync(scratchDir)) {
+    fail(`ensureScratchDirs: scratch directory was not created`);
+  }
+
+  // 3. canonicalResultPath
+  const resDir = join(fixture, "results");
+  mkdirSync(resDir, { recursive: true });
+  const cPath1 = canonicalResultPath(resDir, "find_repo", "Find Official Repo");
+  if (!cPath1.endsWith("results/find_repo.json")) {
+    fail(`canonicalResultPath: unexpected canonical path ${cPath1}`);
+  }
+
+  const cPath2 = canonicalResultPath(resDir, "crypto_audit", "Crypto Audit", 1);
+  if (!cPath2.endsWith("results/crypto_audit.json")) {
+    fail(`canonicalResultPath: unexpected non-existing indexed path ${cPath2}`);
+  }
+  writeFileSync(join(resDir, "02_crypto_audit.json"), "{}", "utf8");
+  const cPath2Existing = canonicalResultPath(resDir, "crypto_audit", "Crypto Audit", 1);
+  if (!cPath2Existing.endsWith("results/02_crypto_audit.json")) {
+    fail(`canonicalResultPath: expected existing 02_crypto_audit.json to be picked`);
+  }
+
+  // 4. generateSubagentFileContract & parseFileContract
+  const contract = generateSubagentFileContract({
+    itemId: "cipher_audit",
+    itemName: "Audit Cipher Implementation",
+    itemIndex: 2,
+    projectDir: fixture,
+    fieldsPath: join(fixture, "fields.yaml"),
+    upstreamContextPrompt: "<upstream-context>\nFound repo: https://github.com/test/repo\n</upstream-context>",
+  });
+
+  if (!contract.contractPrompt.includes("<file-contract>") || !contract.contractPrompt.includes("Output JSON Path: results/03_cipher_audit.json")) {
+    fail(`generateSubagentFileContract: missing expected contract format, got:\n${contract.contractPrompt}`);
+  }
+  if (!contract.contractPrompt.includes("<upstream-context>")) {
+    fail(`generateSubagentFileContract: upstream context was not appended`);
+  }
+
+  const parsedContract = parseFileContract(contract.contractPrompt);
+  if (!parsedContract || parsedContract.itemId !== "cipher_audit" || parsedContract.targetPath !== "results/03_cipher_audit.json") {
+    fail(`parseFileContract: failed to parse contract, got: ${JSON.stringify(parsedContract)}`);
+  }
+
+  rmSync(fixture, { recursive: true, force: true });
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

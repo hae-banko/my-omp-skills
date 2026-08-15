@@ -73,25 +73,49 @@ export function slugifyItemId(text: string, index: number): string {
 }
 
 /**
- * Match an item name to an existing result JSON file in results/.
+ * Canonical result file path for a research item (results/<slug>.json or results/<01>_<slug>.json).
+ */
+export function canonicalResultPath(resultsDir: string, itemId: string, itemName: string, index?: number): string {
+  const slug = slugifyItemId(itemId || itemName, index ?? 0);
+  if (index !== undefined && index >= 0) {
+    const idxPrefix = String(index + 1).padStart(2, "0");
+    const indexed = join(resultsDir, `${idxPrefix}_${slug}.json`);
+    if (existsSync(indexed)) return indexed;
+  }
+  return join(resultsDir, `${slug}.json`);
+}
+
+/**
+ * File-first lookup for an item's result JSON file.
+ * 1. Checks direct deterministic paths (results/<slug>.json and results/<01>_<slug>.json).
+ * 2. Scans results/ directory if legacy filename was used.
  */
 export function findItemResultFile(resultsDir: string, itemId: string, itemName: string): string | undefined {
   if (!existsSync(resultsDir) || !statSync(resultsDir).isDirectory()) return undefined;
+
+  const idSlug = slugifyItemId(itemId, 0);
+  const nameSlug = slugifyItemId(itemName, 0);
+
+  // 1. Direct O(1) existence checks for canonical paths
+  const exactIdPath = join(resultsDir, `${idSlug}.json`);
+  if (existsSync(exactIdPath)) return exactIdPath;
+
+  const exactNamePath = join(resultsDir, `${nameSlug}.json`);
+  if (existsSync(exactNamePath)) return exactNamePath;
+
+  // 2. Scan directory for numbered or prefixed matches
   try {
     const files = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
-    const idLower = itemId.toLowerCase().replace(/[^a-z0-9_]+/g, "_");
-    const nameLower = itemName.toLowerCase().replace(/[^a-z0-9_]+/g, "_");
-    const slugName = slugifyItemId(itemName, 0);
-
     for (const f of files) {
       const fClean = f.toLowerCase().replace(/\.json$/, "").replace(/[^a-z0-9_]+/g, "_");
-      if (fClean === idLower || fClean.endsWith(`_${idLower}`) || fClean.includes(idLower)) {
-        return join(resultsDir, f);
-      }
-      if (fClean === nameLower || fClean.endsWith(`_${nameLower}`) || fClean.includes(nameLower)) {
-        return join(resultsDir, f);
-      }
-      if (slugName && (fClean === slugName || fClean.endsWith(`_${slugName}`) || fClean.includes(slugName))) {
+      if (
+        fClean === idSlug ||
+        fClean.endsWith(`_${idSlug}`) ||
+        fClean.includes(idSlug) ||
+        fClean === nameSlug ||
+        fClean.endsWith(`_${nameSlug}`) ||
+        fClean.includes(nameSlug)
+      ) {
         return join(resultsDir, f);
       }
     }
@@ -100,7 +124,6 @@ export function findItemResultFile(resultsDir: string, itemId: string, itemName:
   }
   return undefined;
 }
-
 /**
  * Deterministically compute an epistemic hash for a node given its definition,
  * category, dependencies, and upstream hashes (subgraph memoization).

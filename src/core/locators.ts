@@ -7,8 +7,8 @@
 // command. All scans take `root` (the repo root) and return repo-relative
 // names/paths.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 
 /** Dated research project dirs (`2026-08-07_<topic_slug>`). */
 const DATED_SLUG_RE = /^\d{4}-\d{2}-\d{2}_/;
@@ -520,4 +520,104 @@ export function listAdrFiles(root: string): string[] {
   } catch {
     return [];
   }
+}
+const repoRootCache = new Map<string, string | null>();
+
+/**
+ * Locate the nearest repository root (.git, .omp, or .scratch) walking up from startDir.
+ * Returns null if no repository root is found.
+ */
+export function findRepoRoot(startDir: string = process.cwd()): string | null {
+  const cached = repoRootCache.get(startDir);
+  if (cached !== undefined) return cached;
+  let dir = startDir;
+  for (;;) {
+    if (
+      existsSync(join(dir, ".git")) ||
+      existsSync(join(dir, ".omp")) ||
+      existsSync(join(dir, ".scratch"))
+    ) {
+      repoRootCache.set(startDir, dir);
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      repoRootCache.set(startDir, null);
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+export interface KnowledgeDirs {
+  rootDir: string;
+  recordsDir: string;
+  pitfallsDir: string;
+  researchDir: string;
+  indexPath: string;
+}
+/**
+ * Ensure all knowledge base directories and INDEX.md exist lazily.
+ */
+export function ensureKnowledgeDirs(root: string): KnowledgeDirs {
+  const safeRoot = root && root !== "/" && root !== "\\" ? root : process.cwd();
+  const rootDir = join(safeRoot, ".omp", "knowledge");
+  const recordsDir = join(rootDir, "records");
+  const pitfallsDir = join(rootDir, "pitfalls");
+  const researchDir = join(rootDir, "research");
+  const indexPath = join(rootDir, "INDEX.md");
+
+  try {
+    mkdirSync(recordsDir, { recursive: true });
+    mkdirSync(pitfallsDir, { recursive: true });
+    mkdirSync(researchDir, { recursive: true });
+
+    if (!existsSync(indexPath)) {
+      writeFileSync(indexPath, "# Knowledge Base Index\n\n", "utf8");
+    }
+  } catch {
+    // Ignore permissions or write errors on restricted roots
+  }
+
+  return { rootDir, recordsDir, pitfallsDir, researchDir, indexPath };
+}
+
+export interface RoutinesDirs {
+  routinesDir: string;
+  manifestPath: string;
+}
+
+/**
+ * Ensure the routines directory and manifest exist lazily.
+ */
+export function ensureRoutinesDirs(root: string): RoutinesDirs {
+  const safeRoot = root && root !== "/" && root !== "\\" ? root : process.cwd();
+  const routinesDir = join(safeRoot, "scripts", "routines");
+  const manifestPath = join(routinesDir, "manifest.json");
+
+  try {
+    mkdirSync(routinesDir, { recursive: true });
+
+    if (!existsSync(manifestPath)) {
+      writeFileSync(manifestPath, JSON.stringify({ routines: [] }, null, 2) + "\n", "utf8");
+    }
+  } catch {
+    // Ignore permissions or write errors
+  }
+
+  return { routinesDir, manifestPath };
+}
+
+/**
+ * Ensure the scratch directory exists lazily.
+ */
+export function ensureScratchDirs(root: string): string {
+  const safeRoot = root && root !== "/" && root !== "\\" ? root : process.cwd();
+  const scratchDir = join(safeRoot, ".omp", "scratch");
+  try {
+    mkdirSync(scratchDir, { recursive: true });
+  } catch {
+    // Ignore permissions errors
+  }
+  return scratchDir;
 }

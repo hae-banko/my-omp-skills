@@ -60,42 +60,16 @@ export function validateExtensionSyntax(content: string): { valid: boolean; erro
     return { valid: false, error: "Extension content cannot be empty" };
   }
 
-  // Check for export default function
+  // Check for export default function signature
   if (!/export\s+default\s+(?:function|\()/m.test(content) && !/export\s+default\s+[a-zA-Z0-9_$]+/m.test(content)) {
     return { valid: false, error: "Extension must export a default function receiving ExtensionApi" };
   }
 
-  // Check for basic delimiter balance (braces, parens, brackets)
+  // Verify balanced delimiters (braces, parens, brackets)
   const stack: string[] = [];
   const pairs: Record<string, string> = { "}": "{", ")": "(", "]": "[" };
-  let inString: string | null = null;
-  let inComment = false;
-
   for (let i = 0; i < content.length; i++) {
     const ch = content[i];
-    const next = content[i + 1];
-
-    if (inComment) {
-      if (ch === "\n" && inComment) inComment = false;
-      continue;
-    }
-    if (ch === "/" && next === "/") {
-      inComment = true;
-      i++;
-      continue;
-    }
-
-    if (inString) {
-      if (ch === "\\" ) { i++; continue; }
-      if (ch === inString) inString = null;
-      continue;
-    }
-
-    if (ch === '"' || ch === "'" || ch === "`") {
-      inString = ch;
-      continue;
-    }
-
     if (ch === "{" || ch === "(" || ch === "[") {
       stack.push(ch);
     } else if (ch === "}" || ch === ")" || ch === "]") {
@@ -105,7 +79,6 @@ export function validateExtensionSyntax(content: string): { valid: boolean; erro
       }
     }
   }
-
   if (stack.length > 0) {
     return { valid: false, error: `Unclosed delimiter: '${stack[stack.length - 1]}'` };
   }
@@ -161,7 +134,8 @@ export default function (pi: ExtensionApi): void {
 }
 
 /**
- * Heuristic analyzer checking if a markdown skill is a purely procedural candidate for graduation.
+ * Check if a markdown skill has procedural code blocks suitable for extension/routine graduation.
+ * User approval remains the authoritative gate.
  */
 export function isSkillProceduralCandidate(skillMarkdown: string): {
   isCandidate: boolean;
@@ -170,53 +144,28 @@ export function isSkillProceduralCandidate(skillMarkdown: string): {
 } {
   const tokenLength = Math.round(skillMarkdown.length / 4);
 
-  // Creative skills with interview loops or active methodologies are NEVER candidates
-  const CREATIVE_PATTERNS = [
-    /interview/i,
-    /grill/i,
-    /stress-test/i,
-    /red-green-refactor/i,
-    /domain-modeling/i,
-    /prototype/i,
-    /explore/i,
-    /architect/i,
-  ];
-
-  for (const pattern of CREATIVE_PATTERNS) {
-    if (pattern.test(skillMarkdown)) {
-      return {
-        isCandidate: false,
-        estimatedTokenSavings: 0,
-        reason: "Skill contains creative reasoning, interview loops, or architectural heuristics",
-      };
-    }
+  // Creative methodologies with active interview loops are not procedural candidates
+  if (/interview|grill|stress-test|red-green-refactor|domain-modeling/i.test(skillMarkdown)) {
+    return {
+      isCandidate: false,
+      estimatedTokenSavings: 0,
+      reason: "Skill contains creative reasoning or interview methodologies",
+    };
   }
 
-  // Check for procedural indicators (dense bash commands, CLI flags, build/lint incantations)
-  const PROCEDURAL_PATTERNS = [
-    /```bash\b[\s\S]*?```/,
-    /npm run /i,
-    /cargo /i,
-    /pytest /i,
-    /python /i,
-    /docker /i,
-    /slurm|sbatch/i,
-    /curl /i,
-  ];
-
-  const proceduralMatches = PROCEDURAL_PATTERNS.filter((p) => p.test(skillMarkdown));
-  if (proceduralMatches.length >= 1) {
+  // Check for CLI/shell commands
+  if (/```(?:bash|sh|shell|zsh)\b[\s\S]*?```/i.test(skillMarkdown) || /npm run |cargo |pytest /i.test(skillMarkdown)) {
     return {
       isCandidate: true,
       estimatedTokenSavings: tokenLength,
-      reason: "Skill consists of purely deterministic CLI commands and procedural flag invocations",
+      reason: "Skill contains deterministic CLI commands and flag invocations",
     };
   }
 
   return {
     isCandidate: false,
     estimatedTokenSavings: 0,
-    reason: "Skill does not match procedural CLI criteria",
+    reason: "Skill does not contain procedural CLI code blocks",
   };
 }
 
