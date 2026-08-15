@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.63.1 — Routinize Extension Evolution & Strictly Local Documentation
+
+- **Routinize Extension Evolution & Skill Graduation** — expanded `/routinize` (`src/features/routines.ts`, `commands/routinize/`) to support three-tier functional graduation: Script Routines (`scripts/routines/`), Local TypeScript Extensions (`.omp/extensions/<slug>.ts`), and Skill Graduation (pruning purely procedural markdown skills into zero-token extensions/routines to eliminate prompt bloat).
+- **Extension Scaffolding & Syntax Validation** — added `validateExtensionSyntax`, `scaffoldLocalExtension`, and `graduateSkillToExtension` with delimiter balance and `export default function` verification.
+- **Strictly Local Documentation** — updated `.gitignore` and git tracking to ensure `.omp/` (including `.omp/adr/`) and `CONTEXT.md` remain strictly local, private working artifacts on disk without polluting the remote GitHub repository.
 ## v0.63.0 — OMP-IAP/v1 Inter-Agent Communication Protocol & Reactive DAG Live Engine
 
 - **OMP-IAP/v1 Core Protocol (`src/protocol/iap.ts`)** — implemented application-layer Inter-Agent Protocol featuring explicit performatives (`INFORM`, `QUERY`, `PROPOSE`, `BLOCKED`, `COMPLETED`, `FAILED`), structured `AgentEnvelope<T>` typing, markdown block extraction (` ```iap ... ``` `), and strict envelope validation.

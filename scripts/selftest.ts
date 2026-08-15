@@ -100,6 +100,13 @@ import {
   writeLocalTilt,
 } from "../src/features/tilt.ts";
 import {
+  findRoutinesRepoRoot,
+  graduateSkillToExtension,
+  isSkillProceduralCandidate,
+  scaffoldLocalExtension,
+  validateExtensionSyntax,
+} from "../src/features/routines.ts";
+import {
   BORDER_COLORS,
   bold,
   boxLine,
@@ -4588,6 +4595,105 @@ Hope this helps!
   }
 
   rmSync(fixture, { recursive: true, force: true });
+}
+
+// --- Routinize Extension Evolution & Skill Graduation Unit Tests ---
+{
+  // 1. validateExtensionSyntax checks
+  const validExt = `
+export interface ExtensionApi {
+  registerCommand(name: string, def: any): void;
+}
+export default function (pi: ExtensionApi): void {
+  pi.registerCommand("test-cmd", {
+    description: "test",
+    handler: () => {}
+  });
+}
+`;
+  const checkValid = validateExtensionSyntax(validExt);
+  if (!checkValid.valid) {
+    fail(`validateExtensionSyntax: expected valid, got error: ${checkValid.error}`);
+  }
+
+  const checkEmpty = validateExtensionSyntax("");
+  if (checkEmpty.valid) {
+    fail(`validateExtensionSyntax: expected error on empty content`);
+  }
+
+  const checkNoDefault = validateExtensionSyntax(`function run() {}`);
+  if (checkNoDefault.valid) {
+    fail(`validateExtensionSyntax: expected error when default export is missing`);
+  }
+
+  const checkMismatched = validateExtensionSyntax(`export default function() { return ( }`);
+  if (checkMismatched.valid) {
+    fail(`validateExtensionSyntax: expected error on mismatched delimiters`);
+  }
+
+  // 2. scaffoldLocalExtension
+  const scaffolded = scaffoldLocalExtension({
+    slug: "smoke-test",
+    description: "Run local hardware smoke tests",
+    commandName: "smoke-test",
+    options: [{ value: "all", label: "all", description: "Run all tests" }],
+    implementationBody: `ctx.ui?.notify?.("Smoke tests passed", "info");`,
+  });
+
+  if (scaffolded.path !== ".omp/extensions/smoke-test.ts") {
+    fail(`scaffoldLocalExtension: unexpected path ${scaffolded.path}`);
+  }
+  if (!scaffolded.content.includes("smoke-test") || !scaffolded.content.includes("Smoke tests passed")) {
+    fail(`scaffoldLocalExtension: missing expected content, got:\n${scaffolded.content}`);
+  }
+  const scaffoldCheck = validateExtensionSyntax(scaffolded.content);
+  if (!scaffoldCheck.valid) {
+    fail(`scaffoldLocalExtension: generated code failed syntax validation: ${scaffoldCheck.error}`);
+  }
+
+  // 3. isSkillProceduralCandidate heuristic tests
+  const creativeSkill = `
+# Grilling
+Run an interview loop to stress-test your design. Never assume. Ask one question at a time.
+`;
+  const candCreative = isSkillProceduralCandidate(creativeSkill);
+  if (candCreative.isCandidate) {
+    fail(`isSkillProceduralCandidate: creative skill should NOT be flagged for graduation`);
+  }
+
+  const proceduralSkill = `
+# Clean Build
+Run the following build commands:
+\`\`\`bash
+npm run clean
+cargo build --release
+pytest tests/
+\`\`\`
+`;
+  const candProcedural = isSkillProceduralCandidate(proceduralSkill);
+  if (!candProcedural.isCandidate || candProcedural.estimatedTokenSavings <= 0) {
+    fail(`isSkillProceduralCandidate: procedural skill SHOULD be flagged for graduation, got ${JSON.stringify(candProcedural)}`);
+  }
+
+  // 4. graduateSkillToExtension
+  const graduated = graduateSkillToExtension({
+    skillPath: ".omp/skills/clean-build/SKILL.md",
+    skillContent: proceduralSkill,
+  });
+
+  if (graduated.extensionPath !== ".omp/extensions/clean-build.ts") {
+    fail(`graduateSkillToExtension: unexpected extensionPath ${graduated.extensionPath}`);
+  }
+  if (graduated.skillPathToDelete !== ".omp/skills/clean-build/SKILL.md") {
+    fail(`graduateSkillToExtension: unexpected skillPathToDelete ${graduated.skillPathToDelete}`);
+  }
+  if (graduated.tokenSavings <= 0) {
+    fail(`graduateSkillToExtension: expected positive token savings`);
+  }
+  const gradCheck = validateExtensionSyntax(graduated.extensionContent);
+  if (!gradCheck.valid) {
+    fail(`graduateSkillToExtension: generated extension failed syntax validation: ${gradCheck.error}`);
+  }
 }
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

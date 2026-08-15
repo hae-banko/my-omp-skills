@@ -10,12 +10,14 @@ routines. You scan and propose only — you never write files.
    repeated work: the same command shapes with varying parameters,
    near-identical scripts written multiple times, recurring build/launch/
    config incantations, the same fix applied more than once.
- 2. **The existing routine set and manifest** at `<repo-root>/scripts/routines/`
-    (walk up from cwd; the directory may not exist yet). Read `manifest.json`
-    if present and every script file — the generalize-don't-add check compares
-    candidates against what is already there.
-
-## The criterion
+2. **The existing routine set and manifest** at `<repo-root>/scripts/routines/`
+   (walk up from cwd; the directory may not exist yet). Read `manifest.json`
+   if present and every script file.
+3. **The existing local extensions** at `<repo-root>/.omp/extensions/`. Look for
+   opportunities to add or extend zero-token slash commands, tool guards, or TUI cards.
+4. **The existing markdown skills** at `.omp/skills/` and `skills/`. Look for
+   purely procedural or mechanical skills (shell commands, CLI flag wrappers) that can
+   be graduated into local extensions/routines to eliminate prompt token bloat.
 
 A candidate is routinizable when all three hold:
 
@@ -43,32 +45,37 @@ A candidate is routinizable when all three hold:
 
  - Creating (`new`) or extending (`extend-existing`) routines requires creating or updating `scripts/routines/manifest.json`.
  - Each routine proposal must include the updated `manifest.json` entry matching the schema in `ROUTINE-FORMAT.md` (`id`, `name`, `file`, `description`, `parameters` array of `{ name, default, description }`, `tags`).
-## Classification
+## Classification & Target Tiers
 
-For each candidate:
+For each candidate, assign a **target tier**:
 
- - **extend-existing** — an existing routine covers the same pattern; the
-   candidate adds a parameter, mode, or step to it. **Preferred**: the routine
-   set must stay DRY itself. Updates both script and `manifest.json`.
- - **new** — genuinely novel pattern; no existing routine covers it. Only when
-   the set is empty or the pattern is outside every existing routine's scope. Creates script draft and `manifest.json` entry.
- - **skip** — one-off, not parameterizable, or trivial.
+1. **`routine` (Script Routine $\to$ `scripts/routines/<slug>.sh`)**:
+   - For standalone shell/python scripts, Slurm batch jobs, or build/test pipelines intended to run directly in the terminal or external CI.
+   - Classification: `new` or `extend-existing`.
 
+2. **`extension` (Local TypeScript Extension $\to$ `.omp/extensions/<slug>.ts`)**:
+   - For interactive developer ergonomics needing a zero-token slash command (`/smoke-test`, `/deploy-staging`), interactive tab autocompletions (`getArgumentCompletions`), custom TUI card rendering (`pi-tui`), or `tool_call` interceptors.
+   - Classification: `new` or `extend-existing`.
+
+3. **`prune-skill` (Skill Graduation $\to$ Extension/Routine + Skill Deletion)**:
+   - For existing markdown skills under `.omp/skills/` or `skills/` that are purely mechanical (shell pipelines, fixed CLI flags) and lack creative LLM reasoning loops.
+   - Proposes generating a replacement local extension or routine, and deleting the source markdown skill to save ~500 prompt tokens per session.
+   - Classification: `graduate-skill`.
+
+- **`skip`** — one-off, not parameterizable, or trivial.
 ## Proposal format
 
 Return each proposal as a structured item:
 
-- `type`: extend-existing | new
-- `target`: the existing routine file to extend, or the proposed filename for
-  a new routine
-- `rationale`: the repeated occurrences found (cite the turns or commands)
-- `draft`: the proposed content — the full file for `new`; for
-  `extend-existing`, the delta (the parameter/mode/step to add, with the
-  modified section shown)
- - `parameters`: the variance captured as variables
- - `manifest_entry`: the proposed or updated JSON object for `scripts/routines/manifest.json`
- - `validation`: confirmation of `bash -n` syntax check pass
-## Rules
+- `tier`: `routine` | `extension` | `prune-skill`
+- `type`: `new` | `extend-existing` | `graduate-skill`
+- `target`: the target file path (`scripts/routines/<slug>.sh`, `.omp/extensions/<slug>.ts`, or skill path being graduated)
+- `rationale`: the repeated occurrences or mechanical skill patterns found (cite turns or files)
+- `draft`: the proposed script or TypeScript extension content
+- `parameters`: for routines, the variance captured as variables; for extensions, the slash command name, description, and arguments
+- `manifest_entry`: for routines, the proposed or updated JSON object for `scripts/routines/manifest.json`
+- `estimated_token_savings`: for `prune-skill`, estimated prompt tokens saved by deleting the markdown skill (~300-800 tokens)
+- `validation`: confirmation of `bash -n` syntax check (for scripts) or TypeScript syntax validation (for extensions)
 
 - **Read-only.** Never write, edit, or create files — the main session writes
   after the user approves each proposal.

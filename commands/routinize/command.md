@@ -36,9 +36,7 @@ gitignored: agent-side working material, fetched on demand, not repo assets.
 Delegate the scan to a background subagent (task agent). The brief is
 `ROUTINIZE-BRIEF.md` — read it and compose the subagent task from it, adding
 the user's steering prompt when one was given. The subagent scans the session
-transcript plus the existing routine set (`manifest.json` and script files), runs `bash -n` syntax checks, and returns structured proposals including manifest entries,
-classifying each as `extend-existing` (preferred), `new`, or `skip`.
-
+transcript, the existing routine set (`manifest.json` and script files), local extensions (`.omp/extensions/`), and existing skills (`skills/`, `.omp/skills/`). It returns structured proposals classified into three tiers: `routine`, `extension`, or `prune-skill`.
 ### 3. Present proposals
 
 When the results arrive, present every proposal to the user, each with:
@@ -53,17 +51,20 @@ For each proposal, get the user's decision: **approve**, **edit-then-write**
 (apply their changes to the draft), or **reject**. The approval gate is what
 keeps the routine set free of bloat — never write without it.
 
-### 5. Write approved routines
+### 5. Write approved items
 
-- `mkdir -p scripts/routines/`
-- `new`: write the file following `ROUTINE-FORMAT.md`.
-- `extend-existing`: modify the existing routine in place — add the
-  parameter/mode/step, preserving existing behavior via defaults. Never fork
-  a copy for a special case.
-- Create or update `scripts/routines/manifest.json` with the corresponding entry (`id`, `name`, `file`, `description`, `parameters`, `tags`) following the JSON schema in `ROUTINE-FORMAT.md`.
-- Ensure `.gitignore` contains the relative entry `scripts/routines/`; add it
-  if missing.
-### 6. Report
+- **`routine`**:
+  - `mkdir -p scripts/routines/`
+  - `new`: write script following `ROUTINE-FORMAT.md`.
+  - `extend-existing`: modify the existing routine in place, preserving existing behavior via defaults.
+  - Create or update `scripts/routines/manifest.json`.
+  - Ensure `.gitignore` contains `scripts/routines/`.
+- **`extension`**:
+  - `mkdir -p .omp/extensions/`
+  - Write or update `.omp/extensions/<slug>.ts` following the modular extension skeleton.
+- **`prune-skill` (Skill Graduation)**:
+  - Generate the replacement routine or extension.
+  - Upon explicit user approval, delete the mechanical markdown skill file (`.omp/skills/<name>/` or `skills/<name>/`).
 
 Summarize what was written or extended, including manifest entries, and note that future sessions fetch
 routines from `scripts/routines/` (the routine set is gitignored, so routine
