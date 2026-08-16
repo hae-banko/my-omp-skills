@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.67.0 — Pruned Rules Directory & Consolidated Knowledge Workflow Rule
+
+- **Pruned Internal Repo Rules from `rules/`** — Removed `kv-cache-token-economics.md` from the global `rules/` directory (where it was unnecessarily being injected into external user projects) and relocated it to `AGENTS.md` as an authoring invariant for this repository.
+- **Consolidated Knowledge Command Rules (`rules/knowledge-commands.md`)** — Merged 3 separate `alwaysApply` rule files (`use-record.md`, `use-pitfall.md`, `use-research.md`) into a single compact 4-line rule, saving system prompt tokens on every turn.
+- **Rules Directory Pruning** — Streamlined `rules/` down to 4 universal, high-leverage rules: `math-formatting.md`, `dont-look-for-claude-md.md`, `knowledge-commands.md`, and the `knowledge-append-only.md` TTSR tool interceptor.
 ## v0.66.0 — 14-Tier Tilt Stratification, Knowledge Card Fixes & Markdown Linter Suite
 
 - **14-Tier Granular Tilt Stratification & PPP Index (`src/features/tilt.ts`)** — Added 14 ultra-granular rage archetypes ($0 to $5,000+), Purchasing Power Parity (PPP) real-world valuations, active psychological debuffs, and visual progress bars to the next tier.

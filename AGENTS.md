@@ -77,6 +77,12 @@ All markdown files across `commands/` and `skills/` are validated on every `npm 
 ### 7. TUI Card Rendering (76-Column ANSI Invariant)
 Custom message renderers (`pi.registerMessageRenderer`) must calculate display width via `displayWidth` (which strips ANSI escape sequences before measuring character width) to ensure colored borders (`BORDER_COLORS`) strictly respect 76-column box boundaries.
 
+### 8. KV Cache Prefix Stability & Token Economics Invariants
+To maintain maximum LLM performance, low turn latency, and high KV cache hit rates ($>90\%$):
+- **Prefix Stability**: Dynamic system prompt additions (like `<relevant-knowledge>`) MUST be appended strictly to the tail (`evt.systemPrompt = sysPrompt + ...`). Never prepend or mutate prefix text.
+- **Deterministic Formats**: Use static, deterministic formats (e.g. `YYYY-MM-DD` mtime dates, deterministic list sorting) rather than volatile timestamps like `Date.now()`.
+- **Context Preservation**: Cap system prompt injections (e.g. max 5 records + 5 pitfalls in `kb-index-injector.ts`) to avoid context dilution.
+
 ## Rules
 
 - Every user-visible change bumps `package.json` **and** adds a `CHANGELOG.md` entry.
