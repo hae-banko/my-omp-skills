@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.69.0 — Ponytail Lazy Senior Dev Suite Port
+
+- **Ported Ponytail Skill Suite from Reference Corpus**:
+  - **`ponytail` (`skills/ponytail/SKILL.md`, `commands/ponytail/`)** — Enforces *The Ladder*: YAGNI → reuse in codebase → stdlib first → native platform features → shortest working diff. Supports `lite`, `full` (default), and `ultra` intensity levels with companion `PLATFORM-NATIVE.md` zero-dependency lookup cheatsheet.
+  - **`ponytail-review` (`skills/ponytail-review/SKILL.md`, `commands/ponytail-review.md`)** — Complexity-hunting diff review producing single-line actionable recommendations with tagged labels (`delete:`, `stdlib:`, `native:`, `yagni:`, `shrink:`) and net line impact scoring.
+  - **`ponytail-debt` (`skills/ponytail-debt/SKILL.md`, `commands/ponytail-debt.md`)** — Scans repository for `// ponytail:` and `# ponytail:` shortcut/deferral comments, compiling an actionable debt ledger tracking limits, ceilings, and upgrade triggers.
+  - **`ponytail-audit` (`skills/ponytail-audit/SKILL.md`, `commands/ponytail-audit.md`)** — Repo-wide over-engineering scan detecting packages in dependency manifests (`package.json`, `requirements.txt`) that can be dropped in favor of modern standard libraries.
+- **Added 4 User-Invoked Slash Commands** — Registered `/ponytail`, `/ponytail-review`, `/ponytail-debt`, and `/ponytail-audit` with tab-completion in `src/index.ts` (bringing the total to 33 slash commands and 18 model-invoked skills).
+- **Updated Test Suite & Markdown Linter** — Added tests and whitelist entries in `tests/test-utils.ts` and verified all frontmatter passes `npm test` and `npm run typecheck`.
 ## v0.68.0 — Legacy Docs Migration to ADRs
 
 - **Migrated Legacy `docs/` to `.omp/adr/`** — Converted 4 historical design notes into standardized Architectural Decision Records:

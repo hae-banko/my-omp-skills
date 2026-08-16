@@ -1,13 +1,13 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.64.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.69.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-29-orange" alt="29 slash commands" />
+  <img src="https://img.shields.io/badge/commands-33-orange" alt="33 slash commands" />
 </p>
 
-An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **29 user-invoked slash commands**, **14 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **33 user-invoked slash commands**, **18 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
@@ -73,7 +73,7 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 
 ---
 
-## Slash Commands (29 User-Invoked Commands)
+## Slash Commands (33 User-Invoked Commands)
 
 | Command | Category | Description |
 | --- | --- | --- |
@@ -106,10 +106,14 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 | `/teach` | Knowledge & Upkeep | Teaches a skill or concept over multiple sessions using current directory as a workspace. |
 | `/tilt` | Quality & Controls | Inspects user tilt level, swear jar balance, and global rage leaderboard in a zero-token TUI card. |
 | `/writing-great-skills` | Knowledge & Upkeep | Reference guide for writing and editing agent skills. |
+| `/ponytail` | Quality & Controls | Lazy senior dev mode: YAGNI, stdlib & native first, shortest working diff (/ponytail [lite|full|ultra]). |
+| `/ponytail-review` | Quality & Controls | Reviews diffs exclusively for over-engineering, unneeded abstractions, and complexity. |
+| `/ponytail-debt` | Knowledge & Upkeep | Scans codebase for deliberate shortcut comments and compiles a tracked debt ledger. |
+| `/ponytail-audit` | Audit | Whole-repo audit for over-engineering and dependencies replaceable by stdlib/native features. |
 
 ---
 
-## Model-Invoked Skills (14 Skills)
+## Model-Invoked Skills (18 Skills)
 
 Omp automatically loads model-invoked skills when conversation or codebase context matches the skill condition.
 
@@ -129,6 +133,10 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 | `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/`). | **User-invoked only**: explicitly requested by user. |
 | `show-me` | Visual explanations via sketches, call trees, file layouts, Mermaid, or HTML. | Explaining structure, control flow, UI hierarchy, or architecture. |
 | `design-control-loop` | Cybernetic control loop design (sensor, controller, actuator) for codebase workflows. | Designing scheduled feedback loops, PR workflows, or quality gates. |
+| `ponytail` | Enforces the Ladder: YAGNI → reuse in codebase → stdlib → native platform → shortest diff. | Any coding, refactoring, fixing, or designing task. |
+| `ponytail-review` | Complexity-hunting diff review with single-line tag recommendations (`delete:`, `stdlib:`, `native:`, `yagni:`, `shrink:`). | User asks to review for over-engineering or bloat. |
+| `ponytail-debt` | Scans and compiles `ponytail:` shortcut and deferral comments into a structured debt ledger. | User asks to track deferred shortcuts or ponytail debt. |
+| `ponytail-audit` | Whole-repo over-engineering scan prioritizing packages and wrappers replaceable by stdlib. | User asks for repo-wide complexity or dependency audit. |
 
 ---
 
@@ -150,3 +158,4 @@ Adapted from open-source extension suites (all MIT licensed):
 - [Weizhena/deep-research-skills](https://github.com/Weizhena/deep-research-skills) — Deep research workflow architecture.
 - [humanlayer/skills](https://github.com/humanlayer/humanlayer) — `show-me` and `design-control-loop` skills.
 - [dkmnx/pi-clarify](https://github.com/dkmnx/pi-clarify) — Prompt clarification pattern.
+- [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) — Ponytail lazy senior dev skill and over-engineering audit/review suite.

@@ -1549,6 +1549,37 @@ const COMMANDS: CommandSpec[] = [
       await runTiltCommand(pi, root, args, ctx);
     },
   },
+  {
+    name: "ponytail",
+    description: "Lazy senior dev mode — question speculative code, stdlib & native first, shortest working diff. /ponytail [lite|full|ultra].",
+    bodyPath: "commands/ponytail/command.md",
+    companions: ["commands/ponytail/PLATFORM-NATIVE.md"],
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const options = [
+        { value: "lite", label: "lite", description: "Build requested code, but name the lazier alternative in one line" },
+        { value: "full", label: "full", description: "Enforce the ladder strictly (stdlib/native first, shortest diff) — default" },
+        { value: "ultra", label: "ultra", description: "YAGNI extremist: deletion before addition, ship one-liner and challenge requirement" },
+      ];
+      const lower = argumentPrefix.toLowerCase().trim();
+      if (!lower) return options;
+      return options.filter((o) => o.value.startsWith(lower));
+    },
+  },
+  {
+    name: "ponytail-review",
+    description: "Review diffs exclusively for over-engineering, unneeded abstractions, and complexity.",
+    bodyPath: "commands/ponytail-review.md",
+  },
+  {
+    name: "ponytail-debt",
+    description: "Scan codebase for ponytail shortcut comments and compile a debt ledger.",
+    bodyPath: "commands/ponytail-debt.md",
+  },
+  {
+    name: "ponytail-audit",
+    description: "Whole-repo audit for over-engineering and dependencies replaceable by stdlib/native features.",
+    bodyPath: "commands/ponytail-audit.md",
+  },
 ];
 
 function loadBody(rel: string): string {
