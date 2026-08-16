@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.68.0 — Legacy Docs Migration to ADRs
+
+- **Migrated Legacy `docs/` to `.omp/adr/`** — Converted 4 historical design notes into standardized Architectural Decision Records:
+  - **ADR 0003**: *Native LaTeX Math Rendering Discipline* (`.omp/adr/0003-native-latex-math-rendering.md`)
+  - **ADR 0004**: *Settle-Time Reflection Pass via Session-Stop Hook (Hindsight)* (`.omp/adr/0004-hindsight-session-stop-reflection.md`)
+  - **ADR 0005**: *Multi-Agent Workspace Integration via Herdr CLI* (`.omp/adr/0005-herdr-multi-agent-workspace-integration.md`)
+  - **ADR 0006**: *Reference Corpus Acquisition and Consultation Boundaries* (`.omp/adr/0006-reference-corpus-acquisition-and-consultation.md`)
+- **Removed Legacy `docs/` Directory** — Cleaned up unindexed historical `.md` files to eliminate developer confusion and keep the repository root strictly focused on extension buckets (`commands/`, `skills/`, `rules/`, `src/`, `tests/`).
 ## v0.67.0 — Pruned Rules Directory & Consolidated Knowledge Workflow Rule
 
 - **Pruned Internal Repo Rules from `rules/`** — Removed `kv-cache-token-economics.md` from the global `rules/` directory (where it was unnecessarily being injected into external user projects) and relocated it to `AGENTS.md` as an authoring invariant for this repository.
