@@ -129,6 +129,7 @@ export async function runKnowledgeSuite(ctx: TestContext): Promise<void> {
       this.msgs.push(msg);
     },
   };
+  ctx.customMessages.length = 0;
   await runRecentCommand({
     root: fixtureRoot,
     kind: "record",
@@ -136,6 +137,38 @@ export async function runKnowledgeSuite(ctx: TestContext): Promise<void> {
     ctx: { ui: recentMockUI },
     pi: ctx.pi,
   });
+
+  const recordMsg = ctx.customMessages.find((m) => m.customType === "knowledge-record");
+  if (!recordMsg) {
+    fail("/record --recent: no knowledge-record message dispatched");
+  } else {
+    const msgContent = typeof recordMsg.content === "string" ? recordMsg.content : "";
+    if (msgContent.length === 0) {
+      fail("/record --recent: empty content in message");
+    }
+    if (!msgContent.includes("DTCM Architecture")) {
+      fail(`/record --recent: missing DTCM title in content: ${msgContent}`);
+    }
+  }
+
+  ctx.customMessages.length = 0;
+  await runRecentCommand({
+    root: fixtureRoot,
+    kind: "pitfall",
+    rawArgs: "--recent",
+    ctx: { ui: recentMockUI },
+    pi: ctx.pi,
+  });
+
+  const pitfallMsg = ctx.customMessages.find((m) => m.customType === "knowledge-pitfall");
+  if (!pitfallMsg) {
+    fail("/pitfall --recent: no knowledge-pitfall message dispatched");
+  } else {
+    const pitfallContent = typeof pitfallMsg.content === "string" ? pitfallMsg.content : "";
+    if (pitfallContent.length === 0) {
+      fail("/pitfall --recent: empty content in message");
+    }
+  }
 
   fixture.cleanup();
 }

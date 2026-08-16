@@ -229,12 +229,40 @@ function listMarkdownFiles(dir: string): string[] {
   }
 }
 
+export function extractEntryTitle(body: string, filename: string): string {
+  // 1. Check YAML frontmatter title: "..."
+  const titleMatch = body.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+  if (titleMatch && titleMatch[1]?.trim()) {
+    return titleMatch[1].trim();
+  }
+  // 2. Check markdown heading # ...
+  const headingMatch = body.match(/^#\s+(.+)$/m);
+  if (headingMatch && headingMatch[1]?.trim()) {
+    return headingMatch[1].trim();
+  }
+  // 3. Check first non-frontmatter, non-empty line
+  const lines = body.split("\n").map((l) => l.trim());
+  let inFrontmatter = false;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (i === 0 && l === "---") {
+      inFrontmatter = true;
+      continue;
+    }
+    if (inFrontmatter) {
+      if (l === "---") inFrontmatter = false;
+      continue;
+    }
+    if (l.length > 0) {
+      return l.slice(0, 120);
+    }
+  }
+  // 4. Fallback to filename without .md
+  return filename.replace(/\.md$/, "").replace(/^\d{4}-\d{2}-\d{2}_?/, "");
+}
+
 function firstLine(body: string): string {
-  const line = body
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => l.length > 0 && !l.startsWith("---"));
-  return line ? line.slice(0, 120) : "";
+  return extractEntryTitle(body, "");
 }
 
 export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeReadResult {
@@ -420,7 +448,11 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
       const filePath = join(dir, f);
       if (!existsSync(filePath) || !statSync(filePath).isFile()) continue;
       const body = readFileSync(filePath, "utf8");
-      lines.push(query.full ? `## ${f}\n${body}` : `- ${f} — ${firstLine(body)}`);
+      const title = extractEntryTitle(body, f);
+      const dateMatch = f.match(/^(\d{4}-\d{2}-\d{2})/);
+      const dateStr = dateMatch ? dateMatch[1] : "";
+      const displayLine = dateStr ? `• [${dateStr}] ${title}` : `• ${title}`;
+      lines.push(query.full ? `## ${f}\n${body}` : displayLine);
       validPaths.push(filePath);
     }
     if (lines.length === 0) {

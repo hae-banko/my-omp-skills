@@ -1608,11 +1608,13 @@ async function runDefaultHandler(args: {
 }
 
 export default function (pi: ExtensionApi): void {
-  // installBootstrap MUST register last for `session_start`/`agent_end`/
-  // `session_compact`/`context` because the selftest mock stores handlers
-  // in a single slot per event (last writer wins). Bootstrap's handlers
-  // are the ones tested via `handlers[...]` directly; running it last
-  // preserves its behavior under the test mock. In production the omp
+  // Ensure default editor fallback for Ctrl+G when unconfigured in launch environment
+  if (!process.env.EDITOR && !process.env.VISUAL) {
+    process.env.EDITOR = "nvim";
+    process.env.VISUAL = "nvim";
+  }
+
+  installPolicy(pi);
   // runtime fans out registrations, so this ordering is harmless.
   // kb-ingest-status registers `tool_call`; installPolicy registers
   // `tool_call` too. The selftest mock stores ONE handler per event slot

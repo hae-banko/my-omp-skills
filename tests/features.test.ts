@@ -17,12 +17,14 @@ import {
 import {
   calculateDefcon,
   defconLabel,
+  getTiltStratum,
   readLocalTilt,
   recordTiltIncident,
   renderTiltCard,
   scanPromptTilt,
   TILT_CUSTOM_TYPE,
   TILT_DICTIONARY,
+  TILT_STRATA,
   writeLocalTilt,
 } from "../src/features/tilt.ts";
 import {
@@ -33,15 +35,6 @@ import {
   TIMELINE_CUSTOM_TYPE,
 } from "../src/features/timeline.ts";
 import {
-  findRoutinesRepoRoot,
-  graduateSkillToExtension,
-  isSkillProceduralCandidate,
-  scaffoldLocalExtension,
-  validateExtensionSyntax,
-} from "../src/features/routines.ts";
-import { didRealWork, isHindsightEnabled, reloadHindsightConfig } from "../src/features/hindsight.ts";
-import { parseHerdrOutput } from "../src/features/herdr-tools.ts";
-import {
   CLARIFY_PROMPT,
   isClarifyDebugEnabled,
   isClarifyEnabled,
@@ -51,15 +44,20 @@ import {
   shouldBypassClarify,
   stripClarifyBypassPrefix,
 } from "../src/features/clarify.ts";
+import { didRealWork } from "../src/features/hindsight.ts";
+import { parseHerdrOutput } from "../src/features/herdr-tools.ts";
+import {
+  isSkillProceduralCandidate,
+  scaffoldLocalExtension,
+  validateExtensionSyntax,
+} from "../src/features/routines.ts";
 import {
   createTempFixture,
   fail,
   type TestContext,
 } from "./test-utils.ts";
-
 export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
   const { tools, customMessages } = ctx;
-
   // 1. Timeline limit parser & formatting
   if (parseTimelineLimit("") !== 15) fail("timeline: parseTimelineLimit('') should be 15");
   if (parseTimelineLimit("5") !== 5) fail("timeline: parseTimelineLimit('5') should be 5");
@@ -78,7 +76,18 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
     fail("scanPromptTilt: failed to detect profanity in tilt prompt");
   }
 
-  // 3. Prompt Clarification
+  // 2b. Granular Stratification Tiers & PPP
+  if (TILT_STRATA.length < 12) {
+    fail(`TILT_STRATA: expected >= 12 tiers, got ${TILT_STRATA.length}`);
+  }
+  const zeroStratum = getTiltStratum(0);
+  if (zeroStratum.tier !== 0) fail(`getTiltStratum(0): expected tier 0, got ${zeroStratum.tier}`);
+  const userStratum = getTiltStratum(240);
+  if (userStratum.tier !== 7 || !userStratum.name.includes("WSL2")) {
+    fail(`getTiltStratum(240): expected tier 7 WSL2, got: ${JSON.stringify(userStratum)}`);
+  }
+  const maxStratum = getTiltStratum(10000);
+  if (maxStratum.tier !== 13) fail(`getTiltStratum(10000): expected tier 13, got ${maxStratum.tier}`);
   if (isVagueInput("git status") || isVagueInput("npm test")) {
     fail("isVagueInput: common developer commands flagged as vague");
   }

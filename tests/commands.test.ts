@@ -9,6 +9,10 @@ import {
   filterCompletions,
 } from "../src/core/completions.ts";
 import {
+  scanAndValidateMarkdownDir,
+  validateMarkdownFrontmatter,
+} from "../src/core/markdown-lint.ts";
+import {
   createTempFixture,
   EXPECTED_COMMANDS,
   fail,
@@ -164,5 +168,31 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   const subRes = subCompleter("run sc");
   if (!subRes || subRes.length !== 2) {
     fail(`createSubcommandCompleter: expected 2 script options`);
+  }
+
+  // 7. Markdown Frontmatter Linting & Syntax Validation
+  const unclosedCheck = validateMarkdownFrontmatter("---\nname: test\n# missing end");
+  if (unclosedCheck.length === 0 || !unclosedCheck[0].includes("Unclosed YAML")) {
+    fail("validateMarkdownFrontmatter: failed to detect unclosed frontmatter");
+  }
+
+  const dupKeyCheck = validateMarkdownFrontmatter("---\nname: a\nname: b\n---\nbody");
+  if (dupKeyCheck.length === 0 || !dupKeyCheck[0].includes("Duplicate frontmatter key")) {
+    fail("validateMarkdownFrontmatter: failed to detect duplicate key");
+  }
+
+  const quoteCheck = validateMarkdownFrontmatter('---\nname: "unclosed\n---\nbody');
+  if (quoteCheck.length === 0 || !quoteCheck[0].includes("Mismatched quotes")) {
+    fail("validateMarkdownFrontmatter: failed to detect mismatched quotes");
+  }
+
+  const cmdFailures = scanAndValidateMarkdownDir("commands");
+  if (cmdFailures.length > 0) {
+    fail(`commands markdown lint failures: ${JSON.stringify(cmdFailures, null, 2)}`);
+  }
+
+  const skillFailures = scanAndValidateMarkdownDir("skills");
+  if (skillFailures.length > 0) {
+    fail(`skills markdown lint failures: ${JSON.stringify(skillFailures, null, 2)}`);
   }
 }

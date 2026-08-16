@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.66.0 — 14-Tier Tilt Stratification, Knowledge Card Fixes & Markdown Linter Suite
+
+- **14-Tier Granular Tilt Stratification & PPP Index (`src/features/tilt.ts`)** — Added 14 ultra-granular rage archetypes ($0 to $5,000+), Purchasing Power Parity (PPP) real-world valuations, active psychological debuffs, and visual progress bars to the next tier.
+- **Fixed Knowledge Card Double-Boxing (`src/features/recent-command.ts`, `src/knowledge/knowledge-tool.ts`)** — Resolved card rendering collision where pre-boxed strings were re-boxed by the transcript message renderer, restoring clean display for `/record --recent` and `/pitfall --recent`.
+- **Frontmatter Title Extraction (`src/knowledge/knowledge.ts`)** — Added `extractEntryTitle` to extract YAML `title:` frontmatter, markdown headings, and clean timestamps (`• [YYYY-MM-DD] <title>`) for knowledge listings.
+- **Markdown Frontmatter Linter & Integrity Suite (`src/core/markdown-lint.ts`, `tests/commands.test.ts`)** — Implemented recursive frontmatter validator checking unclosed `---` boundaries, duplicate keys, quote mismatches, and YAML syntax across all 82 files in `commands/` and `skills/`.
+- **Neovim Editor Default Fallback (`src/index.ts`)** — Initialized fallback `process.env.EDITOR = "nvim"` and `process.env.VISUAL = "nvim"` when unset in the parent launch environment for `Ctrl+G` external editor support.
 ## v0.65.0 — Modular Test Architecture, Unified Workspace & Zero-Dependency Report Synthesizer
 
 - **Modular Test Suite Architecture (`tests/`, `scripts/selftest.ts`)** — Decoupled the monolithic 4,800-line test script into domain-grouped test suites under `tests/`: `test-utils.ts`, `commands.test.ts`, `knowledge.test.ts`, `research.test.ts`, `features.test.ts`, and `protocol.test.ts`. Converted `scripts/selftest.ts` into a fast, lightweight master runner aggregator executing the full suite in under 1 second.

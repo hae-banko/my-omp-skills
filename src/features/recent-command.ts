@@ -64,37 +64,33 @@ export interface RunRecentCommandArgs {
 export async function runRecentCommand(args: RunRecentCommandArgs): Promise<{ handled: boolean }> {
   const { kind, rawArgs, root, pi, ctx } = args;
   if (!isRecentArgs(rawArgs)) return { handled: false };
-
   const customType = kind === "record" ? RECORD_CUSTOM_TYPE : PITFALL_CUSTOM_TYPE;
   const kindLabel = kind === "record" ? "RECORD" : "PITFALL";
   const kindNoun = kind === "record" ? "record" : "pitfall";
-
   const kbRoot = findKnowledgeRoot(root);
   if (!kbRoot) {
-    const message = `No .omp/knowledge/ found from this working directory — run /record once (or /omp-setup) to create it.`;
-    ctx.ui?.notify?.(message, "warn");
-    const card = toolResultCard(
-      [`○ No .omp/knowledge/ directory here — run /record <title> to create it.`],
-      `${kindLabel} — not found`,
-      BORDER_COLORS.cyan,
+    ctx.ui?.notify?.(
+      `No .omp/knowledge/ found from this working directory — run /record once (or /omp-setup) to create it.`,
+      "warn",
     );
     pi.sendMessage({
       customType,
-      content: stringifyCard(card),
+      content: `○ No .omp/knowledge/ directory here — run /record <title> to create it.`,
       display: true,
       attribution: "user",
     });
     return { handled: true };
   }
-
   const limit = parseRecentCount(rawArgs);
   const result = readKnowledge(kbRoot, { type: kind === "record" ? "records" : "pitfalls", limit });
-  const lines = result.text.split("\n").slice(0, MAX_LIMIT);
-  const label = `${kindLabel} — ${kind.toUpperCase()}S (${result.details.count})`;
-  const card = toolResultCard(lines, label, BORDER_COLORS.cyan);
+  const rawLines = result.text.split("\n").filter((l) => l.trim().length > 0).slice(0, MAX_LIMIT);
+  const body =
+    rawLines.length > 0
+      ? rawLines
+      : [`○ No ${kind === "record" ? "records" : "pitfalls"} saved yet — use /${kind} <title> to capture your first finding.`];
   pi.sendMessage({
     customType,
-    content: stringifyCard(card),
+    content: body.join("\n"),
     display: true,
     attribution: "user",
   });
@@ -104,28 +100,4 @@ export async function runRecentCommand(args: RunRecentCommandArgs): Promise<{ ha
       : `${result.details.count} recent ${kindNoun}${result.details.count === 1 ? "" : "s"}`;
   ctx.ui?.notify?.(notifyMsg, "info");
   return { handled: true };
-}
-
-/**
- * Flatten a Container from toolResultCard into a single string for the
- * transcript message body. The same renderer in src/knowledge-tool.ts
- * receives the string back and rebuilds the card visually — see
- * `registerMessageCard` there for the message-payload -> card round-trip.
- *
- * The Container's children are accessed via the documented `@oh-my-pi/pi-tui`
- * shape (`{ text: string }` per child); we narrow with `in` + `typeof` to
- * stay honest about what we trust here.
- */
-function stringifyCard(card: unknown): string {
-  if (!card || typeof card !== "object" || !("children" in card)) return "";
-  const children = (card as { children: unknown }).children;
-  if (!Array.isArray(children)) return "";
-  const lines: string[] = [];
-  for (const child of children) {
-    if (child && typeof child === "object" && "text" in child) {
-      const text = (child as { text: unknown }).text;
-      if (typeof text === "string") lines.push(text);
-    }
-  }
-  return lines.join("\n");
 }

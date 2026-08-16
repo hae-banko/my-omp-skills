@@ -36,6 +36,170 @@ export interface TiltBreakdown {
   caps_rage: number;
 }
 
+export interface TiltStratum {
+  tier: number;
+  level: number;
+  name: string;
+  minDollars: number;
+  maxDollars: number;
+  ppp: string; // Purchasing Power Parity
+  debuff: string;
+  color: string;
+}
+
+export const TILT_STRATA: ReadonlyArray<TiltStratum> = [
+  {
+    tier: 0,
+    level: 1,
+    name: "Zen Monk (Untested Code)",
+    minDollars: 0,
+    maxDollars: 0,
+    ppp: "Filtered tap water in a paper cup",
+    debuff: "None. Delusional sense of operational stability.",
+    color: BORDER_COLORS.green,
+  },
+  {
+    tier: 1,
+    level: 10,
+    name: "Petty Cash Slippage",
+    minDollars: 0.5,
+    maxDollars: 4.5,
+    ppp: "1 Lukewarm vending machine coffee",
+    debuff: "-2% Typing speed · Mild sigh into microphone",
+    color: BORDER_COLORS.cyan,
+  },
+  {
+    tier: 2,
+    level: 18,
+    name: "CSS Z-Index Victim",
+    minDollars: 5.0,
+    maxDollars: 14.5,
+    ppp: "1 Sweetgreen Guacamole Greens Salad",
+    debuff: "Passive-aggressive thumbs-up emoji on PRs",
+    color: BORDER_COLORS.cyan,
+  },
+  {
+    tier: 3,
+    level: 25,
+    name: "Vite / Webpack Cache Desync",
+    minDollars: 15.0,
+    maxDollars: 29.5,
+    ppp: "1 Month Copilot Pro + UberEats delivery fee",
+    debuff: "Frontruns build errors with rapid hot-reloads",
+    color: BORDER_COLORS.blue,
+  },
+  {
+    tier: 4,
+    level: 35,
+    name: "Linker Group Civil War",
+    minDollars: 30.0,
+    maxDollars: 59.5,
+    ppp: "Mechanical switch lubing kit & artisan keycap",
+    debuff: "Switch spring ping amplified by 200%",
+    color: BORDER_COLORS.yellow,
+  },
+  {
+    tier: 5,
+    level: 45,
+    name: "Glibc Heap Chunk Decapitation",
+    minDollars: 60.0,
+    maxDollars: 99.5,
+    ppp: "1 Linear Red Switch Acoustic Keyboard",
+    debuff: "Blindness to compiler warning banners",
+    color: BORDER_COLORS.yellow,
+  },
+  {
+    tier: 6,
+    level: 52,
+    name: "ACPI Power State Freeze",
+    minDollars: 100.0,
+    maxDollars: 179.5,
+    ppp: "Herman Miller Aeron lumbar support cushion",
+    debuff: "+35% Keystroke volume · Laptop refuses sleep",
+    color: BORDER_COLORS.magenta,
+  },
+  {
+    tier: 7,
+    level: 60,
+    name: "WSL2 DMA Corruption / Subprime Rage",
+    minDollars: 180.0,
+    maxDollars: 299.5,
+    ppp: "1 Annual JetBrains Pack OR 1.2B Llama-3 Tokens",
+    debuff: "-35% Typing Accuracy · Keycaps classified as percussion",
+    color: BORDER_COLORS.magenta,
+  },
+  {
+    tier: 8,
+    level: 70,
+    name: "OOM-Killer Database Homicide",
+    minDollars: 300.0,
+    maxDollars: 499.5,
+    ppp: "1 Month Enterprise Datadog APM Subscription",
+    debuff: "Heart rate 145 BPM · Ignores all stack traces",
+    color: BORDER_COLORS.red,
+  },
+  {
+    tier: 9,
+    level: 78,
+    name: "Raft Split-Brain Consensus Collapse",
+    minDollars: 500.0,
+    maxDollars: 849.5,
+    ppp: "1 Refurbished Herman Miller Aeron Classic",
+    debuff: "Types 'DO NOT RUN TERRAFORM' in all-caps",
+    color: BORDER_COLORS.red,
+  },
+  {
+    tier: 10,
+    level: 85,
+    name: "Linus Torvalds 2005 GNOME Roast",
+    minDollars: 850.0,
+    maxDollars: 1499.5,
+    ppp: "1 Hour of BigLaw Partner Billable Retainer",
+    debuff: "Permanent tunnel vision · rm -rf .git impulse",
+    color: BORDER_COLORS.red,
+  },
+  {
+    tier: 11,
+    level: 90,
+    name: "Chapter 11 Restructuring",
+    minDollars: 1500.0,
+    maxDollars: 2999.5,
+    ppp: "1 NVIDIA RTX 4090 GPU (Founders Edition)",
+    debuff: "Court-appointed trustee must approve git amends",
+    color: BORDER_COLORS.red,
+  },
+  {
+    tier: 12,
+    level: 95,
+    name: "SEC Forensic Subpoena",
+    minDollars: 3000.0,
+    maxDollars: 4999.5,
+    ppp: "1 Apple Vision Pro with Zeiss prescription inserts",
+    debuff: "Cosmic ray bit-flip in developer prefrontal cortex",
+    color: BORDER_COLORS.red,
+  },
+  {
+    tier: 13,
+    level: 99,
+    name: "Weimar Hyper-Inflation Collapse",
+    minDollars: 5000.0,
+    maxDollars: Infinity,
+    ppp: "Full YC Seed Round for a 3-person Startup",
+    debuff: "Ascended Beyond Computing · Unplugs datacenter",
+    color: BORDER_COLORS.red,
+  },
+];
+
+/** Resolve the granular stratum matching a dollar balance. */
+export function getTiltStratum(dollars: number): TiltStratum {
+  for (let i = TILT_STRATA.length - 1; i >= 0; i--) {
+    if (dollars >= TILT_STRATA[i].minDollars) {
+      return TILT_STRATA[i];
+    }
+  }
+  return TILT_STRATA[0];
+}
+
 export interface LocalTiltState {
   project: string;
   project_strikes: number;
@@ -70,7 +234,6 @@ export interface TiltDictionaryEntry {
   category: TiltCategory;
   points: number;
 }
-
 /**
  * Deterministic profanity & rage dictionary with fixed point weights.
  */
@@ -377,18 +540,32 @@ export function renderTiltCard(payload: TiltCardPayload): string[] {
   lines.push(boxLine(` ${bold("TILT-O-METER & SWEAR JAR")} ${colorize(`[${def.label}]`, def.color)}`, borderColor));
   lines.push(makeDivider(borderColor));
 
+  // Granular Stratum & Archetype
+  const stratum = getTiltStratum(local.swear_jar_total);
+  lines.push(boxLine(` ${bold("Rage Archetype:")} ${colorize(`[Tier ${stratum.tier} · Lv. ${stratum.level}] ${stratum.name}`, stratum.color)}`, borderColor));
+  lines.push(boxLine(`   ${dim("PPP Valuation:")} ${italic(stratum.ppp)}`, borderColor));
+  lines.push(boxLine(`   ${dim("Active Debuff:")} ${colorize(stratum.debuff, BORDER_COLORS.yellow)}`, borderColor));
+
+  if (stratum.tier < TILT_STRATA.length - 1) {
+    const nextStratum = TILT_STRATA[stratum.tier + 1];
+    const tierSpan = nextStratum.minDollars - stratum.minDollars;
+    const prog = tierSpan > 0 ? Math.min(1, Math.max(0, (local.swear_jar_total - stratum.minDollars) / tierSpan)) : 1;
+    const progBar = makeProgressBar(prog, 10);
+    lines.push(boxLine(`   ${dim("Next Tier:")}     ${progBar} $${local.swear_jar_total.toFixed(2)} / $${nextStratum.minDollars.toFixed(2)} (${nextStratum.name})`, borderColor));
+  }
+  lines.push(makeDivider(borderColor));
+
   // Vibe Meter Bar
   const vibeRatio = (6 - local.defcon) / 5; // 0.2 (chill) to 1.0 (rage)
   const vibeBar = makeProgressBar(vibeRatio, 16);
-  lines.push(boxLine(` ${bold("Session Vibe:")} ${vibeBar} Level ${6 - local.defcon}/5`, borderColor));
-  lines.push(boxLine(`   Session Strikes: ${bold(String(local.session_strikes))} · Swear Jar Balance: ${colorize(`$${local.swear_jar_total.toFixed(2)}`, BORDER_COLORS.green)}`, borderColor));
+  lines.push(boxLine(` ${bold("Session Vibe:")} ${vibeBar} Level ${6 - local.defcon}/5 · Strikes: ${bold(String(local.session_strikes))}`, borderColor));
+  lines.push(boxLine(`   Swear Jar Total: ${colorize(`$${local.swear_jar_total.toFixed(2)}`, BORDER_COLORS.green)} (${(local.swear_jar_total / SWEAR_JAR_FEE_PER_POINT).toFixed(0)} rage pts)`, borderColor));
 
   if (local.last_incident) {
     const trig = local.last_incident.trigger;
     lines.push(boxLine(`   ${dim("Last Incident:")} ${italic(truncateToWidth(trig, INNER_WIDTH - 20))}`, borderColor));
   }
   lines.push(makeDivider(borderColor));
-
   // Category Breakdown Bar Chart
   lines.push(boxLine(` ${bold("Profanity Category Breakdown:")}`, borderColor));
   const maxCategory = Math.max(
