@@ -43,6 +43,7 @@ import {
   makeTopBorder,
   padToWidth,
   statusBorderColor,
+  starsFor,
   truncateToWidth,
 } from "./research-format.ts";
 import {
@@ -55,7 +56,6 @@ import {
   type ResearchProjectSummary,
 } from "./research-store.ts";
 import { phaseOf, phaseStepper } from "./research-status.ts";
-import { starsFor } from "./research-format.ts";
 import { getWorkspaceContext } from "../core/workspace.ts";
 import { findRepoRoot } from "../core/locators.ts";
 import type {
@@ -149,7 +149,6 @@ function clampInt(value: number, lo: number, hi: number): number {
   if (hi < lo) return lo;
   return Math.max(lo, Math.min(hi, Math.round(value)));
 }
-
 
 function projectEntryFromSummary(summary: ResearchProjectSummary, root: string): ResearchOverlayProjectEntry {
   const project = readProject(root, summary.slug);
@@ -719,6 +718,7 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     else if (next >= cur + visible) this.state.scrollOffsets[tab] = next - visible + 1;
   }
 }
+
 /**
  * Create a new interactive Research Dashboard overlay. Loads the project list
  * for `root` and pre-selects `initialSlug` if it exists.

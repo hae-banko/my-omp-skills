@@ -64,6 +64,7 @@ import { installKbIndexInjector } from "./knowledge/kb-index-injector.ts";
 import {
   createResearchOverlay,
   type ResearchOverlayAction,
+  type ResearchOverlayComponent,
 } from "./research/research-overlay.ts";
 import { installRoutinesTool } from "./features/routines.ts";
 import {
