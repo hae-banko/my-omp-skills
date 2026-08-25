@@ -86,11 +86,6 @@ export interface ResearchOverlayState {
   showProjectPicker: boolean;
 }
 
-export interface ResearchOverlayActionResult {
-  action: "run";
-  command?: string;
-}
-
 export type ResearchOverlayAction =
   | { action: "run"; command: string }
   | { action: "dismiss" };
@@ -103,14 +98,7 @@ export interface ResearchOverlayComponent {
   handleInput(key: string): ResearchOverlayAction | undefined;
 }
 
-export interface ResearchOverlayOptions {
-  initialTab?: ResearchOverlayTab;
-}
-
-export type ResearchOverlayDone = (
-  result: ResearchOverlayActionResult | { action: "dismiss" },
-) => void;
-
+export type ResearchOverlayDone = (result: ResearchOverlayAction) => void;
 const TABS: ResearchOverlayTab[] = ["overview", "items", "fields", "artifacts"];
 const TAB_LABELS: Record<ResearchOverlayTab, string> = {
   overview: "Overview",
@@ -444,28 +432,28 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     return lines;
   }
 
-  private renderItems(): string[] {
-    const data = this.currentData();
+  private renderScrollableList<T>(
+    title: string,
+    items: T[],
+    tab: ResearchOverlayTab,
+    borderColor: string,
+    formatRow: (item: T, idx: number, isActive: boolean) => string,
+    emptyMessage: string,
+  ): string[] {
     const inner = Math.max(20, this.width - 2);
     const usableHeight = Math.max(4, this.height - HEADER_HEIGHT - FOOTER_HEIGHT);
-    const items: ResearchItemSpec[] = data?.itemSpecs ?? data?.review.items ?? [];
-    const borderColor = BORDER_COLORS.cyan;
     const lines: string[] = [makeTopBorder(borderColor)];
-    lines.push(boxLine(`  📋 ${bold("Items")} (${items.length}) — ↑/↓ select · Enter run`, borderColor));
+    lines.push(boxLine(`  ${title} (${items.length})`, borderColor));
+
     if (items.length === 0) {
-      lines.push(boxLine(`  ⭕ (no items defined — outline.yaml missing)`, borderColor));
+      lines.push(boxLine(`  ⭕ ${emptyMessage}`, borderColor));
     } else {
-      const start = clampInt(this.state.scrollOffsets.items, 0, Math.max(0, items.length - 1));
+      const start = clampInt(this.state.scrollOffsets[tab], 0, Math.max(0, items.length - 1));
       const visible = items.slice(start, start + usableHeight);
       visible.forEach((item, i) => {
         const idx = start + i;
         const isActive = idx === this.state.selectedItemIndex;
-        const marker = isActive ? colorize("●", BORDER_COLORS.green) : colorize("○", BORDER_COLORS.dim);
-        const name = item.name ?? item.id ?? "?";
-        const status = item.status ? colorize(` [${item.status}]`, BORDER_COLORS.dim) : "";
-        const cat = item.category ? dim(` (${item.category})`) : "";
-        const text = `  ${marker} ${truncateToWidth(name, Math.max(8, inner - 16))}${cat}${status}`;
-        lines.push(boxLine(text, borderColor));
+        lines.push(boxLine(formatRow(item, idx, isActive), borderColor));
       });
       if (start + usableHeight < items.length) {
         lines.push(boxLine(`  ↪ ${items.length - start - usableHeight} more below`, borderColor));
@@ -475,37 +463,45 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     return lines;
   }
 
+  private renderItems(): string[] {
+    const data = this.currentData();
+    const items: ResearchItemSpec[] = data?.itemSpecs ?? data?.review.items ?? [];
+    const inner = Math.max(20, this.width - 2);
+    return this.renderScrollableList(
+      `📋 ${bold("Items")}`,
+      items,
+      "items",
+      BORDER_COLORS.cyan,
+      (item, _idx, isActive) => {
+        const marker = isActive ? colorize("●", BORDER_COLORS.green) : colorize("○", BORDER_COLORS.dim);
+        const name = item.name ?? item.id ?? "?";
+        const status = item.status ? colorize(` [${item.status}]`, BORDER_COLORS.dim) : "";
+        const cat = item.category ? dim(` (${item.category})`) : "";
+        return `  ${marker} ${truncateToWidth(name, Math.max(8, inner - 16))}${cat}${status}`;
+      },
+      "(no items defined — outline.yaml missing)",
+    );
+  }
+
   private renderFields(): string[] {
     const data = this.currentData();
-    const inner = Math.max(20, this.width - 2);
-    const usableHeight = Math.max(4, this.height - HEADER_HEIGHT - FOOTER_HEIGHT);
     const fields: ResearchFieldSpec[] = data?.review.fields ?? [];
-    const borderColor = BORDER_COLORS.magenta;
-    const lines: string[] = [makeTopBorder(borderColor)];
-    lines.push(boxLine(`  🧬 ${bold("Fields")} (${fields.length})`, borderColor));
-    if (fields.length === 0) {
-      lines.push(boxLine(`  ⭕ (no field dimensions defined — fields.yaml missing)`, borderColor));
-    } else {
-      const start = clampInt(this.state.scrollOffsets.fields, 0, Math.max(0, fields.length - 1));
-      const visible = fields.slice(start, start + usableHeight);
-      visible.forEach((field, i) => {
-        const idx = start + i;
-        const isActive = idx === this.state.selectedItemIndex;
+    const inner = Math.max(20, this.width - 2);
+    return this.renderScrollableList(
+      `🧬 ${bold("Fields")}`,
+      fields,
+      "fields",
+      BORDER_COLORS.magenta,
+      (field, _idx, isActive) => {
         const marker = isActive ? colorize("●", BORDER_COLORS.green) : colorize("○", BORDER_COLORS.dim);
         const name = field.name ?? "?";
         const cat = field.category ? dim(` (${field.category})`) : "";
         const stars = field.detail_level ? ` ${starsFor(field.detail_level)}` : "";
-        const text = `  ${marker} ${truncateToWidth(name, Math.max(8, inner - 18))}${stars}${cat}`;
-        lines.push(boxLine(text, borderColor));
-      });
-      if (start + usableHeight < fields.length) {
-        lines.push(boxLine(`  ↪ ${fields.length - start - usableHeight} more below`, borderColor));
-      }
-    }
-    lines.push(makeBottomBorder(borderColor));
-    return lines;
+        return `  ${marker} ${truncateToWidth(name, Math.max(8, inner - 18))}${stars}${cat}`;
+      },
+      "(no field dimensions defined — fields.yaml missing)",
+    );
   }
-
   private renderArtifacts(): string[] {
     const data = this.currentData();
     const inner = Math.max(20, this.width - 2);
@@ -728,10 +724,8 @@ export function createResearchOverlay(
   initialSlug?: string,
   initialTab: ResearchOverlayTab = "overview",
   onDone?: ResearchOverlayDone,
-  options: ResearchOverlayOptions = {},
 ): ResearchOverlayComponent {
   const resolvedRoot = root && root.trim().length > 0 ? root : findRepoRoot();
-  const wantedTab = options.initialTab ?? initialTab ?? "overview";
-  return new ResearchOverlay(resolvedRoot, initialSlug, wantedTab, onDone);
+  return new ResearchOverlay(resolvedRoot, initialSlug, initialTab, onDone);
 }
 
