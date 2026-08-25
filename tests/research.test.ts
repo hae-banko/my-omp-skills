@@ -228,5 +228,62 @@ export async function runResearchSuite(ctx: TestContext): Promise<void> {
     fail(`emptyOverlay.handleInput('\\x1b'): expected dismiss, got ${JSON.stringify(emptyDismiss)}`);
   }
   emptyFixture.cleanup();
+
+  // 7. Larger-frame render (120x40) keeps box widths intact.
+  const wideFrame = overlay.render(120, 40);
+  const wideChildren = wideFrame.children ?? [];
+  if (!wideFrame || wideChildren.length === 0) {
+    fail(`ResearchOverlay.render(120, 40) returned empty container`);
+  }
+  // Each non-empty child line must respect the 120-cell box budget (≤ 118
+  // cells between the two │ borders after ANSI/stripping).
+  for (const child of wideChildren) {
+    if (!child || typeof child !== "object" || !("text" in child)) continue;
+    const textValue = child.text;
+    const raw = typeof textValue === "string" ? textValue : "";
+    const stripped = stripAnsi(raw);
+    const w = displayWidth(stripped);
+    if (w > 118) {
+      fail(`overlay.render(120x40): child line exceeds 118-cell box: width=${w} line=${JSON.stringify(stripped.slice(0, 40))}`);
+    }
+  }
+
+  // 8. CJK / emoji display-width alignment. Topics with CJK characters must
+  // still fit the box even though each ideograph = 2 cells.
+  const cjkFixture = createTempFixture("cjk-research-overlay-");
+  const cjkRoot = cjkFixture.dir;
+  const cjkResearch = join(cjkRoot, ".omp", "knowledge", "research");
+  mkdirSync(join(cjkResearch, "2026-08-15_深度学习-topic"), { recursive: true });
+  writeFileSync(
+    join(cjkResearch, "2026-08-15_深度学习-topic", "outline.yaml"),
+    "topic: 深度学习 overview\nitems: [{name: 卷积神经网络, category: 视觉}, {name: Transformer, category: NLP}]",
+  );
+  const cjkOverlay = createResearchOverlay(cjkRoot, "2026-08-15_深度学习-topic", "overview");
+  if (cjkOverlay.getState().activeTab !== "overview") {
+    fail(`cjkOverlay: expected initial tab 'overview'`);
+  }
+  const cjkFrame = cjkOverlay.render(80, 24);
+  const cjkChildren = cjkFrame.children ?? [];
+  for (const child of cjkChildren) {
+    if (!child || typeof child !== "object" || !("text" in child)) continue;
+    const textValue = child.text;
+    const raw = typeof textValue === "string" ? textValue : "";
+    const stripped = stripAnsi(raw);
+    const w = displayWidth(stripped);
+    // 80-column overlay → ≤ 78 cells between borders (inner = width - 2).
+    if (w > 78) {
+      fail(`CJK overlay render: child exceeds 78-cell box: width=${w} line=${JSON.stringify(stripped.slice(0, 40))}`);
+    }
+  }
+  // `displayWidth` itself must treat a CJK string as 2 cells per ideograph (4 chars = 8 cells).
+  if (displayWidth("深度学习") !== 8) {
+    fail(`displayWidth('深度学习') expected 8, got ${displayWidth("深度学习")}`);
+  }
+  // Emoji (`📊`) is wide (2 cells).
+  if (displayWidth("📊") !== 2) {
+    fail(`displayWidth('📊') expected 2, got ${displayWidth("📊")}`);
+  }
+  cjkFixture.cleanup();
+
   fixture.cleanup();
 }
