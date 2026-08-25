@@ -50,6 +50,7 @@ import { installReferenceResultRenderer, runReferenceCommand } from "./features/
 import { runRecentCommand } from "./features/recent-command.ts";
 import { installTimelineRenderer, runTimelineCommand } from "./features/timeline.ts";
 import { installTilt, runTiltCommand } from "./features/tilt.ts";
+import { installCouncilVerdictRenderer, runCouncilCommand } from "./features/council.ts";
 import {
   archiveResearchProject,
   getResearchDashboardMetrics,
@@ -1635,6 +1636,66 @@ const COMMANDS: CommandSpec[] = [
     description: "Whole-repo audit for over-engineering and dependencies replaceable by stdlib/native features.",
     bodyPath: "commands/ponytail-audit.md",
   },
+  {
+    name: "council",
+    description: "Summon a multi-perspective agent council to deliberate on architecture, ML, firmware, or EE trade-offs.",
+    bodyPath: "commands/council.md",
+    customType: "council-verdict",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const lower = argumentPrefix.toLowerCase().trim();
+      // Subcommand tokens (`list`, `init`) surface at the start of the arg
+      // string; everything else is a flag.
+      const headMatch = lower.match(/^(\S+)/);
+      const head = headMatch?.[1] ?? "";
+      const subcommandOptions: CompletionOption[] = [
+        { value: "list", label: "list", description: "List every available council (built-in + user-defined)" },
+        { value: "init", label: "init", description: "Scaffold .omp/council.yaml with documentation (--force to overwrite)" },
+      ];
+      if (head === "list") {
+        return subcommandOptions.filter((o) => o.value === "list");
+      }
+      if (head === "init") {
+        return [
+          ...subcommandOptions.filter((o) => o.value === "init"),
+          { value: "--force", label: "--force", description: "Overwrite existing .omp/council.yaml" },
+        ];
+      }
+      const flagOptions: CompletionOption[] = [
+        { value: "--quick", label: "--quick", description: "2-stage fast deliberation (Parallel drafts → Chairman synthesis)" },
+        { value: "--deep", label: "--deep", description: "3-stage debate (Drafts → Blind cross-critique → Synthesis)" },
+        { value: "--debate", label: "--debate", description: "Alias for --deep 3-stage blind deliberation" },
+        { value: "--raw", label: "--raw", description: "1-stage multi-perspective fan-out (no arbitration)" },
+        { value: "--save", label: "--save", description: "Persist decision record to .omp/scratch/debates/" },
+        { value: "--record", label: "--record", description: "Alias for --save record persistence" },
+        { value: "--actionable", label: "--actionable", description: "Propose executable follow-up commands in verdict" },
+        { value: "--overlay", label: "--overlay", description: "Open the interactive Council Verdict overlay (alias: --modal)" },
+        { value: "--modal", label: "--modal", description: "Alias for --overlay" },
+        { value: "--software", label: "--software", description: "Use the default software triad (Minimalist / Architect / Security)" },
+        { value: "--ml", label: "--ml", description: "Use the ML-research triad (Model Architect / Eval Critic / Inference Engineer)" },
+        { value: "--embedded", label: "--embedded", description: "Use the embedded triad (Realtime Auditor / Hardware Safety / Baremetal Pragmatist)" },
+        { value: "--firmware", label: "--firmware", description: "Alias for --embedded" },
+        { value: "--ee", label: "--ee", description: "Use the electrical-EE triad (Signal & Power Integrity / Component DFM / Safety)" },
+        { value: "--hardware", label: "--hardware", description: "Alias for --ee" },
+        { value: "--council", label: "--council <name>", description: "Select council preset from .omp/council.yaml (or built-in alias)" },
+        { value: "--preset", label: "--preset <name>", description: "Alias for --council <name>" },
+        ...subcommandOptions,
+      ];
+      if (!lower) return flagOptions;
+      // If the user is typing a flag, filter; otherwise treat as a subcommand
+      // prefix and return subcommandOptions if any match.
+      if (lower.startsWith("-")) {
+        return flagOptions.filter((o) => o.value.startsWith(lower));
+      }
+      const subMatches = subcommandOptions.filter((o) => o.value.startsWith(lower));
+      if (subMatches.length > 0) return subMatches;
+      return flagOptions.filter((o) => o.value.startsWith(lower));
+    },
+    handler: (pi, { body, companionPaths }) => (args: string, ctx: CommandContext) => {
+      const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+      const root = override && override.trim() ? override.trim() : findRepoRoot() ?? process.cwd();
+      runCouncilCommand(pi, root, args, ctx, { body, companionPaths });
+    },
+  },
 ];
 
 function loadBody(rel: string): string {
@@ -1729,6 +1790,7 @@ export default function (pi: ExtensionApi): void {
   installReferenceResultRenderer(pi);
   installTimelineRenderer(pi);
   installTilt(pi);
+  installCouncilVerdictRenderer(pi);
   installBootstrap(
     pi,
     COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),

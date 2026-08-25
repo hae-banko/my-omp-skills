@@ -73,6 +73,7 @@ export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: b
   "ponytail-review": {},
   "ponytail-debt": {},
   "ponytail-audit": {},
+  council: {},
 };
 
 let globalFailures = 0;

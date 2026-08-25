@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.72.0 — Domain Council Presets, Interactive Verdict Overlay & Subcommands
+
+- **Built-in Domain Council Presets (`src/features/council.ts`)** — Extended the `/council` engine from a single software triad to four domain-specialized panels, each with its own `tools` allow-list so the personas know when they may execute `web_search` or read `.omp/references/` for primary sources:
+  - **`default-triad`** *(alias `--software`)* — Minimalist (`ponytail`) · Systems Architect · Security Auditor. Untouched persona set.
+  - **`ml-research`** *(alias `--ml`)* — Model Architect (architectures, losses, scaling laws) · Eval Critic (benchmark rigor, leakage, statistical significance) · Inference Engineer (KV cache, quantization, throughput). Tools: `web_search`, `read`, `grep`.
+  - **`embedded`** *(aliases `--embedded`, `--firmware`)* — Realtime Auditor (ISR latency, DTCM/SRAM, zero-allocation invariants) · Hardware Safety (register configs, DMA bus access, brownout recovery) · Baremetal Pragmatist (C/Rust zero-cost abstractions). Tools: `read`, `grep`, `glob`.
+  - **`electrical-ee`** *(aliases `--ee`, `--hardware`)* — Signal & Power Integrity · Component DFM (lifecycle, thermal) · Safety & Compliance (ESD, reverse polarity, fail-safe). Tools: `web_search`, `read`.
+  - **`COUNCIL_PRESETS`, `COUNCIL_PRESET_ALIASES`, `COUNCIL_PRESET_IDS`, `listCouncilPresets()`** — single source of truth for resolver, autocompleter, and help card.
+  - **`CouncilPersona.tools?: string[]`** — surfaced into Stage-1 subagent prompts so ML researchers, software architects, and embedded engineers know they can execute web searches or inspect `.omp/references/` to back claims with primary sources.
+- **Interactive Council Verdict Modal Inspector (`src/features/council-overlay.ts`)** — TUI overlay modeled after `src/research/research-overlay.ts`, launched through `ctx.ui.custom(...)` when `--overlay` (alias `--modal`) is passed and the runtime has an interactive UI:
+  - **4 Tabs**: `[1] Verdict & Consensus` (consensus invariants / majority / divergences / summary), `[2/3/4] Persona A/B/C` (un-truncated stance, recommendation, key invariants, caveats, confidence).
+  - **Keyboard**: `1-4` or `Tab`/`Shift+Tab` to switch tabs, `j/k` (or arrows) to scroll, `s` to save the record, `Enter` to dispatch `/implement` with the consensus invariants, `Esc`/`q` to dismiss.
+  - The 76-column ANSI verdict card continues to render in standard chat output even when the overlay is used — the overlay is an opt-in inspection surface.
+- **Ergonomic CLI Flags & `/council` Subcommands (`src/index.ts`, `src/features/council.ts`)**:
+  - Preset shortcuts: `--software`, `--ml`, `--embedded`, `--firmware`, `--ee`, `--hardware`, plus `--preset <name>` and `--council <name>` for explicit selection.
+  - Subcommands: **`/council list`** (print every built-in + user-defined council with persona details and tool capabilities) and **`/council init [--force]`** (scaffold `.omp/council.yaml` with documentation and a copy-able example council; idempotent unless `--force` is passed).
+  - **`parseCouncilArgs`** now recognises `--overlay`/`--modal` and the new preset shortcuts; **`parseCouncilSubcommand`** short-circuits `list`/`init` before the deliberation workflow runs.
+  - Tab autocompletion in `src/index.ts` exposes every new flag and subcommand and filters by prefix.
+- **YAML Scaffold & Persona Tool Surfacing** — `scaffoldCouncilYaml(rootDir?, { force? })` writes `.omp/council.yaml` with documentation for all four built-ins and an example `my-domain-council` showing how to declare `tools:` lists.
+- **Comprehensive Test Coverage (`tests/features.test.ts`, `tests/commands.test.ts`)** — Added sections for preset triads, persona `tools` parsing, every new flag + subcommand completion, `/council list`/`/council init` routing (with `MY_OMP_SKILLS_TEST_ROOT` so CI never writes into the real repo), listCouncils dedupe of built-in aliases, summarizeVerdict, scaffoldCouncilYaml idempotence, and full overlay keyboard routing + render coverage.
+- **Documentation Refresh (`commands/council.md`, `skills/council/SKILL.md`)** — Added preset table, subcommand reference, `--overlay` keyboard reference, and Stage-1 spawn prompt update surfacing the `tools` allow-list to subagents.
+
+## v0.71.0 — Multi-LLM Council Deliberation & Consensus Engine (SPEC-002)
+
+- **Multi-Perspective Council Deliberation (`src/features/council.ts`, SPEC-002)** — Implemented an internal deliberation panel to evaluate complex software architectures, breaking refactors, and technical trade-offs with zero external dependencies:
+  - **Default Triad Personas**: Minimalist (`ponytail` — YAGNI, platform-native simplicity, deletion-first), Systems Architect (modular seams, testability, 6-month maintainability), and Security Auditor (boundary hardening, failure modes, safety invariants).
+  - **Star Chamber Semantic Consensus Partitioning**: Automatically partitions opinions into 🟢 `[CONSENSUS INVARIANTS]` (3/3 unanimous), 🟡 `[MAJORITY RECOMMENDATIONS]` (2/3), 🔵 `[UNIQUE INSIGHTS]` (specialized single-persona caveats), and 🔴 `[CRITICAL DIVERGENCES]` (isolated architectural trade-offs).
+  - **Ed25519 Cryptographic Verification (ADR-034)** — Signs decision records using `node:crypto` Ed25519 keypairs bound to the git commit SHA for tamper-evident reproducibility.
+  - **76-Column ANSI Verdict Card Renderer**: Formats color-coded box cards respecting terminal boundaries with actionable shortcuts (`Enter` to implement, `s` to save record).
+  - **Decision Record Persistence**: Generates structured markdown records at `.omp/scratch/debates/YYYY-MM-DD_<slug>.md` with YAML frontmatter.
+- **Dual Invocation & Command Registration (`commands/council.md`, `skills/council/SKILL.md`, `src/index.ts`)**:
+  - Registered `/council` slash command with tab autocompletion (`--quick`, `--deep`, `--raw`, `--save`, `--council`, `--actionable`).
+  - Added model-invoked `council` skill for autonomous panel deliberation during high-stakes refactors and architectural forks.
+  - Added `council-verdict` custom message renderer in `src/index.ts`.
+- **Comprehensive Test Suite Coverage (`tests/features.test.ts`, `tests/test-utils.ts`)** — Added unit and integration tests for persona resolution, consensus partitioning, Ed25519 signing/verification, 76-column card width constraints, and file persistence.
+
 ## v0.70.0 — Interactive Research Dashboard Overlay & Multi-Project Switcher
 
 - **Interactive Floating Research Overlay (`src/research/research-overlay.ts`, SPEC-001)** — Implemented a responsive, center-anchored modal overlay using Oh My Pi's native `ctx.ui.custom()` API (merged upstream in commit `ed820703a7` via PR #7913):

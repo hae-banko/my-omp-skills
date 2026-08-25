@@ -1,8 +1,6 @@
 {
   "name": "my-omp-skills",
-  "version": "0.70.0",
-  "private": true,
-  "license": "MIT",
+  "version": "0.72.0",
   "files": [
     "src",
     "commands",

@@ -16,9 +16,9 @@ import {
   createTempFixture,
   EXPECTED_COMMANDS,
   fail,
+  type RegisteredCommand,
   type TestContext,
 } from "./test-utils.ts";
-
 export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   const { registered, sent, handlers } = ctx;
 
@@ -194,5 +194,72 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   const skillFailures = scanAndValidateMarkdownDir("skills");
   if (skillFailures.length > 0) {
     fail(`skills markdown lint failures: ${JSON.stringify(skillFailures, null, 2)}`);
+  }
+
+  // 8. /council subcommand routing + completions
+  const councilSpec = registered["council"];
+  if (!councilSpec) fail("/council not registered");
+  const complete = (prefix: string) => {
+    const fn = councilSpec.getArgumentCompletions;
+    if (!fn) return [];
+    return fn(prefix) ?? [];
+  };
+
+  // The completer returns ALL the new ergonomic flags + subcommands when the
+  // user has not typed anything.
+  const allOptions = complete("");
+  const expectedValues = [
+    "--software", "--ml", "--embedded", "--firmware", "--ee", "--hardware",
+    "--overlay", "--modal", "--preset", "--council",
+    "list", "init",
+  ];
+  for (const v of expectedValues) {
+    if (!allOptions.some((o) => o.value === v)) {
+      fail(`/council completion missing: ${v}`);
+    }
+  }
+
+  // Filtering by prefix still works for the new flags.
+  const mlOnly = complete("--ml");
+  if (mlOnly.length === 0 || mlOnly[0].value !== "--ml") fail("/council --ml completion");
+  const eeOnly = complete("--ee");
+  if (eeOnly.length === 0 || eeOnly[0].value !== "--ee") fail("/council --ee completion");
+  const overlayOnly = complete("--overlay");
+  if (overlayOnly.length === 0 || overlayOnly[0].value !== "--overlay") fail("/council --overlay completion");
+
+  // Subcommand filtering: typing "init" surfaces init + --force.
+  const initOnly = complete("init");
+  if (initOnly.length === 0 || initOnly[0].value !== "init") fail("/council init completion");
+  if (!initOnly.some((o) => o.value === "--force")) fail("/council init --force completion");
+
+  // /council list routes through the runCouncilCommand subcommand path and
+  // emits a customType=council-verdict listing message (no deliberation).
+  sent.length = 0;
+  const getCustomType = (m: Record<string, unknown>): string | undefined =>
+    typeof m.customType === "string" ? m.customType : undefined;
+
+  sent.length = 0;
+  ctx.customMessages.length = 0;
+  await registered["council"].handler("list", {});
+  const listMsgs = ctx.customMessages.filter((m) => getCustomType(m) === "council-verdict");
+  if (listMsgs.length === 0) fail("/council list: no council-verdict message");
+  // /council init scaffolds the YAML config — point the test at a tmp dir so
+  // we never write into the real repo's .omp/ from CI.
+  const tmp = createTempFixture("council-init-");
+  const prevRoot = process.env.MY_OMP_SKILLS_TEST_ROOT;
+  process.env.MY_OMP_SKILLS_TEST_ROOT = tmp.dir;
+  try {
+    sent.length = 0;
+    ctx.customMessages.length = 0;
+    await registered["council"].handler("init --force", {});
+    const initMsgs = ctx.customMessages.filter((m) => getCustomType(m) === "council-verdict");
+    if (initMsgs.length === 0) fail("/council init: no council-verdict message");
+    if (!existsSync(join(tmp.dir, ".omp", "council.yaml"))) {
+      fail("/council init: .omp/council.yaml not created in test root");
+    }
+  } finally {
+    if (prevRoot === undefined) delete process.env.MY_OMP_SKILLS_TEST_ROOT;
+    else process.env.MY_OMP_SKILLS_TEST_ROOT = prevRoot;
+    tmp.cleanup();
   }
 }

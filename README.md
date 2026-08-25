@@ -1,13 +1,12 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.70.0-8A2BE2" alt="version" />
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
+  <img src="https://img.shields.io/badge/version-0.72.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
-  <img src="https://img.shields.io/badge/commands-33-orange" alt="33 slash commands" />
+  <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>
 
-An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **33 user-invoked slash commands**, **18 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **19 model-invoked skills**, multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
@@ -49,6 +48,7 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 - **/to-spec**, **/to-tickets**, **/implement**: Workflow chain for synthesizing context into specs, decomposing specs into tracer-bullet tickets with dependency edges, and building features via TDD.
 - **/wayfinder**: Maps multi-session epics into decision tickets on the issue tracker.
 - **/triage**: Filters and processes incoming issues/PRs into agent-ready execution briefs.
+- **/council**: Summons a multi-perspective panel (Minimalist, Systems Architect, Security Auditor) to deliberate on architectures and partition consensus invariants with Ed25519 signatures.
 
 ### 2. Multi-Agent Deep Research
 - **/research**: Scaffolds a structured research plan (`outline.yaml`, comparison `fields.yaml`, and DAG dependencies) with live review dashboard.
@@ -73,7 +73,8 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 
 ---
 
-## Slash Commands (33 User-Invoked Commands)
+
+## Slash Commands (34 User-Invoked Commands)
 
 | Command | Category | Description |
 | --- | --- | --- |
@@ -110,10 +111,11 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 | `/ponytail-review` | Quality & Controls | Reviews diffs exclusively for over-engineering, unneeded abstractions, and complexity. |
 | `/ponytail-debt` | Knowledge & Upkeep | Scans codebase for deliberate shortcut comments and compiles a tracked debt ledger. |
 | `/ponytail-audit` | Audit | Whole-repo audit for over-engineering and dependencies replaceable by stdlib/native features. |
+| `/council` | Planning | Multi-perspective deliberation panel (Minimalist, Architect, Security) with Star Chamber consensus partitioning. |
 
 ---
 
-## Model-Invoked Skills (18 Skills)
+## Model-Invoked Skills (19 Skills)
 
 Omp automatically loads model-invoked skills when conversation or codebase context matches the skill condition.
 
@@ -137,6 +139,7 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 | `ponytail-review` | Complexity-hunting diff review with single-line tag recommendations (`delete:`, `stdlib:`, `native:`, `yagni:`, `shrink:`). | User asks to review for over-engineering or bloat. |
 | `ponytail-debt` | Scans and compiles `ponytail:` shortcut and deferral comments into a structured debt ledger. | User asks to track deferred shortcuts or ponytail debt. |
 | `ponytail-audit` | Whole-repo over-engineering scan prioritizing packages and wrappers replaceable by stdlib. | User asks for repo-wide complexity or dependency audit. |
+| `council` | Autonomous multi-perspective deliberation on architectures, refactors, and trade-offs. | High-stakes architectural forks, breaking refactors, or second opinion requests. |
 
 ---
 
