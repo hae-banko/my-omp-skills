@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.70.0 — Interactive Research Dashboard Overlay & Multi-Project Switcher
+
+- **Interactive Floating Research Overlay (`src/research/research-overlay.ts`, SPEC-001)** — Implemented a responsive, center-anchored modal overlay using Oh My Pi's native `ctx.ui.custom()` API (merged upstream in commit `ed820703a7` via PR #7913):
+  - **4 Tabbed Inspector Views**: `[1] Overview` (pipeline stepper, progress bar, freshness, next action), `[2] Items & DAG` (scrollable outline items, status badges, dependency edges), `[3] Fields` (category groupings, dimensions, star detail indicators), and `[4] Artifacts` (file inventory checklist with sizes and missing alerts).
+  - **Multi-Project Switching**: Browse and cycle between multiple research endeavors in the same repo with `[` / `]` or quick-picker `p`, with project counter (`◄ slug (1/3) ►`).
+  - **Hotkey Command Dispatch**: Press `Enter` to run the recommended next step, `d` for `/research-deep <slug>`, `r` for `/research-report <slug>`, or `Esc`/`q`/`Ctrl+C` to dismiss without scrollback pollution.
+  - **Semantic ANSI Palette & Emojis**: Status-coded colored borders (`OUTLINE` cyan, `RUNNING` blue, `CONVERGED` green, `PAUSED` yellow, `ERROR` red, `ARCHIVED` magenta) with visual glyphs (🎯 📊 ⚡ 🧭 🕸️ 📦 🟢 🟡 ⏳ 📁 ⭕) and width-aware padding.
+  - **Zero-Projects Onboarding View**: Displays guided 3-phase research onboarding instructions when no projects exist on disk.
+- **Command Integration & Fallback Lifecycle (`src/index.ts`)** — Connected `/research dashboard` and `/research review` to launch the interactive overlay when `ctx.hasUI && ctx.ui.custom` is present, with automatic fallback to static transcript cards in headless/CI environments or when `--card`/`--transcript` flags are passed.
+- **Comprehensive Test Suite Coverage (`tests/research.test.ts`)** — Added unit and integration tests covering multi-project cycling, CJK/emoji display width alignment, tab switching, empty-state onboarding, and action hotkey dispatch.
 ## v0.69.0 — Ponytail Lazy Senior Dev Suite Port
 
 - **Ported Ponytail Skill Suite from Reference Corpus**:

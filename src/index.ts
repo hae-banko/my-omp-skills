@@ -61,6 +61,10 @@ import {
 } from "./research/research-store.ts";
 import { installKbIngestStatus } from "./knowledge/kb-ingest-status.ts";
 import { installKbIndexInjector } from "./knowledge/kb-index-injector.ts";
+import {
+  createResearchOverlay,
+  type ResearchOverlayAction,
+} from "./research/research-overlay.ts";
 import { installRoutinesTool } from "./features/routines.ts";
 import {
   installResearchDashboardRenderer,
@@ -423,7 +427,32 @@ const COMMANDS: CommandSpec[] = [
 
       if (head === "dashboard") {
         const root = findRepoRoot();
-        const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
+        const cleanRest = rest.replace(/\s+--(full|compact|card|transcript)\b/g, "").trim();
+        const wantsCard = /\s*--(card|transcript)\b/.test(rest);
+
+        if (ctx.hasUI && ctx.ui?.custom && !wantsCard) {
+          const overlay = createResearchOverlay(root, cleanRest, "overview");
+          const result = await ctx.ui.custom<ResearchOverlayAction | undefined>(
+            (_tui, _theme, _keybindings, done) => {
+              return {
+                render: (width = 80, height = 24) => overlay.render(width, height),
+                handleInput: (data: string) => {
+                  const act = overlay.handleInput(data);
+                  if (act) done(act);
+                },
+              };
+            },
+            {
+              overlay: true,
+              overlayOptions: { width: "85%", maxHeight: "75%", anchor: "center" },
+            },
+          );
+          if (result && result.action === "run" && result.command) {
+            await pi.sendUserMessage(result.command);
+          }
+          return;
+        }
+
         const { slug, notFound, payload } = readProject(root, cleanRest);
         if (notFound) {
           ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
@@ -529,7 +558,32 @@ const COMMANDS: CommandSpec[] = [
 
       if (head === "review") {
         const root = findRepoRoot();
-        const cleanRest = rest.replace(/\s+--(full|compact)\b/g, "").trim();
+        const cleanRest = rest.replace(/\s+--(full|compact|card|transcript)\b/g, "").trim();
+        const wantsCard = /\s*--(card|transcript)\b/.test(rest);
+
+        if (ctx.hasUI && ctx.ui?.custom && !wantsCard) {
+          const overlay = createResearchOverlay(root, cleanRest, "items");
+          const result = await ctx.ui.custom<ResearchOverlayAction | undefined>(
+            (_tui, _theme, _keybindings, done) => {
+              return {
+                render: (width = 80, height = 24) => overlay.render(width, height),
+                handleInput: (data: string) => {
+                  const act = overlay.handleInput(data);
+                  if (act) done(act);
+                },
+              };
+            },
+            {
+              overlay: true,
+              overlayOptions: { width: "85%", maxHeight: "75%", anchor: "center" },
+            },
+          );
+          if (result && result.action === "run" && result.command) {
+            await pi.sendUserMessage(result.command);
+          }
+          return;
+        }
+
         const { slug, projectDir, notFound } = resolveResearchProjectDir(root, cleanRest);
         if (notFound) {
           ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");

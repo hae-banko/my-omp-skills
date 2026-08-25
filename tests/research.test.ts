@@ -41,6 +41,10 @@ import {
   fail,
   type TestContext,
 } from "./test-utils.ts";
+import {
+  createResearchOverlay,
+  ResearchOverlay,
+} from "../src/research/research-overlay.ts";
 
 export async function runResearchSuite(ctx: TestContext): Promise<void> {
   const { collectLines } = ctx;
@@ -130,6 +134,99 @@ export async function runResearchSuite(ctx: TestContext): Promise<void> {
   if (!unarchRes.ok) {
     fail(`unarchiveResearchProject failed: ${unarchRes.error}`);
   }
+  // 6. Interactive Research Dashboard Overlay (SPEC-001)
+  // Create a second project for multi-project cycling
+  mkdirSync(join(kbResearch, "2026-08-02_proj-b"), { recursive: true });
+  writeFileSync(join(kbResearch, "2026-08-02_proj-b", "outline.yaml"), "topic: 深度学习 Proj B\nitems: [{name: i2, category: cat1}]");
 
+  const overlay = createResearchOverlay(fixture.dir, "2026-08-01_proj-a", "overview");
+  const state0 = overlay.getState();
+  if (state0.activeTab !== "overview") {
+    fail(`createResearchOverlay: expected initial tab 'overview', got ${state0.activeTab}`);
+  }
+  if (state0.projects.length < 2) {
+    fail(`createResearchOverlay: expected at least 2 projects, got ${state0.projects.length}`);
+  }
+  // Multi-project cycling with '[' and ']'
+  const initialIdx = state0.activeProjectIndex;
+  overlay.handleInput("]");
+  const nextIdx = overlay.getState().activeProjectIndex;
+  if (nextIdx === initialIdx) {
+    fail(`handleInput(']'): expected activeProjectIndex to change from ${initialIdx}`);
+  }
+  overlay.handleInput("[");
+  if (overlay.getState().activeProjectIndex !== initialIdx) {
+    fail(`handleInput('['): expected activeProjectIndex to return to ${initialIdx}, got ${overlay.getState().activeProjectIndex}`);
+  }
+  // Render check at 80x24 (includes CJK characters from topic)
+  const frame80 = overlay.render(80, 24);
+  if (!frame80 || !frame80.children || frame80.children.length === 0) {
+    fail(`ResearchOverlay.render(80, 24) returned empty container`);
+  }
+
+  // Tab switching key tests
+  overlay.handleInput("2");
+  if (overlay.getState().activeTab !== "items") {
+    fail(`handleInput('2'): expected tab 'items', got ${overlay.getState().activeTab}`);
+  }
+
+  overlay.handleInput("\t");
+  if (overlay.getState().activeTab !== "fields") {
+    fail(`handleInput('\\t'): expected tab 'fields', got ${overlay.getState().activeTab}`);
+  }
+
+  overlay.handleInput("\t");
+  if (overlay.getState().activeTab !== "artifacts") {
+    fail(`handleInput('\\t'): expected tab 'artifacts', got ${overlay.getState().activeTab}`);
+  }
+
+  overlay.handleInput("1");
+  if (overlay.getState().activeTab !== "overview") {
+    fail(`handleInput('1'): expected tab 'overview', got ${overlay.getState().activeTab}`);
+  }
+
+  // Action hotkeys: Enter (run next), d (deep waves), r (report), q / Ctrl+C (dismiss)
+  const enterAct = overlay.handleInput("\r");
+  if (!enterAct || enterAct.action !== "run" || !enterAct.command) {
+    fail(`handleInput('\\r'): expected run action, got ${JSON.stringify(enterAct)}`);
+  }
+
+  const deepAct = overlay.handleInput("d");
+  if (!deepAct || deepAct.action !== "run" || !deepAct.command?.startsWith("/research-deep")) {
+    fail(`handleInput('d'): expected run /research-deep action, got ${JSON.stringify(deepAct)}`);
+  }
+
+  const reportAct = overlay.handleInput("r");
+  if (!reportAct || reportAct.action !== "run" || !reportAct.command?.startsWith("/research-report")) {
+    fail(`handleInput('r'): expected run /research-report action, got ${JSON.stringify(reportAct)}`);
+  }
+
+  const ctrlCAct = overlay.handleInput("\x03");
+  if (!ctrlCAct || ctrlCAct.action !== "dismiss") {
+    fail(`handleInput('\\x03'): expected dismiss action, got ${JSON.stringify(ctrlCAct)}`);
+  }
+
+  const dismissAct = overlay.handleInput("q");
+  if (!dismissAct || dismissAct.action !== "dismiss") {
+    fail(`handleInput('q'): expected dismiss action, got ${JSON.stringify(dismissAct)}`);
+  }
+
+  // Zero-projects empty state onboarding
+  const emptyFixture = createTempFixture("empty-research-overlay-");
+  const emptyOverlay = createResearchOverlay(emptyFixture.dir);
+  if (emptyOverlay.getState().projects.length !== 0) {
+    fail(`emptyOverlay: expected 0 projects, got ${emptyOverlay.getState().projects.length}`);
+  }
+
+  const emptyFrame = emptyOverlay.render(80, 24);
+  if (!emptyFrame || !emptyFrame.children || emptyFrame.children.length === 0) {
+    fail(`emptyOverlay.render(80, 24) returned empty container`);
+  }
+
+  const emptyDismiss = emptyOverlay.handleInput("\x1b");
+  if (!emptyDismiss || emptyDismiss.action !== "dismiss") {
+    fail(`emptyOverlay.handleInput('\\x1b'): expected dismiss, got ${JSON.stringify(emptyDismiss)}`);
+  }
+  emptyFixture.cleanup();
   fixture.cleanup();
 }

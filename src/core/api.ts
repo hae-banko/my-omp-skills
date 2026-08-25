@@ -3,12 +3,45 @@
 // superset, so these stay assignable both ways without depending on the
 // `@oh-my-pi/pi-coding-agent` type package.
 
+/** Minimal view of an interactive TUI overlay component that the
+ * `ctx.ui.custom(...)` seam accepts. The runtime manages focus, sizing,
+ * key routing, and lifecycle; this contract only requires render + input. */
+export interface CustomOverlayComponent<T = unknown> {
+  render(width?: number, height?: number): unknown;
+  handleInput?(data: string): void;
+  done?: (result: T) => void;
+}
+
+/** Factory shape the omp runtime invokes with its `tui`/`theme`/`keybindings`
+ * helpers plus a `done(result)` callback the component uses to resolve. The
+ * factory returns the overlay component (render/handleInput pair). */
+export type CustomOverlayFactory<T = unknown> = (
+  tui: unknown,
+  theme: unknown,
+  keybindings: unknown,
+  done: (result: T) => void,
+) => CustomOverlayComponent<T> | { render: (width?: number, height?: number) => unknown; handleInput?: (data: string) => void };
+
 export interface CommandContext {
+  /** True when an interactive UI is available; false in --headless / CI modes. */
+  hasUI?: boolean;
   ui?: {
     notify?(message: string, level?: string): void;
     setStatus?(key: string, text: string | undefined): void;
+    /**
+     * Launch a modal overlay component. The runtime mounts the component,
+     * drives `render`/`handleInput`, and resolves once the component returns
+     * `undefined` (user dismissed) or the action it returned.
+     */
+    custom?<T>(
+      factory: CustomOverlayFactory<T>,
+      options?: {
+        overlay?: boolean;
+        overlayOptions?: { width?: string; maxHeight?: string; anchor?: "center" | "top" | "bottom" };
+      },
+    ): Promise<T | undefined>;
   };
-}
+ }
 
 export interface CommandHandlerDef {
   description?: string;
