@@ -50,7 +50,7 @@ import { installReferenceResultRenderer, runReferenceCommand } from "./features/
 import { runRecentCommand } from "./features/recent-command.ts";
 import { installTimelineRenderer, runTimelineCommand } from "./features/timeline.ts";
 import { installTilt, runTiltCommand } from "./features/tilt.ts";
-import { installCouncilVerdictRenderer, runCouncilCommand } from "./features/council.ts";
+import { installCouncilVerdictRenderer, runCouncilCommand } from "./council/index.ts";
 import {
   archiveResearchProject,
   getResearchDashboardMetrics,

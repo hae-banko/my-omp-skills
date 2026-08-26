@@ -79,8 +79,8 @@ import {
   type CouncilOpinion,
   type CouncilPersona,
   type CouncilVerdict,
-} from "../src/features/council.ts";
-import { createCouncilOverlay } from "../src/features/council-overlay.ts";
+} from "../src/council/council.ts";
+import { createCouncilOverlay } from "../src/council/council-overlay.ts";
 import {
   createTempFixture,
   fail,

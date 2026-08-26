@@ -1,7 +1,18 @@
 # Changelog
 
-## v0.73.0 — Natural keyword syntax for `/council` (drop the `--`)
+## v0.74.0 — Relocate council source files to `src/council/`
 
+- **New domain directory `src/council/`** — Promoted the multi-perspective deliberation engine (SPEC-002), Star Chamber consensus partitioner, Ed25519 signer (ADR-034), interactive verdict overlay, and decision-history lister from `src/features/` into their own dedicated `src/council/` domain directory, alongside the existing `src/core/`, `src/knowledge/`, `src/research/`, `src/protocol/`, and `src/features/` buckets:
+  - **`src/council/council.ts`** — deliberation engine (`partitionCouncilOpinions`, `signCouncilVerdict`, `verifyCouncilSignature`), domain presets (`COUNCIL_PRESETS`, `ML_RESEARCH_TRIAD`, `EMBEDDED_TRIAD`, `ELECTRICAL_EE_TRIAD`), 76-column ANSI verdict card, `/council list` / `/council init` subcommands.
+  - **`src/council/council-overlay.ts`** — interactive 4-tab TUI modal inspector (`CouncilOverlay` / `createCouncilOverlay`).
+  - **`src/council/council-history.ts`** — local zero-token `/council recent [N]` lister (`runCouncilRecentCommand`, `parseDebateFrontmatter`, `listDebateRecords`).
+  - **`src/council/index.ts`** — barrel re-exporting the public API of every council module so callers import from `./council/index.ts` and refactors stay localised.
+- **Internal import cutover (`src/index.ts`, `tests/features.test.ts`)** — Updated every caller of the council modules to import from `./council/index.ts` (extension entry) and `../src/council/council.ts` + `../src/council/council-overlay.ts` (selftest). The relative paths from `src/council/*` to `../core/`, `../research/`, and `./` siblings are unchanged in shape — only the source location moved.
+- **Bug fix (`src/council/council-history.ts`)** — The previously-untracked `council-history.ts` was missing the `node:fs`, `node:path`, and `../core/workspace.ts` imports required for `findDebatesDir` / `listDebateRecords` to resolve, and it referenced a non-existent `renderCouncilVerdictCardCompact` export. Added the missing imports and dropped the dead `void renderCouncilVerdictCardCompact` line so `npm test` and `npm run typecheck` pass cleanly for the first time. Also fixed a stray `/**` that broke the `runCouncilRecentCommand` JSDoc block.
+- **Documentation (`AGENTS.md`)** — Added `src/council/` to the `src/` domain taxonomy under "TypeScript extension engine organized by domain:", documenting `council.ts` and `council-overlay.ts` (and the new `council-history.ts` decision-record lister).
+
+
+## v0.73.0 — Natural keyword syntax for `/council` (drop the `--`)
 - **Natural keyword CLI for `/council` (`src/features/council.ts`, `src/index.ts`)** — Replaces the mandatory `--` prefix with elegant bare-keyword forms so common invocations read like prose:
   - **Mode**: `quick` / `deep` / `debate` / `raw` (or `--quick` / `--deep` etc.) — example: `/council debate <topic>` triggers the 3-stage Chatham-House blind cross-critique.
   - **Actions**: `save` / `record` / `actionable` / `compact` / `terse` / `summary` / `overlay` / `modal` (or `--save` / `--record` etc.).

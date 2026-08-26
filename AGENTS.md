@@ -21,7 +21,7 @@ authoring contract.
   - `src/research/` — `research-dag.ts` (dependency engine), `research-report.ts` (zero-dep TS report generator), `research-store.ts`, `research-renderer.ts`, `research-format.ts`.
   - `src/protocol/` — `iap.ts` (`OMP-IAP/v1` envelopes, performatives, pointer offloading), `iap-hub.ts` (message bus adapter).
   - `src/features/` — `timeline.ts`, `tilt.ts` (14-tier swear jar), `references.ts`, `recent-command.ts`, `clarify.ts`, `hindsight.ts`, `herdr-tools.ts`, `routines.ts`, `subagent-contract.ts`.
-  - `src/index.ts` — extension entry point registering tools, commands, and message renderers.
+  - `src/council/` — `council.ts` (deliberation engine, Star Chamber partitioner, domain presets, Ed25519 signer), `council-overlay.ts` (interactive TUI modal inspector).
 - `tests/` — **domain-grouped test suites** aggregated by `scripts/selftest.ts` (`npm test`):
   - `test-utils.ts` — mock ExtensionApi harness and failure collectors.
   - `commands.test.ts` — command registrations, companion disclosures, frontmatter linter.
