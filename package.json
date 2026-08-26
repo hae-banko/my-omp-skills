@@ -1,8 +1,7 @@
 {
-  "name": "my-omp-skills",
-  "version": "0.75.0",
-  "files": [
-    "src",
+ "name": "my-omp-skills",
+ "version": "0.75.1",
+ "files": [
     "commands",
     "skills",
     "rules",

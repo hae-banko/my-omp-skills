@@ -28,6 +28,22 @@ export interface CommandContext {
   ui?: {
     notify?(message: string, level?: string): void;
     setStatus?(key: string, text: string | undefined): void;
+    input?(
+      prompt: string,
+      placeholder?: string,
+      dialogOptions?: unknown,
+    ): Promise<string | undefined>;
+    editor?(
+      title: string,
+      prefill?: string,
+      dialogOptions?: unknown,
+      editorOptions?: { promptStyle?: boolean },
+    ): Promise<string | undefined>;
+    select?(
+      title: string,
+      options: Array<{ label: string; description?: string; value?: string } | string>,
+      dialogOptions?: unknown,
+    ): Promise<string | undefined>;
     /**
      * Launch a modal overlay component. The runtime mounts the component,
      * drives `render`/`handleInput`, and resolves once the component returns

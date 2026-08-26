@@ -51,6 +51,12 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
       if (sent.length !== 0) {
         fail(`silent command /${name} queued a message: ${JSON.stringify(sent)}`);
       }
+    } else if (spec?.noEcho) {
+      // noEcho: command routes via pi.sendMessage({ triggerTurn, deliverAs: "nextTurn" })
+      // and must NOT call pi.sendUserMessage with the command echo.
+      if (sent.length !== 0) {
+        fail(`noEcho command /${name} must not echo into the input box: ${JSON.stringify(sent)}`);
+      }
     } else {
       const userPrompt = sent[0] ?? "";
       if (userPrompt !== `/${name}`) {

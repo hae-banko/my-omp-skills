@@ -17,7 +17,7 @@ Summon an internal panel of specialized engineering personas (Software, ML, Embe
 /council [keywords] <topic or proposal>
 /council list
 /council init [force]
-```
+/council edit
 
 ### Natural keyword syntax
 
@@ -46,7 +46,7 @@ Keywords combine naturally in any order:
 | --- | --- |
 | `/council list` | Print every available council (built-in presets + user-defined entries from `.omp/council.yaml`) with persona details and tool capabilities. |
 | `/council init` | Scaffold `.omp/council.yaml` with documentation and an example council. Pass `force` to overwrite an existing file (`/council init force`). |
-
+| `/council edit` | Open `.omp/council.yaml` directly in the built-in TUI text editor to edit presets, personas, prompts, and default selection without leaving the harness (alias `/council config`). |
 ### Available Keywords
 
 #### Mode
@@ -137,10 +137,9 @@ Validate each subagent result against the schema before Stage 2/3. If a subagent
 
 ---
 
-## Stage 2 — Chatham-House Blind Cross-Critique *(only when `--deep` or `--debate` is set)*
+## Stage 2 — Chatham-House Blind Cross-Critique *(only when `deep` or `debate` is set)*
 
-When the user passes `--deep` or `--debate`, you MUST run Stage 2 before synthesis. Anonymize the Stage 1 outputs:
-
+When the user passes `deep` or `debate`, you MUST run Stage 2 before synthesis. Anonymize the Stage 1 outputs:
 - Persona A → Proposal A
 - Persona B → Proposal B
 - Persona C → Proposal C
@@ -173,9 +172,8 @@ Render the verdict via the engine's `renderCouncilVerdictCard` over `customType:
 By default, do NOT print intermediate persona debates or walls of discussion. After emitting the verdict card:
 - Provide a **concise 3–5 bullet point executive summary** of the decision.
 - Only print detailed persona critique logs and debate transcripts if `verbose: true` was specified.
-## Stage 4 — Persistence *(only when `--save` or `--record` is set)*
-
-If the user passed `--save` or `--record`:
+## Stage 4 — Persistence *(only when `save` or `record` is set)*
+If the user passed `save` or `record`:
 
 1. Resolve `git rev-parse HEAD` as `snapshot_id`.
 2. Build the canonical payload `JSON.stringify({ snapshot_id, topic, consensusInvariants, verdictSummary }, Object.keys(data).sort())`.
@@ -183,12 +181,9 @@ If the user passed `--save` or `--record`:
 4. Write the decision record to `.omp/scratch/debates/YYYY-MM-DD_<topic_slug>.md`.
 5. Emit the verdict card with `savedPath` populated.
 
----
+## Interactive Verdict Overlay (`overlay`)
 
-## Interactive Verdict Overlay (`--overlay`)
-
-When `--overlay` (alias `--modal`) is passed and the runtime exposes `ctx.ui.custom`, launch the interactive Council Verdict overlay immediately so the user can read the verdict while the executing agent runs Stage 1. The overlay is modeled after `src/research/research-overlay.ts` and oh-my-pi TUI conventions.
-
+When `overlay` (alias `modal`) is passed and the runtime exposes `ctx.ui.custom`, launch the interactive Council Verdict overlay immediately so the user can read the verdict while the executing agent runs Stage 1. The overlay is modeled after `src/research/research-overlay.ts` and oh-my-pi TUI conventions.
 - **Tabs**: `[1] Verdict & Consensus` (consensus invariants / majority / divergences / summary), `[2] Persona A`, `[3] Persona B`, `[4] Persona C` (un-truncated stance, recommendation, key invariants, caveats, confidence).
 - **Keyboard**: `1-4` or `Tab`/`Shift+Tab` to switch tabs; `j`/`k` (or arrow keys) to scroll; `s` to save the record; `Enter` to dispatch `/implement` with the consensus invariants; `Esc` or `q` to close.
 
@@ -222,12 +217,10 @@ Status: Deliberation Concluded · <ISO timestamp>
    • <Persona>: <position>
    • <Persona>: <position>
 
-💾 Saved Record: <path when --save>
+💾 Saved Record: <path when `save`>
 ⟨Enter: Run /implement⟩ ⟨s: Save Record⟩ ⟨Esc: Dismiss⟩
 ```
 
 ---
 
-## Interactive Prompts
-
-When invoked without arguments (`/council`), the command opens an interactive selector dialog to pick Mode, Council, and Persistence before launching. In headless / CI mode, fall back to `--quick` with no persistence.
+When invoked without arguments (`/council`), the command opens an interactive selector dialog to pick Mode, Council, and Persistence before launching. In headless / CI mode, fall back to `quick` with no persistence.

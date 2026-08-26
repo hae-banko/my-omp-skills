@@ -40,6 +40,7 @@ The `/council` command uses clean natural keywords without any `--` prefix:
 - `/council save <topic>` → Persist decision record to `.omp/scratch/debates/`
 - `/council overlay <topic>` → Open the interactive verdict overlay
 - `/council verbose <topic>` → Show detailed multi-stage debate and critique transcripts
+- `/council edit` (or `/council config`) → Open `.omp/council.yaml` in the built-in text editor directly
 
 All keywords combine naturally: `quick`, `deep`, `debate`, `raw`, `save`, `record`, `actionable`, `verbose`, `compact`, `terse`, `summary`, `overlay`, `modal`, `software`, `ml`, `embedded`, `firmware`, `ee`, `hardware`, plus `council <name>` and `preset <name>`.
 ---
@@ -102,7 +103,7 @@ Validate each subagent result against the schema. If a subagent returns malforme
 
 ---
 
-## Stage 2 — Chatham-House Blind Cross-Critique *(only on `--deep` or `--debate`)*
+## Stage 2 — Chatham-House Blind Cross-Critique *(only on `deep` or `debate`)*
 
 Anonymize the Stage 1 outputs as Proposal A / Proposal B / Proposal C. Spawn **3 parallel critique subagents**, each reviewing one anonymized proposal against the others. The critique preamble:
 
@@ -133,26 +134,16 @@ By default, do NOT print intermediate persona debates or walls of discussion. Af
 - Only print detailed persona critique logs and debate transcripts if `verbose` was specified.
 
 ---
-## Stage 4 — Persistence *(only on `--save` or `--record`)*
+## Stage 4 — Persistence *(only on `save` or `record`)*
 
 When the user requested persistence:
 
-1. Resolve `git rev-parse HEAD` as `snapshot_id`.
-2. Build canonical payload `JSON.stringify({ snapshot_id, topic, consensusInvariants, verdictSummary }, Object.keys(data).sort())`.
-3. Sign with `node:crypto` Ed25519 (ADR-034).
-4. Write the decision record to `.omp/scratch/debates/YYYY-MM-DD_<topic_slug>.md`.
-5. Emit the verdict card with `savedPath` populated.
-
----
-
 ## Interactive Verdict Overlay
 
-When the user passed `--overlay` (alias `--modal`) and the runtime exposes `ctx.ui.custom`, launch the interactive Council Verdict overlay immediately. The overlay is modeled after `src/research/research-overlay.ts` and oh-my-pi TUI conventions.
+When the user passed `overlay` (alias `modal`) and the runtime exposes `ctx.ui.custom`, launch the interactive Council Verdict overlay immediately. The overlay is modeled after `src/research/research-overlay.ts` and oh-my-pi TUI conventions.
 
 - **Tabs**: `[1] Verdict & Consensus` (consensus invariants / majority / divergences / summary), `[2] Persona A`, `[3] Persona B`, `[4] Persona C` (un-truncated stance, recommendation, key invariants, caveats, confidence).
 - **Keyboard**: `1-4` or `Tab`/`Shift+Tab` to switch tabs; `j`/`k` (or arrow keys) to scroll; `s` to save the record; `Enter` to dispatch `/implement` with the consensus invariants; `Esc` or `q` to close.
-
-The 76-column ANSI verdict card continues to render in standard chat output even when the overlay is used — the overlay is an additional, opt-in inspection surface.
 
 ---
 
@@ -182,6 +173,4 @@ Status: Deliberation Concluded · <ISO timestamp>
    • <Persona>: <position>
    • <Persona>: <position>
 
-💾 Saved Record: <path>          ← only when --save
-⟨Enter: Run /implement⟩ ⟨s: Save Record⟩ ⟨Esc: Dismiss⟩
-```
+💾 Saved Record: <path>          ← only when `save`

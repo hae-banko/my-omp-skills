@@ -81,7 +81,16 @@ Custom message renderers (`pi.registerMessageRenderer`) must calculate display w
 To maintain maximum LLM performance, low turn latency, and high KV cache hit rates ($>90\%$):
 - **Prefix Stability**: Dynamic system prompt additions (like `<relevant-knowledge>`) MUST be appended strictly to the tail (`evt.systemPrompt = sysPrompt + ...`). Never prepend or mutate prefix text.
 - **Deterministic Formats**: Use static, deterministic formats (e.g. `YYYY-MM-DD` mtime dates, deterministic list sorting) rather than volatile timestamps like `Date.now()`.
-- **Context Preservation**: Cap system prompt injections (e.g. max 5 records + 5 pitfalls in `kb-index-injector.ts`) to avoid context dilution.
+### 9. Command UX Invariant — No Think, No Echo, No `--` (ADR-0008)
+
+Every slash command and every handler in `src/**` MUST respect the user-facing UX contract below. Violations are an `AGENTS.md` rule violation, not a style nit:
+
+1. **Pure-display commands MUST NOT trigger an LLM turn.** Set `skipAgentTurn: true` on the `CommandSpec`. The default handler in `src/index.ts:runDefaultHandler` MUST honor that flag and MUST NOT call `pi.sendUserMessage`.
+2. **No `--` prefix in user-facing flag/keyword syntax.** Document flags as bare keywords (`quick`, `deep`, `save`, `ml`, `overlay`, `verbose`). The parser MUST still accept `--quick` as a tolerant synonym for muscle memory, but the prose examples in `commands/<name>.md` and `skills/<name>/SKILL.md` show bare form only.
+3. **No editor echo. No input mutation.** NEVER call `ctx.ui.setEditorText` or `ctx.ui.pasteToEditor` from a command handler. NEVER call `pi.sendUserMessage` with `/<command> <args>` text after the user typed it (the input box gets repainted with the command echo — this is the `(QUICK)` / `(RAW)` / `(EMBEDDED)` problem on `/council`).
+4. **Status-bar text is for the user.** No sub-mode stamps like `(QUICK)` in `ctx.ui.setStatus` — that's routing metadata, not user-readable progress.
+5. **Autocomplete every flag and subcommand.** `getArgumentCompletions` MUST surface every subcommand (`list`, `init`, `edit`, `config`, `status`, `recent`, `show`, `add-items`, `add-fields`, `validate`, `dashboard`, `report`), every keyword, and every named preset. When the user types the first token of a subcommand (`/council e`), narrow to matching subcommand heads only.
+6. **Default verbosity = silent card.** Single visually rich card in chat; no wall of reasoning prose. `verbose` keyword (no `--`) opts in to multi-stage detail.
 
 ## Rules
 

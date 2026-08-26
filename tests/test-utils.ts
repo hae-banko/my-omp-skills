@@ -39,7 +39,7 @@ export interface RegisteredTool {
   ) => unknown;
 }
 
-export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: boolean }> = {
+export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: boolean; noEcho?: boolean }> = {
   "ask-me": {},
   "grill-me": {},
   "grill-with-docs": {},
@@ -73,7 +73,7 @@ export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: b
   "ponytail-review": {},
   "ponytail-debt": {},
   "ponytail-audit": {},
-  council: {},
+  council: { noEcho: true },
 };
 
 let globalFailures = 0;
@@ -196,11 +196,23 @@ export interface CustomUiCall {
   renderedFrames: Record<number, readonly string[]>;
 }
 
-export function createInteractiveCommandContext(onCustom?: (call: CustomUiCall) => void): {
+export interface InteractiveContextOptions {
+  onCustom?: (call: CustomUiCall) => void;
+  onEditor?: (title: string, prefill?: string) => Promise<string | undefined> | string | undefined;
+  onSelect?: (title: string, options: unknown[]) => Promise<string | undefined> | string | undefined;
+  onInput?: (prompt: string) => Promise<string | undefined> | string | undefined;
+}
+
+export function createInteractiveCommandContext(
+  optionsOrCustom?: ((call: CustomUiCall) => void) | InteractiveContextOptions,
+): {
   hasUI: true;
   ui: {
     notify: (msg: string, level?: string) => void;
     setStatus: (k: string, t?: string) => void;
+    editor: (title: string, prefill?: string) => Promise<string | undefined>;
+    select: (title: string, options: unknown[]) => Promise<string | undefined>;
+    input: (prompt: string) => Promise<string | undefined>;
     custom: <T = unknown>(
       factory: (tui: unknown, theme: unknown, keybindings: unknown, done: (result: T) => void) => unknown,
       options?: Record<string, unknown>,
@@ -208,11 +220,19 @@ export function createInteractiveCommandContext(onCustom?: (call: CustomUiCall) 
   };
   notifications: Array<{ msg: string; level?: string }>;
   statuses: Record<string, string | undefined>;
+  editorCalls: Array<{ title: string; prefill?: string }>;
+  selectCalls: Array<{ title: string; options: unknown[] }>;
+  inputCalls: string[];
   customCalls: CustomUiCall[];
 } {
+  const opts: InteractiveContextOptions =
+    typeof optionsOrCustom === "function" ? { onCustom: optionsOrCustom } : (optionsOrCustom ?? {});
   const notifications: Array<{ msg: string; level?: string }> = [];
   const statuses: Record<string, string | undefined> = {};
   const customCalls: CustomUiCall[] = [];
+  const editorCalls: Array<{ title: string; prefill?: string }> = [];
+  const selectCalls: Array<{ title: string; options: unknown[] }> = [];
+  const inputCalls: string[] = [];
 
   const ui = {
     notify: (msg: string, level?: string): void => {
@@ -220,6 +240,21 @@ export function createInteractiveCommandContext(onCustom?: (call: CustomUiCall) 
     },
     setStatus: (k: string, t?: string): void => {
       statuses[k] = t;
+    },
+    editor: async (title: string, prefill?: string): Promise<string | undefined> => {
+      editorCalls.push({ title, prefill });
+      if (opts.onEditor) return opts.onEditor(title, prefill);
+      return prefill;
+    },
+    select: async (title: string, options: unknown[]): Promise<string | undefined> => {
+      selectCalls.push({ title, options });
+      if (opts.onSelect) return opts.onSelect(title, options);
+      return undefined;
+    },
+    input: async (prompt: string): Promise<string | undefined> => {
+      inputCalls.push(prompt);
+      if (opts.onInput) return opts.onInput(prompt);
+      return undefined;
     },
     custom: async <T = unknown>(
       factory: (tui: unknown, theme: unknown, keybindings: unknown, done: (result: T) => void) => unknown,
@@ -265,7 +300,7 @@ export function createInteractiveCommandContext(onCustom?: (call: CustomUiCall) 
         renderedFrames: frames,
       };
       customCalls.push(call);
-      onCustom?.(call);
+      opts.onCustom?.(call);
       return resultVal;
     },
   };
@@ -275,6 +310,9 @@ export function createInteractiveCommandContext(onCustom?: (call: CustomUiCall) 
     ui,
     notifications,
     statuses,
+    editorCalls,
+    selectCalls,
+    inputCalls,
     customCalls,
   };
 }

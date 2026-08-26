@@ -1127,10 +1127,12 @@ export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
  *  so the handler can short-circuit before invoking the default deliberation
  *  workflow. Returns the subcommand name (lowercase) and the trailing
  *  remainder, or `null` when the args describe a normal deliberation. */
-export function parseCouncilSubcommand(rawArgs: string): { sub: "list" | "init"; rest: string } | null {
+export function parseCouncilSubcommand(
+  rawArgs: string,
+): { sub: "list" | "init" | "edit" | "config"; rest: string } | null {
   const tokens = rawArgs.trim().split(/\s+/).filter(Boolean);
   const head = tokens[0]?.toLowerCase();
-  if (head === "list" || head === "init") {
+  if (head === "list" || head === "init" || head === "edit" || head === "config") {
     return { sub: head, rest: tokens.slice(1).join(" ") };
   }
   return null;
@@ -1151,15 +1153,14 @@ export function parseCouncilSubcommand(rawArgs: string): { sub: "list" | "init";
  *  Returns `true` when a subcommand consumed the call (caller should not
  *  also fire the default deliberation workflow); `false` otherwise.
  */
-export function runCouncilCommand(
+export async function runCouncilCommand(
   pi: ExtensionApi,
   root: string,
   rawArgs: string,
   ctx: CommandContext,
   resources: { body: string; companionPaths: string[] },
-): void {
-  // Subcommand short-circuit: `/council list` and `/council init` resolve here
-  // without spawning the deliberation workflow.
+): Promise<void> {
+  // Subcommand short-circuit: `/council list`, `/council init`, and `/council edit`
   const sub = parseCouncilSubcommand(rawArgs);
   if (sub) {
     if (sub.sub === "list") {
@@ -1170,8 +1171,69 @@ export function runCouncilCommand(
       runCouncilInitSubcommand(pi, root, ctx, sub.rest);
       return;
     }
+    if (sub.sub === "edit" || sub.sub === "config") {
+      await runCouncilEditSubcommand(pi, root, ctx);
+      return;
+    }
   }
 
+  // Interactive triad selection dialog when invoked without arguments in a TUI session
+  if (!rawArgs.trim() && ctx.hasUI && ctx.ui?.select) {
+    const councils = listCouncils(root);
+    const config = loadCouncilConfig(root);
+    const options: Array<{ label: string; description?: string; value: string }> = [];
+
+    for (const c of councils) {
+      const isDefault = c.id === config.defaultCouncil;
+      const defaultTag = isDefault ? " ★ default" : "";
+      const personasList = c.personas.map((p) => p.name).join(", ");
+      options.push({
+        label: `${c.id}${defaultTag}`,
+        description: `${c.personas.length} participants: ${personasList}`,
+        value: c.id,
+      });
+    }
+
+    options.push({
+      label: "✏️  Edit .omp/council.yaml in editor",
+      description: "Open the built-in text editor to customize presets, personas, and prompts",
+      value: "__edit__",
+    });
+
+    options.push({
+      label: "📋  List councils and personas (/council list)",
+      description: "Display all available councils and their detailed personas in chat",
+      value: "__list__",
+    });
+
+    const selected = await ctx.ui.select("Select Council Triad or Action", options);
+    if (!selected) {
+      ctx.ui?.notify?.("Council selection cancelled", "info");
+      return;
+    }
+
+    if (selected === "__edit__" || selected.includes("Edit .omp/council.yaml")) {
+      await runCouncilEditSubcommand(pi, root, ctx);
+      return;
+    }
+
+    if (selected === "__list__" || selected.includes("List councils")) {
+      runCouncilListSubcommand(pi, root, ctx);
+      return;
+    }
+
+    const chosenCouncil = selected.replace(/\s+★\s*default/i, "").trim();
+    let chosenTopic = "";
+    if (ctx.ui?.input) {
+      chosenTopic = (await ctx.ui.input(`Enter proposal or question for ${chosenCouncil}:`)) ?? "";
+    }
+
+    if (!chosenTopic.trim()) {
+      chosenTopic = "Untitled proposal";
+    }
+
+    return runCouncilCommand(pi, root, `${chosenCouncil} ${chosenTopic}`, ctx, resources);
+  }
   const parsed = parseCouncilArgs(rawArgs);
   const topic = parsed.topic || "Untitled proposal";
   // 2. Resolve the council to use and load its personas for the receipt
@@ -1183,14 +1245,14 @@ export function runCouncilCommand(
   const personas = config.councils[councilName] ?? DEFAULT_COUNCIL_TRIAD;
   const mode = parsed.explicitMode ? parsed.mode : config.defaultMode;
 
-  // 1. Live status-bar indicator: announce deliberation started
+  // 1. Live status-bar indicator — clean status text, no sub-mode stamp.
+  //    Sub-mode routing belongs to the verdict card / execution contract,
+  //    not the status bar (ADR-0008 §4).
   ctx.ui?.setStatus?.(
     COUNCIL_STATUS_KEY,
-    `Council: ${mode.toUpperCase()} (${councilName}) deliberating on "${truncateForStatus(topic)}"`,
+    `Council deliberating on "${truncateForStatus(topic)}"`,
   );
-  ctx.ui?.notify?.(`Council deliberation started (${mode} · ${councilName})`, "info");
-
-  // 3. Compose the workflow body with structured Execution Contract & resolved personas
+  ctx.ui?.notify?.(`Council deliberation started`, "info");
   const argText = rawArgs.trim();
   let text = resources.body;
   text = text.replace(/\$ARGUMENTS/g, argText || "");
@@ -1217,24 +1279,27 @@ export function runCouncilCommand(
   if (resources.companionPaths.length > 0) {
     text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${resources.companionPaths.join("\n")}`;
   }
-  // 4. Emit the workflow body (hidden) so the executing agent has full instructions
-  pi.sendMessage({
-    customType: `command:council`,
-    content: text,
-    display: false,
-    attribution: "user",
-  });
 
-  // 5. Send the user prompt that triggers the executing agent to spawn the council
-  const userPrompt = `/council${argText ? ` ${argText}` : ""}`;
-  void pi.sendUserMessage(userPrompt);
+  // 4. Emit the workflow body (hidden) so the executing agent has full instructions.
+  //    Use deliverAs: "nextTurn" + triggerTurn so the agent turn starts without
+  //    repainting the user's editable input buffer (ADR-0008 §3).
+  pi.sendMessage(
+    {
+      customType: `command:council`,
+      content: text,
+      display: false,
+      attribution: "user",
+    },
+    { deliverAs: "nextTurn", triggerTurn: true },
+  );
 
-  // 6. Queue the verdict receipt card so the user sees the structural placeholders
+  // 5. Queue the verdict receipt card so the user sees the structural placeholders
   //    immediately and the renderer fills in the live verdict once Stage 3 lands.
+  //    No sub-mode stamp in the visible content (ADR-0008 §4).
   pi.sendMessage(
     {
       customType: COUNCIL_CUSTOM_TYPE,
-      content: `Council deliberation requested on "${truncateForStatus(topic)}" (${mode.toUpperCase()})`,
+      content: `Council deliberating on "${truncateForStatus(topic)}"`,
       display: true,
       attribution: "user",
       details: {
@@ -1253,16 +1318,16 @@ export function runCouncilCommand(
     { deliverAs: "followUp" },
   );
 
-  // 7. If the user requested an interactive overlay, launch it on the verdict
+  // 6. If the user requested an interactive overlay, launch it on the verdict
   //    receipt card immediately so they can read the verdict while the executing
   //    agent runs Stage 1. The overlay auto-dismisses once they pick an action.
   if (parsed.overlay && ctx.hasUI && ctx.ui?.custom) {
     void launchCouncilOverlay(pi, root, ctx, topic, councilName, mode);
   }
 
-  // 8. Clear the status widget; the executing agent will repopulate it on Stage transitions.
+  // 7. Clear the status widget; the executing agent will repopulate it on Stage transitions.
   ctx.ui?.setStatus?.(COUNCIL_STATUS_KEY, undefined);
-}
+ }
 
 /** `/council list` — print every built-in + user-defined council. */
 function runCouncilListSubcommand(pi: ExtensionApi, root: string, ctx: CommandContext): void {
@@ -1343,7 +1408,59 @@ function runCouncilInitSubcommand(pi: ExtensionApi, root: string, ctx: CommandCo
     },
   });
 }
+/** `/council edit` (alias `/council config`) — open `.omp/council.yaml` in the
+ *  built-in TUI text editor directly so the user can edit presets, personas,
+ *  prompts, and default selection without leaving the harness session. */
+export async function runCouncilEditSubcommand(
+  pi: ExtensionApi,
+  root: string,
+  ctx: CommandContext,
+): Promise<void> {
+  const targetDir = join(root, ".omp");
+  const targetPath = join(targetDir, "council.yaml");
+  if (!existsSync(targetPath)) {
+    scaffoldCouncilYaml(root);
+  }
 
+  const initialContent = readFileSync(targetPath, "utf8");
+
+  if (ctx.ui?.editor) {
+    const edited = await ctx.ui.editor("Edit Council Configuration (.omp/council.yaml)", initialContent);
+    if (edited !== undefined && edited !== initialContent) {
+      writeFileSync(targetPath, edited, "utf8");
+      const loaded = loadCouncilConfig(root);
+      const councilCount = Object.keys(loaded.councils).length;
+      ctx.ui.notify?.(
+        `Saved .omp/council.yaml (${councilCount} council(s), default: ${loaded.defaultCouncil})`,
+        "info",
+      );
+      pi.sendMessage({
+        customType: COUNCIL_CUSTOM_TYPE,
+        content: `Saved .omp/council.yaml\nActive default: ${loaded.defaultCouncil} (${loaded.councils[loaded.defaultCouncil]?.length ?? 0} participants)\nTotal councils: ${councilCount}`,
+        display: true,
+        attribution: "user",
+        details: {
+          topic: "Council config saved",
+          mode: loaded.defaultMode,
+          councilName: loaded.defaultCouncil,
+          opinions: [],
+          consensusInvariants: [],
+          majorityRecommendations: [],
+          uniqueInsights: [],
+          criticalDivergences: [],
+          verdictSummary: `Configuration updated: default council is ${loaded.defaultCouncil}`,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } else if (edited === undefined) {
+      ctx.ui?.notify?.("Council configuration edit cancelled", "info");
+    }
+    return;
+  }
+
+  // Non-TUI / headless fallback: inform user where to edit
+  ctx.ui?.notify?.(`Council configuration located at ${targetPath}`, "info");
+}
 /** Launch the verdict overlay so the user can read the verdict, scroll per-
  *  persona detail, and dispatch Enter→/implement or s→save before dismissing.
  *  Returns once the user dismisses the overlay; the caller need not await. */

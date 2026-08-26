@@ -299,6 +299,15 @@ interface CommandSpec {
   companions?: string[];
   /** customType for the transcript receipt emitted when the command runs */
   customType?: string;
+  /**
+   * When true, the command resolves entirely inside its handler and
+   * `runDefaultHandler` MUST NOT call `pi.sendUserMessage` afterwards.
+   * Required for all pure-data commands (`/timeline`, `/tilt`, `/reference`,
+   * `/council list|init|edit|recent|history`, `/clarify debug`,
+   * `/hindsight status`, `/record --recent`, `/pitfall --recent`,
+   * `/omp-setup status`, `/omp-handoff status`, etc.) per ADR-0008.
+   */
+  skipAgentTurn?: boolean;
   /** custom handler replacing the default body-send handler (e.g. toggles) */
   handler?: (
     pi: ExtensionApi,
@@ -1663,6 +1672,8 @@ const COMMANDS: CommandSpec[] = [
       const subcommandOptions: CompletionOption[] = [
         { value: "list", label: "list", description: "List every available council (built-in + user-defined)" },
         { value: "init", label: "init", description: "Scaffold .omp/council.yaml with documentation (--force to overwrite)" },
+        { value: "edit", label: "edit", description: "Open .omp/council.yaml in the built-in text editor directly" },
+        { value: "config", label: "config", description: "Alias for edit (open .omp/council.yaml in text editor)" },
       ];
       if (head === "list") {
         return subcommandOptions.filter((o) => o.value === "list");
@@ -1672,6 +1683,9 @@ const COMMANDS: CommandSpec[] = [
           ...subcommandOptions.filter((o) => o.value === "init"),
           { value: "force", label: "force", description: "Overwrite existing .omp/council.yaml" },
         ];
+      }
+      if (head === "edit" || head === "config") {
+        return subcommandOptions.filter((o) => o.value === head);
       }
       const keywordOptions: CompletionOption[] = [
         { value: "quick", label: "quick", description: "2-stage fast deliberation (Parallel drafts → Chairman synthesis)" },
@@ -1731,8 +1745,14 @@ async function runDefaultHandler(args: {
   args: string;
   companionPaths: string[];
   ctx: CommandContext;
+  /**
+   * When true, do NOT call `pi.sendUserMessage` after emitting the body.
+   * Pure-data display commands resolve entirely inside their own handler
+   * and must not echo the user's typed text back into the prompt buffer.
+   */
+  skipAgentTurn?: boolean;
 }): Promise<void> {
-  const { pi, name, customType, body, args: rawArgs, companionPaths, ctx } = args;
+  const { pi, name, customType, body, args: rawArgs, companionPaths, ctx, skipAgentTurn } = args;
   const argText = rawArgs.trim();
   let text = body;
   if (argText) {
@@ -1746,14 +1766,16 @@ async function runDefaultHandler(args: {
       "\n",
     )}`;
   }
-  pi.sendMessage({
-    customType: customType ?? `command:${name}`,
-    content: text,
-    display: false,
-    attribution: "user",
-  });
-  const userPrompt = `/${name}${argText ? ` ${argText}` : ""}`;
-  await pi.sendUserMessage(userPrompt);
+  if (!skipAgentTurn) {
+    pi.sendMessage({
+      customType: customType ?? `command:${name}`,
+      content: text,
+      display: false,
+      attribution: "user",
+    });
+    const userPrompt = `/${name}${argText ? ` ${argText}` : ""}`;
+    await pi.sendUserMessage(userPrompt);
+  }
   if (customType) {
     pi.sendMessage(
       {
@@ -1828,6 +1850,7 @@ export default function (pi: ExtensionApi): void {
           args,
           companionPaths,
           ctx,
+          skipAgentTurn: spec.skipAgentTurn,
         });
       },
     });

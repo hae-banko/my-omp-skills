@@ -75,6 +75,7 @@ import {
   partitionCouncilOpinions,
   renderCouncilVerdictCard,
   runCouncilCommand,
+  runCouncilEditSubcommand,
   saveCouncilRecord,
   scaffoldCouncilYaml,
   signCouncilVerdict,
@@ -491,13 +492,13 @@ export default function (pi: ExtensionApi): void {
   if (statusCalls.length < 2) {
     fail(`runCouncilCommand: expected at least 2 setStatus calls (start+clear), got ${statusCalls.length}`);
   }
-  if (statusCalls[0].key !== COUNCIL_STATUS_KEY || !statusCalls[0].text?.includes("QUICK")) {
-    fail(`runCouncilCommand: first setStatus call wrong: ${JSON.stringify(statusCalls[0])}`);
+  if (statusCalls[0].key !== COUNCIL_STATUS_KEY || !statusCalls[0].text?.includes("Council deliberating on")) {
+    fail(`runCouncilCommand: first setStatus call wrong (must be clean, no sub-mode stamp): ${JSON.stringify(statusCalls[0])}`);
   }
-  if (statusCalls[statusCalls.length - 1].text !== undefined) {
-    fail(`runCouncilCommand: expected final setStatus to clear (undefined), got: ${JSON.stringify(statusCalls[statusCalls.length - 1])}`);
+  // ADR-0008 §4: status text must NOT leak sub-mode routing metadata.
+  if (statusCalls[0].text && /QUICK|RAW|DEEP|EMBEDDED|ML-RESEARCH|SOFTWARE/.test(statusCalls[0].text)) {
+    fail(`runCouncilCommand: status text leaks sub-mode stamp: ${JSON.stringify(statusCalls[0])}`);
   }
-  // The verdict receipt (customType=council-verdict) should land in customMessages
   const verdictMessages = ctx.customMessages.filter(
     (m) => (m as { customType?: string }).customType === COUNCIL_CUSTOM_TYPE,
   );
@@ -728,14 +729,31 @@ export default function (pi: ExtensionApi): void {
     }
     originalSend(msg);
   };
+  const councilStatusCalls: Array<{ key: string; text: string | undefined }> = [];
+  const originalSetStatus = mockCtx.ui.setStatus;
+  mockCtx.ui.setStatus = (key: string, text: string | undefined): void => {
+    councilStatusCalls.push({ key, text });
+  };
   try {
+    const sentBefore = ctx.sent.length;
     runCouncilCommand(testPi, customConfigDir.dir, "Should we use DMA buffers?", mockCtx, {
       body: "Base instructions",
       companionPaths: [],
     });
-    const hasEmbeddedNotification = mockCtx.notifications.some((n) => n.msg.includes("embedded"));
-    if (!hasEmbeddedNotification) {
-      fail(`runCouncilCommand: expected notification to announce default council embedded, got ${JSON.stringify(mockCtx.notifications)}`);
+    // ADR-0008 §3+§4: clean status (no sub-mode stamp) and one generic notification.
+    const started = councilStatusCalls.find((s) => s.key === "council" && typeof s.text === "string");
+    if (!started || !started.text?.includes("Council deliberating on")) {
+      fail(`runCouncilCommand: first setStatus call must be clean (no QUICK/RAW/EMBEDDED stamp), got ${JSON.stringify(started)}`);
+    }
+    if (started?.text && /QUICK|RAW|DEEP|EMBEDDED|ML-RESEARCH|SOFTWARE/.test(started.text)) {
+      fail(`runCouncilCommand: status text leaks sub-mode metadata, got ${JSON.stringify(started)}`);
+    }
+    if (!mockCtx.notifications.some((n) => n.msg === "Council deliberation started")) {
+      fail(`runCouncilCommand: missing generic notification, got ${JSON.stringify(mockCtx.notifications)}`);
+    }
+    // ADR-0008 §3: no pi.sendUserMessage echo into the editable input buffer.
+    if (ctx.sent.length !== sentBefore) {
+      fail(`runCouncilCommand: must NOT echo into input buffer via sendUserMessage, got ${JSON.stringify(ctx.sent.slice(sentBefore))}`);
     }
     if (!injectedBody.includes("Council Execution Contract (embedded · 3 participants)")) {
       fail(`runCouncilCommand: missing Execution Contract in injected body: ${injectedBody.slice(0, 200)}`);
@@ -744,8 +762,57 @@ export default function (pi: ExtensionApi): void {
       fail("runCouncilCommand: missing SILENT BY DEFAULT directive in injected body");
     }
   } finally {
+    mockCtx.ui.setStatus = originalSetStatus ?? (() => {});
     testPi.sendMessage = originalSend;
     customConfigDir.cleanup();
+  }
+
+  // 7j-3. /council edit & config subcommands + interactive triad selector
+  const subEdit = parseCouncilSubcommand("edit");
+  if (subEdit?.sub !== "edit") fail(`parseCouncilSubcommand: expected 'edit', got '${subEdit?.sub}'`);
+  const subConfig = parseCouncilSubcommand("config");
+  if (subConfig?.sub !== "config") fail(`parseCouncilSubcommand: expected 'config', got '${subConfig?.sub}'`);
+
+  const editFixture = createTempFixture("council-edit-subcommand-");
+  try {
+    let editorOpened = false;
+    const editCtx = createInteractiveCommandContext({
+      onEditor: (_title, prefill) => {
+        editorOpened = true;
+        // Simulate user editing the config to set default: ml
+        return `${prefill ?? ""}\ndefault: ml\n`;
+      },
+    });
+    await runCouncilEditSubcommand(ctx.pi, editFixture.dir, editCtx);
+    if (!editorOpened) fail("runCouncilEditSubcommand: editor was not opened");
+    const updatedCfg = loadCouncilConfig(editFixture.dir);
+    if (updatedCfg.defaultCouncil !== "ml-research") {
+      fail(`runCouncilEditSubcommand: expected default 'ml-research' after edit, got '${updatedCfg.defaultCouncil}'`);
+    }
+    const savedNotification = editCtx.notifications.some((n) => n.msg.includes("Saved .omp/council.yaml"));
+    if (!savedNotification) fail("runCouncilEditSubcommand: missing saved notification");
+
+    // Verify interactive selector when running /council with no args
+    let selectOptions: unknown[] = [];
+    const selectorCtx = createInteractiveCommandContext({
+      onSelect: (_title, options) => {
+        selectOptions = options;
+        return "__edit__";
+      },
+      onEditor: (_title, prefill) => prefill,
+    });
+    await runCouncilCommand(ctx.pi, editFixture.dir, "", selectorCtx, {
+      body: "Base instructions",
+      companionPaths: [],
+    });
+    const hasEditOption = selectOptions.some(
+      (o) => typeof o === "object" && o !== null && (o as { value?: string }).value === "__edit__",
+    );
+    if (!hasEditOption) {
+      fail("runCouncilCommand: interactive selector missing __edit__ option");
+    }
+  } finally {
+    editFixture.cleanup();
   }
   // 7k. Interactive Council Overlay — render + keyboard routing
   const overlayVerdict: CouncilVerdict = {
