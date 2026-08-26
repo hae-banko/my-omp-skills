@@ -14,6 +14,8 @@ import { findKnowledgeRoot, readKnowledge } from "../knowledge/knowledge.ts";
 import { listResearchProjects } from "../core/locators.ts";
 import { readProject } from "../research/research-store.ts";
 import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
+import type { Component } from "@oh-my-pi/pi-tui";
+import { createTuiCard, type CardSpec } from "../core/card.ts";
 export const DEFAULT_TIMELINE_LIMIT = 15;
 export const MAX_TIMELINE_LIMIT = 50;
 export const TIMELINE_CUSTOM_TYPE = "timeline-digest";
@@ -246,23 +248,50 @@ export async function runTimelineCommand(
   pi.sendMessage({
     customType: TIMELINE_CUSTOM_TYPE,
     content: [headerTitle, ...formattedLines].join("\n"),
+    display: true,
+    attribution: "user",
   });
 
   ctx.ui?.notify?.(`Timeline: ${items.length} event(s) generated`, "info");
 }
 
 /**
+ * Construct a native `@oh-my-pi/pi-tui` Box card representing the Timeline Digest.
+ */
+export function createTimelineCard(content: string, theme?: unknown): Component {
+  const lines = content.split("\n");
+  const title = lines[0] || "TIMELINE DIGEST";
+  const body = lines.slice(1);
+
+  const spec: CardSpec = {
+    title,
+    intent: "accent",
+    badges: [
+      { label: "feed", value: "unified timeline", intent: "accent" },
+      { label: "events", value: String(body.length), intent: body.length > 0 ? "success" : "neutral" },
+    ],
+    sections: [
+      {
+        title: "CHRONOLOGICAL EVENT STREAM",
+        content: body.length > 0 ? body : ["○ No history events found — commit changes or save records to populate"],
+        divider: true,
+      },
+    ],
+    footerActions: ["Tip: /timeline <limit> to adjust event count", "Esc: Dismiss"],
+  };
+
+  return createTuiCard(spec, theme);
+}
+
+/**
  * Register the transcript card renderer for `/timeline`.
  */
 export function installTimelineRenderer(pi: ExtensionApi): void {
-  pi.registerMessageRenderer(TIMELINE_CUSTOM_TYPE, (message, _options, _theme) => {
+  pi.registerMessageRenderer(TIMELINE_CUSTOM_TYPE, (message, _options, theme) => {
     let content = "";
     if (message && typeof message === "object" && "content" in message && typeof message.content === "string") {
       content = message.content;
     }
-    const lines = content.split("\n");
-    const title = lines[0] || "TIMELINE DIGEST";
-    const body = lines.slice(1);
-    return toolResultCard(body, title, BORDER_COLORS.cyan);
+    return createTimelineCard(content, theme);
   });
 }

@@ -7,6 +7,8 @@ import { generateKeyPairSync, sign, verify, createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getWorkspaceContext } from "../core/workspace.ts";
+import { type Component, Container, Text } from "@oh-my-pi/pi-tui";
+import { createTuiCard, type CardSpec, type SemanticCardIntent } from "../core/card.ts";
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
 import {
   BORDER_COLORS,
@@ -293,6 +295,22 @@ export const COUNCIL_PRESET_ALIASES: Record<string, string> = {
   ee: "electrical-ee",
   hardware: "electrical-ee",
 };
+export function resolveCouncilPreset(name: string): string {
+  const clean = name.trim().toLowerCase().replace(/^--?/, "");
+  return COUNCIL_PRESET_ALIASES[clean] ?? clean;
+}
+
+export function resolveBadgeColor(colorStr: string): string {
+  const c = colorStr.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (c === "green") return BORDER_COLORS.green;
+  if (c === "blue") return BORDER_COLORS.blue;
+  if (c === "cyan") return BORDER_COLORS.cyan;
+  if (c === "yellow") return BORDER_COLORS.yellow;
+  if (c === "magenta") return BORDER_COLORS.magenta;
+  if (c === "red") return BORDER_COLORS.red;
+  if (c === "dim") return BORDER_COLORS.dim;
+  return colorStr || BORDER_COLORS.cyan;
+}
 
 /** Sorted list of preset display names (canonical ids) for autocomplete/help. */
 export const COUNCIL_PRESET_IDS: string[] = [
@@ -339,8 +357,6 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
 export function loadCouncilConfig(rootDir?: string): CouncilConfig {
   const root = rootDir ?? process.cwd();
   const configPath = join(root, ".omp", "council.yaml");
-  // Seed with every built-in preset so the resolver always has a hit even
-  // without a YAML file on disk.
   const councils: Record<string, CouncilPersona[]> = { ...COUNCIL_PRESETS };
 
   if (!existsSync(configPath)) {
@@ -349,26 +365,61 @@ export function loadCouncilConfig(rootDir?: string): CouncilConfig {
 
   try {
     const raw = readFileSync(configPath, "utf8");
-    // Lightweight parser for simple council.yaml without heavy dependencies
     const lines = raw.split("\n");
     let currentCouncil = "";
     let currentPersona: Partial<CouncilPersona> | null = null;
+    let explicitDefaultCouncil: string | undefined;
+    let explicitDefaultMode: CouncilMode = "quick";
+    let timeoutSeconds = 30;
 
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
 
-      const councilMatch = line.match(/^([a-z0-9_-]+):\s*$/i);
-      if (councilMatch) {
+      // 1. Top-level configuration metadata
+      const defaultMatch = trimmed.match(/^(?:default|defaultCouncil|default_council):\s*(.+)$/i);
+      if (defaultMatch) {
+        const rawVal = defaultMatch[1].trim().replace(/^['"]|['"]$/g, "");
+        explicitDefaultCouncil = resolveCouncilPreset(rawVal);
+        continue;
+      }
+
+      const modeMatch = trimmed.match(/^(?:defaultMode|default_mode|mode):\s*(.+)$/i);
+      if (modeMatch) {
+        const rawMode = modeMatch[1].trim().toLowerCase().replace(/^['"]|['"]$/g, "");
+        if (rawMode === "quick" || rawMode === "deep" || rawMode === "raw") {
+          explicitDefaultMode = rawMode;
+        } else if (rawMode === "debate") {
+          explicitDefaultMode = "deep";
+        }
+        continue;
+      }
+
+      const timeoutMatch = trimmed.match(/^(?:timeout|timeoutSeconds|timeout_seconds):\s*(\d+)$/i);
+      if (timeoutMatch) {
+        timeoutSeconds = parseInt(timeoutMatch[1], 10);
+        continue;
+      }
+
+      // 2. Ignore namespace header `councils:`
+      if (/^councils:\s*$/i.test(trimmed)) {
+        continue;
+      }
+
+      // 3. Council declaration: either top-level `my-council:` or indented `  my-council:`
+      const councilMatch = line.match(/^(?:[ \t]{2})?([a-z0-9_-]+):\s*$/i);
+      if (councilMatch && !/^(?:tools|personas|items|config)$/i.test(councilMatch[1])) {
         if (currentCouncil && currentPersona && currentPersona.id) {
           pushPersona(councils, currentCouncil, currentPersona);
         }
         currentCouncil = councilMatch[1];
         currentPersona = null;
-        if (!councils[currentCouncil]) councils[currentCouncil] = [];
+        // Defining/overriding this council: reset slot so user participant list replaces defaults
+        councils[currentCouncil] = [];
         continue;
       }
 
+      // 4. Persona declaration
       if (currentCouncil && /^\s*-\s*id:\s*(.+)$/i.test(line)) {
         if (currentPersona && currentPersona.id) {
           pushPersona(councils, currentCouncil, currentPersona);
@@ -386,12 +437,12 @@ export function loadCouncilConfig(rootDir?: string): CouncilConfig {
           currentPersona.name = line.replace(/^\s*name:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
         } else if (/^\s*role:\s*(.+)$/i.test(line)) {
           currentPersona.role = line.replace(/^\s*role:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
-        } else if (/^\s*systemPrompt:\s*(.+)$/i.test(line)) {
-          currentPersona.systemPrompt = line.replace(/^\s*systemPrompt:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
-        } else if (/^\s*badgeColor:\s*(.+)$/i.test(line)) {
-          currentPersona.badgeColor = line.replace(/^\s*badgeColor:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+        } else if (/^\s*(?:systemPrompt|system_prompt|prompt):\s*(.+)$/i.test(line)) {
+          currentPersona.systemPrompt = line.replace(/^\s*(?:systemPrompt|system_prompt|prompt):\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+        } else if (/^\s*(?:badgeColor|badge_color|color):\s*(.+)$/i.test(line)) {
+          const rawCol = line.replace(/^\s*(?:badgeColor|badge_color|color):\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+          currentPersona.badgeColor = resolveBadgeColor(rawCol);
         } else if (/^\s*-\s*(.+)$/i.test(line) && /^\s*tools:/i.test(line.replace(/-.*/, "")) === false) {
-          // `- web_search` style under `tools:` list
           const tool = line.replace(/^\s*-\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
           if (tool) currentPersona.tools = [...(currentPersona.tools ?? []), tool];
         }
@@ -402,11 +453,15 @@ export function loadCouncilConfig(rootDir?: string): CouncilConfig {
       pushPersona(councils, currentCouncil, currentPersona);
     }
 
+    const defaultCouncil = explicitDefaultCouncil && councils[explicitDefaultCouncil]
+      ? explicitDefaultCouncil
+      : explicitDefaultCouncil || "default-triad";
+
     return {
       councils,
-      defaultCouncil: Object.keys(councils)[0] || "default-triad",
-      defaultMode: "quick",
-      timeoutSeconds: 30,
+      defaultCouncil,
+      defaultMode: explicitDefaultMode,
+      timeoutSeconds,
     };
   } catch {
     return DEFAULT_COUNCIL_CONFIG;
@@ -482,48 +537,49 @@ export function scaffoldCouncilYaml(rootDir?: string, options: { force?: boolean
   }
 
   const lines: string[] = [
-    "# .omp/council.yaml — custom council presets (extends the built-in triads).",
+    "# .omp/council.yaml — project council configuration",
     "# ",
-    "# Built-in presets (always available, no need to redeclare):",
-    "#   default-triad       software (minimalist / architect / security)",
-    "#   ml-research         model-architect / eval-critic / inference-engineer",
-    "#   embedded            realtime-auditor / hardware-safety / baremetal-pragmatist",
-    "#   electrical-ee       signal-power-integrity / component-dfm / safety-compliance",
-    "# ",
-    "# Aliases recognised on the CLI (--software, --ml, --embedded / --firmware,",
-    "# --ee / --hardware) map to the same arrays.",
-    "# ",
-    "# Add your own council by giving it a unique slug, listing 3 personas, and",
-    "# optionally surfacing tool capabilities (web_search, read, grep, glob, etc.).",
+    "# 1. Default Council Preset for this project",
+    "# Choose which council is summoned when you type `/council <topic>` without a preset:",
+    "# Options: default-triad (software), ml-research (ml), embedded (firmware), electrical-ee (ee), or custom below",
+    "default: default-triad",
+    "",
+    "# 2. Default Deliberation Mode",
+    "# Options: quick (2-stage fast, default) | deep (3-stage debate) | raw (1-stage fan-out)",
+    "defaultMode: quick",
+    "",
+    "# 3. Custom Councils & Overrides",
+    "# Define custom councils with ANY number of participants (2, 3, 4, 5+),",
+    "# or override a built-in preset (like default-triad) by redeclaring its name.",
+    "councils:",
+    "  # Example: 4-participant specialized domain council",
+    "  my-domain-council:",
+    "    - id: backend",
+    "      name: \"Backend Lead\"",
+    "      role: \"API contracts, schema migrations, async concurrency\"",
+    "      badgeColor: \"green\"",
+    "      systemPrompt: \"Focus on schema safety, concurrency invariants, and data integrity.\"",
+    "      tools:",
+    "        - web_search",
+    "        - read",
+    "        - grep",
+    "    - id: frontend",
+    "      name: \"Frontend Lead\"",
+    "      role: \"TUI responsiveness, user ergonomics, accessibility\"",
+    "      badgeColor: \"cyan\"",
+    "      systemPrompt: \"Focus on client ergonomics, non-blocking rendering, and clear UX.\"",
+    "    - id: security",
+    "      name: \"Security Specialist\"",
+    "      role: \"Threat modeling, input sanitization, permission boundaries\"",
+    "      badgeColor: \"red\"",
+    "      systemPrompt: \"Identify adversarial failure modes, injection vectors, and trust boundaries.\"",
+    "    - id: minimalist",
+    "      name: \"Minimalist\"",
+    "      role: \"YAGNI, platform-native simplicity, line-count deletion\"",
+    "      badgeColor: \"yellow\"",
+    "      systemPrompt: \"Enforce standard library first, zero unneeded dependencies, and shortest diff.\"",
     "",
   ];
-
-  // Add a copy-able sample user-defined council so the file is not empty.
-  const exampleCouncil = DEFAULT_COUNCIL_TRIAD[0];
-  if (exampleCouncil) {
-    lines.push("my-domain-council:");
-    lines.push("  - id: my-persona-a");
-    lines.push(`    name: "${exampleCouncil.name} (Adapted)"`);
-    lines.push(`    role: "${exampleCouncil.role}"`);
-    lines.push(`    badgeColor: "${exampleCouncil.badgeColor}"`);
-    lines.push("    systemPrompt: \"Your 1–3 sentence mandate goes here.\"");
-    lines.push("    tools:");
-    lines.push("      - web_search");
-    lines.push("      - read");
-    lines.push("      - grep");
-    lines.push("  - id: my-persona-b");
-    lines.push("    name: \"Specialist B\"");
-    lines.push("    role: \"What this lens watches for\"");
-    lines.push("    badgeColor: \"\\x1b[34m\"");
-    lines.push("    systemPrompt: \"Your 1–3 sentence mandate goes here.\"");
-    lines.push("  - id: my-persona-c");
-    lines.push("    name: \"Specialist C\"");
-    lines.push("    role: \"What this lens watches for\"");
-    lines.push("    badgeColor: \"\\x1b[33m\"");
-    lines.push("    systemPrompt: \"Your 1–3 sentence mandate goes here.\"");
-    lines.push("");
-  }
-
   writeFileSync(targetPath, lines.join("\n"));
   return { path: targetPath, created: true };
 }
@@ -881,24 +937,105 @@ export function renderCouncilVerdictCard(verdict: CouncilVerdict): string {
 
   return lines.join("\n");
 }
+/**
+ * Convert a CouncilVerdict into a CardSpec for native TUI rendering.
+ */
+export function councilVerdictToCardSpec(verdict: CouncilVerdict): CardSpec {
+  let intent: SemanticCardIntent = "accent";
+  if (verdict.consensusInvariants.length > 0) {
+    intent = "success";
+  } else if (verdict.criticalDivergences.length > 0) {
+    intent = "warning";
+  }
+
+  const sections: CardSpec["sections"] = [
+    {
+      title: "TOPIC",
+      content: [verdict.topic],
+    },
+    {
+      title: "🟢 Consensus Invariants (3/3)",
+      content:
+        verdict.consensusInvariants.length > 0
+          ? verdict.consensusInvariants.map((inv) => `  • ${inv}`)
+          : ["  (No unanimous invariants established)"],
+      divider: true,
+    },
+  ];
+
+  if (verdict.majorityRecommendations.length > 0) {
+    sections.push({
+      title: "🟡 Majority Recommendations (2/3)",
+      content: verdict.majorityRecommendations.map((maj) => `  • ${maj}`),
+      divider: true,
+    });
+  }
+
+  if (verdict.uniqueInsights.length > 0) {
+    sections.push({
+      title: "🔵 Unique Insights",
+      content: verdict.uniqueInsights.map((u) => `  • [${u.persona}] ${u.insight}`),
+      divider: true,
+    });
+  }
+
+  if (verdict.criticalDivergences.length > 0) {
+    sections.push({
+      title: "🔴 Critical Divergences",
+      content: verdict.criticalDivergences.map((div) => `  ⚡ ${div.issue}`),
+      divider: true,
+    });
+  }
+
+  if (verdict.savedPath) {
+    sections.push({
+      content: [`💾 Saved Record: ${verdict.savedPath}`],
+      divider: true,
+    });
+  }
+
+  return {
+    title: `⚖️ COUNCIL VERDICT ◄ ${verdict.councilName} (${verdict.mode.toUpperCase()}) ►`,
+    subtitle: `Deliberation Concluded · ${verdict.timestamp.slice(0, 19)}`,
+    intent,
+    badges: [
+      { label: "council", value: verdict.councilName, intent: "accent" },
+      { label: "mode", value: verdict.mode, intent: "neutral" },
+      {
+        label: "consensus",
+        value: verdict.consensusInvariants.length > 0 ? "reached" : "diverged",
+        intent: verdict.consensusInvariants.length > 0 ? "success" : "warning",
+      },
+    ],
+    sections,
+    footerActions: ["Enter: Run /implement", "s: Save Record", "Esc: Dismiss"],
+  };
+}
+
+/**
+ * Construct a native `@oh-my-pi/pi-tui` Box component representing a Council Verdict.
+ */
+export function createCouncilVerdictCard(verdict: CouncilVerdict, theme?: unknown): Component {
+  const spec = councilVerdictToCardSpec(verdict);
+  return createTuiCard(spec, theme);
+}
 
 /**
  * Register the custom message renderer for `customType: "council-verdict"`.
  *
- * Accepts a `CouncilVerdict` on either `message.details` (preferred) or
- * `message.payload`. Falls back to `undefined` if neither is a valid verdict
- * object, leaving the runtime's default formatting untouched.
+ * Returns a native `@oh-my-pi/pi-tui` Box component with theme-aware tinting and responsive width.
  */
 export function installCouncilVerdictRenderer(pi: ExtensionApi): void {
-  pi.registerMessageRenderer(COUNCIL_CUSTOM_TYPE, (message: unknown, _options: unknown, _theme: unknown) => {
+  pi.registerMessageRenderer(COUNCIL_CUSTOM_TYPE, (message: unknown, _options: unknown, theme: unknown) => {
     if (!message || typeof message !== "object") return undefined;
     const msg = message as { details?: unknown; payload?: unknown };
     const candidate: unknown = msg.details ?? msg.payload;
     if (!candidate || typeof candidate !== "object") return undefined;
     if (!("topic" in candidate) || !("opinions" in candidate)) return undefined;
-    return renderCouncilVerdictCard(candidate as CouncilVerdict);
+    return createCouncilVerdictCard(candidate as CouncilVerdict, theme);
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // Council Command Handler (Stage orchestration entry-point)
@@ -918,15 +1055,15 @@ export function installCouncilVerdictRenderer(pi: ExtensionApi): void {
  */
 export interface ParsedCouncilArgs {
   mode: CouncilMode;
-
+  explicitMode?: boolean;
   councilName?: string;
   save: boolean;
   actionable: boolean;
   overlay: boolean;
   compact: boolean;
+  verbose: boolean;
   topic: string;
 }
-
 /** Ergonomic preset flag → canonical council id. Maps both `--flag` and the
  *  bare keyword so the user can type `/council ml Should we use GQA?` as
  *  easily as `/council --ml Should we use GQA?`. */
@@ -948,20 +1085,23 @@ const PRESET_FLAG_ALIASES: Record<string, string> = {
 export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
   const tokens = rawArgs.trim().split(/\s+/).filter(Boolean);
   let mode: CouncilMode = "quick";
+  let explicitMode = false;
   let councilName: string | undefined;
   let save = false;
   let actionable = false;
   let overlay = false;
   let compact = false;
+  let verbose = false;
   const topicParts: string[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    if (tok === "--quick" || tok === "quick") mode = "quick";
-    else if (tok === "--deep" || tok === "deep" || tok === "--debate" || tok === "debate") mode = "deep";
-    else if (tok === "--raw" || tok === "raw") mode = "raw";
+    if (tok === "--quick" || tok === "quick") { mode = "quick"; explicitMode = true; }
+    else if (tok === "--deep" || tok === "deep" || tok === "--debate" || tok === "debate") { mode = "deep"; explicitMode = true; }
+    else if (tok === "--raw" || tok === "raw") { mode = "raw"; explicitMode = true; }
     else if (tok === "--save" || tok === "save" || tok === "--record" || tok === "record") save = true;
     else if (tok === "--actionable" || tok === "actionable") actionable = true;
+    else if (tok === "--verbose" || tok === "verbose") verbose = true;
     else if (tok === "--overlay" || tok === "overlay" || tok === "--modal" || tok === "modal") overlay = true;
     else if (
       tok === "--compact" || tok === "compact" ||
@@ -973,7 +1113,7 @@ export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
     ) {
       const next = tokens[i + 1];
       if (next) {
-        councilName = next;
+        councilName = resolveCouncilPreset(next);
         i += 1;
       }
     } else if (tok in PRESET_FLAG_ALIASES) {
@@ -981,7 +1121,7 @@ export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
     } else topicParts.push(tok);
   }
 
-  return { mode, councilName, save, actionable, overlay, compact, topic: topicParts.join(" ") };
+  return { mode, explicitMode, councilName, save, actionable, overlay, compact, verbose, topic: topicParts.join(" ") };
 }
 /** Detect `/council list` / `/council init` subcommands at the head of the args
  *  so the handler can short-circuit before invoking the default deliberation
@@ -1034,35 +1174,49 @@ export function runCouncilCommand(
 
   const parsed = parseCouncilArgs(rawArgs);
   const topic = parsed.topic || "Untitled proposal";
-  const mode = parsed.mode;
+  // 2. Resolve the council to use and load its personas for the receipt
+  const config = loadCouncilConfig(root);
+  const resolvedCouncilName = parsed.councilName && config.councils[parsed.councilName]
+    ? parsed.councilName
+    : config.defaultCouncil;
+  const councilName = config.councils[resolvedCouncilName] ? resolvedCouncilName : "default-triad";
+  const personas = config.councils[councilName] ?? DEFAULT_COUNCIL_TRIAD;
+  const mode = parsed.explicitMode ? parsed.mode : config.defaultMode;
 
   // 1. Live status-bar indicator: announce deliberation started
   ctx.ui?.setStatus?.(
     COUNCIL_STATUS_KEY,
-    `Council: ${mode.toUpperCase()} deliberating on "${truncateForStatus(topic)}"`,
+    `Council: ${mode.toUpperCase()} (${councilName}) deliberating on "${truncateForStatus(topic)}"`,
   );
-  ctx.ui?.notify?.(`Council deliberation started (${mode})`, "info");
+  ctx.ui?.notify?.(`Council deliberation started (${mode} · ${councilName})`, "info");
 
-  // 2. Resolve the council to use and load its personas for the receipt
-  const config = loadCouncilConfig(root);
-  const councilName = parsed.councilName && config.councils[parsed.councilName]
-    ? parsed.councilName
-    : config.defaultCouncil;
-  const personas = config.councils[councilName] ?? DEFAULT_COUNCIL_TRIAD;
-
-  // 3. Compose the workflow body with $ARGUMENTS + the user's raw flags + topic
+  // 3. Compose the workflow body with structured Execution Contract & resolved personas
   const argText = rawArgs.trim();
   let text = resources.body;
-  if (argText) {
-    text = text.replace(/\$ARGUMENTS/g, argText);
-    text += `\n\n## Parsed flags\n- mode: \`${mode}\`\n- save: \`${parsed.save}\`\n- actionable: \`${parsed.actionable}\`\n- council: \`${councilName}\`\n- personas: ${personas.map((p) => `\`${p.id}\``).join(", ")}`;
-  } else {
-    text = text.replace(/\$ARGUMENTS/g, "");
-  }
+  text = text.replace(/\$ARGUMENTS/g, argText || "");
+
+  const contract = [
+    `\n\n## Council Execution Contract (${councilName} · ${personas.length} participants)`,
+    `- council: \`${councilName}\``,
+    `- mode: \`${mode}\``,
+    `- verbose: \`${parsed.verbose}\``,
+    `- save: \`${parsed.save}\``,
+    `- actionable: \`${parsed.actionable}\``,
+    `- participants: ${personas.length}`,
+    `- topic: ${JSON.stringify(topic)}`,
+    ``,
+    `### Active Council Personas (${personas.length})`,
+    JSON.stringify(personas, null, 2),
+    ``,
+    `### Directives`,
+    `1. SILENT BY DEFAULT: Do not output chatter, preamble, or drafting narration. Call the \`task\` tool immediately with all ${personas.length} personas in parallel.`,
+    `2. MINIMAL DISCUSSION: Provide a 3-5 bullet point executive summary and emit the structured verdict card. Do NOT print intermediate persona debates or walls of text unless verbose is true.`,
+  ].join("\n");
+  text += contract;
+
   if (resources.companionPaths.length > 0) {
     text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${resources.companionPaths.join("\n")}`;
   }
-
   // 4. Emit the workflow body (hidden) so the executing agent has full instructions
   pi.sendMessage({
     customType: `command:council`,
@@ -1159,12 +1313,12 @@ function runCouncilListSubcommand(pi: ExtensionApi, root: string, ctx: CommandCo
 /** `/council init` — scaffold `.omp/council.yaml` if absent. Pass `force` in
  *  `rest` to overwrite an existing file. */
 function runCouncilInitSubcommand(pi: ExtensionApi, root: string, ctx: CommandContext, rest: string): void {
-  const force = /\s*--force\b/.test(rest);
+  const force = /\s*(?:--)?force\b/i.test(rest);
   const result = scaffoldCouncilYaml(root, { force });
   if (result.created) {
     ctx.ui?.notify?.(`Scaffolded council config at ${result.path}`, "info");
   } else {
-    ctx.ui?.notify?.(`Council config already exists at ${result.path} (pass --force to overwrite)`, "info");
+    ctx.ui?.notify?.(`Council config already exists at ${result.path} (pass force to overwrite)`, "info");
   }
   pi.sendMessage({
     customType: COUNCIL_CUSTOM_TYPE,
@@ -1217,10 +1371,11 @@ async function launchCouncilOverlay(
   const overlay: CouncilOverlayComponent = createCouncilOverlay(verdict);
   const result = await ctx.ui.custom<CouncilOverlayAction | undefined>(
     (_tui, _theme, _keybindings, done) => ({
-      render: (width = 84, height = 26) => overlay.render(width, height),
+      render: (width = 84, height = 26) => overlay.renderLines(width, height),
       handleInput: (data: string) => {
         const act = overlay.handleInput(data);
         if (act) done(act);
+        return act;
       },
     }),
     {

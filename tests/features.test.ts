@@ -16,18 +16,21 @@ import {
 } from "../src/research/research-format.ts";
 import {
   calculateDefcon,
+  createTiltCard,
   defconLabel,
   getTiltStratum,
   readLocalTilt,
   recordTiltIncident,
   renderTiltCard,
   scanPromptTilt,
+  tiltDefconToIntent,
   TILT_CUSTOM_TYPE,
   TILT_DICTIONARY,
   TILT_STRATA,
   writeLocalTilt,
 } from "../src/features/tilt.ts";
 import {
+  createTimelineCard,
   formatTimelineLines,
   getUnifiedTimeline,
   parseTimelineLimit,
@@ -62,6 +65,7 @@ import {
   ELECTRICAL_EE_TRIAD,
   EMBEDDED_TRIAD,
   ML_RESEARCH_TRIAD,
+  createCouncilVerdictCard,
   installCouncilVerdictRenderer,
   listCouncilPresets,
   listCouncils,
@@ -83,6 +87,7 @@ import {
 import { createCouncilOverlay } from "../src/council/council-overlay.ts";
 import {
   createTempFixture,
+  createInteractiveCommandContext,
   fail,
   type TestContext,
 } from "./test-utils.ts";
@@ -92,6 +97,29 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
   if (parseTimelineLimit("") !== 15) fail("timeline: parseTimelineLimit('') should be 15");
   if (parseTimelineLimit("5") !== 5) fail("timeline: parseTimelineLimit('5') should be 5");
   if (parseTimelineLimit("invalid") !== 15) fail("timeline: parseTimelineLimit('invalid') should fallback to 15");
+
+  // 1b. Native Timeline Card rendering
+  const sampleTimelineContent = [
+    "TIMELINE DIGEST — test-project (2 events)",
+    "2026-08-26 · [git] feat: unified card architecture",
+    "2026-08-25 · [record] 2026-08-25_council_debate.md",
+  ].join("\n");
+  const timelineBox = createTimelineCard(sampleTimelineContent);
+  const timelineRows = timelineBox.render(100);
+  if (!timelineRows[0].includes("╭") || !timelineRows[timelineRows.length - 1].includes("╰")) {
+    fail("createTimelineCard: missing native rounded corners");
+  }
+  if (!timelineRows.some((r) => r.includes("TIMELINE DIGEST"))) {
+    fail("createTimelineCard: missing header title");
+  }
+
+  // 1c. runTimelineCommand emits message with display: true
+  ctx.customMessages.length = 0;
+  await runTimelineCommand(ctx.pi, process.cwd(), "5", { ui: {} });
+  const timelineMsg = ctx.customMessages.find((m) => m.customType === TIMELINE_CUSTOM_TYPE);
+  if (!timelineMsg || timelineMsg.display !== true) {
+    fail("runTimelineCommand: emitted message missing display: true");
+  }
 
   // 2. Tilt-O-Meter, Swear Jar, & DEFCON levels
   if (TILT_DICTIONARY.length < 15) {
@@ -118,6 +146,38 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
   }
   const maxStratum = getTiltStratum(10000);
   if (maxStratum.tier !== 13) fail(`getTiltStratum(10000): expected tier 13, got ${maxStratum.tier}`);
+
+  // 2c. Native Tilt Card rendering & intent mapping
+  if (tiltDefconToIntent(5) !== "success") fail(`tiltDefconToIntent(5) should be "success", got: ${tiltDefconToIntent(5)}`);
+  if (tiltDefconToIntent(3) !== "warning") fail(`tiltDefconToIntent(3) should be "warning", got: ${tiltDefconToIntent(3)}`);
+  if (tiltDefconToIntent(1) !== "danger") fail(`tiltDefconToIntent(1) should be "danger", got: ${tiltDefconToIntent(1)}`);
+
+  const sampleTiltPayload = {
+    local: {
+      project: "my-omp-skills",
+      project_strikes: 2,
+      defcon: 3,
+      session_strikes: 2,
+      swear_jar_total: 15.5,
+      breakdown: { f_bombs: 2, rage_words: 3, wtfs: 1, caps_rage: 0 },
+      last_incident: { timestamp: "2026-08-26", trigger: "Broken build", points: 3 },
+    },
+    global: {
+      version: 1,
+      lifetime_strikes: 10,
+      lifetime_swear_jar: 150.0,
+      breakdown: { f_bombs: 10, rage_words: 15, wtfs: 5, caps_rage: 2 },
+      repo_leaderboard: { "my-omp-skills": 15.5, "linux-kernel": 120.0 },
+    },
+  };
+  const tiltBox = createTiltCard(sampleTiltPayload);
+  const tiltRows = tiltBox.render(100);
+  if (!tiltRows[0].includes("╭") || !tiltRows[tiltRows.length - 1].includes("╰")) {
+    fail("createTiltCard: missing native rounded corners");
+  }
+  if (!tiltRows.some((r) => r.includes("TILT-O-METER"))) {
+    fail("createTiltCard: missing header title");
+  }
   if (isVagueInput("git status") || isVagueInput("npm test")) {
     fail("isVagueInput: common developer commands flagged as vague");
   }
@@ -289,6 +349,16 @@ export default function (pi: ExtensionApi): void {
       break;
     }
   }
+
+  // Test native TUI Council Verdict Box rendering
+  const nativeBox = createCouncilVerdictCard(fullVerdict);
+  const boxLines = nativeBox.render(100);
+  if (!boxLines[0].includes("╭") || !boxLines[boxLines.length - 1].includes("╰")) {
+    fail("createCouncilVerdictCard: rendered box missing native rounded corners");
+  }
+  if (boxLines[0].length < 100) {
+    fail(`createCouncilVerdictCard: failed to scale to 100 columns: ${boxLines[0].length}`);
+  }
   // Test persistence to .omp/scratch/debates/
   const testDir = createTempFixture("council-test");
   const savedPath = saveCouncilRecord(testDir.dir, fullVerdict);
@@ -324,23 +394,72 @@ export default function (pi: ExtensionApi): void {
     fail(`COUNCIL_CUSTOM_TYPE: expected "council-verdict", got "${COUNCIL_CUSTOM_TYPE}"`);
   }
 
-  // 7d. installCouncilVerdictRenderer registers a renderer for council-verdict
+  // 7d. installCouncilVerdictRenderer registers a renderer for council-verdict.
+  // Regression guard for v0.74.0 / session-resume crash:
+  //   "TypeError: t[i].render is not a function" in the harness render loop.
+  // The omp runtime iterates registered renderers and calls
+  // `t[i].render(width)` on each. Plain strings have no `.render`, so the
+  // renderer MUST return a pi-tui Component (a Container whose children are
+  // Text widgets) — never a raw newline-joined string. This test exercises
+  // the same loop pattern as the harness; if it throws here, it throws in
+  // production.
   const rendererCtx = createTestContextLike(ctx);
   installCouncilVerdictRenderer(rendererCtx.pi);
-  if (typeof rendererCtx.renderers[COUNCIL_CUSTOM_TYPE] !== "function") {
+  const renderer = rendererCtx.renderers[COUNCIL_CUSTOM_TYPE];
+  if (typeof renderer !== "function") {
     fail(`installCouncilVerdictRenderer: did not register a renderer for "${COUNCIL_CUSTOM_TYPE}"`);
   }
   const verdictForRenderer: CouncilVerdict = fullVerdict;
-  const renderedByRenderer = rendererCtx.renderers[COUNCIL_CUSTOM_TYPE](
-    { details: verdictForRenderer },
-    {},
-    {},
-  );
-  if (typeof renderedByRenderer !== "string" || !renderedByRenderer.includes("COUNCIL VERDICT")) {
-    fail(`installCouncilVerdictRenderer: renderer did not return a verdict card string`);
+  const renderedByRenderer = renderer({ details: verdictForRenderer }, {}, {});
+  // (a) Must NOT be a string — that is the smoking gun of the v0.72.1 crash.
+  if (typeof renderedByRenderer === "string") {
+    fail(
+      "installCouncilVerdictRenderer: returned a raw string; the harness render loop " +
+        "calls t[i].render(width) on registered renderers and will throw " +
+        "'TypeError: t[i].render is not a function' when this verdict is re-rendered " +
+        "on session resume. Wrap each card line in a pi-tui Container of Text widgets.",
+    );
+  }
+  if (!renderedByRenderer || typeof renderedByRenderer !== "object") {
+    fail("installCouncilVerdictRenderer: returned a non-object value");
+  }
+  // (c) Drive the same loop the harness does: walk registered renderers and
+  //     call .render(width). If this throws, the user's session-resume crash
+  //     reproduces exactly. This is the Phase-1 red-capable loop.
+  const harnessRows: string[] = [];
+  for (const [, fn] of Object.entries(rendererCtx.renderers)) {
+    const out = fn({ details: verdictForRenderer }, {}, {});
+    if (out === undefined) continue; // renderer declined — fine
+    // Real harness code: `t[i].render(e)` where e is width. After the guard,
+    // `out` is a non-null object with a callable `render`. Pull it into a
+    // typed local so the call site is type-safe and the `null`/object shape
+    // doesn't escape.
+    if (typeof out !== "object" || out === null || !("render" in out) || typeof out.render !== "function") {
+      fail(
+        "harness-loop exercise: a registered renderer returned a non-Component " +
+          "value — this is the exact pattern that crashes the runtime with " +
+          "'TypeError: t[i].render is not a function'.",
+      );
+    }
+    // Boundary cast: the guard above proves the shape (non-null object with a
+    // callable `render`), but TS won't infer through `in` to the function type
+    // here. The assertion is load-bearing only after the guard succeeds.
+    const component = out as unknown as { render: (width: number) => readonly string[] };
+    const rendered = component.render(80);
+    for (const row of rendered) harnessRows.push(row);
+  }
+  // (d) The verdict text must be present in the rendered lines.
+  if (!harnessRows.some((r) => r.includes("COUNCIL VERDICT"))) {
+    fail("installCouncilVerdictRenderer: rendered output missing 'COUNCIL VERDICT' header");
+  }
+  // (e) Every rendered line must respect the responsive width invariant.
+  for (const row of harnessRows) {
+    if (displayWidth(row) > 80) {
+      fail(`installCouncilVerdictRenderer: row exceeds responsive width (80): ${row}`);
+    }
   }
   // Renderer gracefully handles missing/malformed details
-  const undefRender = rendererCtx.renderers[COUNCIL_CUSTOM_TYPE]({}, {}, {});
+  const undefRender = renderer({}, {}, {});
   if (undefRender !== undefined) {
     fail(`installCouncilVerdictRenderer: expected undefined for empty payload, got: ${String(undefRender).slice(0, 60)}`);
   }
@@ -528,11 +647,106 @@ export default function (pi: ExtensionApi): void {
 
   // The example council should be loadable through loadCouncilConfig
   const loaded = loadCouncilConfig(scaffoldDir.dir);
-  if (!loaded.councils["my-domain-council"]) fail("scaffolded council not loaded");
-  const example = loaded.councils["my-domain-council"][0];
-  if (!example.tools?.includes("web_search")) fail("scaffolded council tools not parsed");
+  if (!loaded.councils["my-domain-council"]) fail("scaffolded council my-domain-council not loaded");
+  const teamPersonas = loaded.councils["my-domain-council"];
+  if (teamPersonas.length !== 4) {
+    fail(`scaffolded council: expected 4 participants, got ${teamPersonas.length}`);
+  }
+  if (!teamPersonas[0].tools?.includes("web_search") && !teamPersonas[0].tools?.includes("read")) {
+    fail("scaffolded council tools not parsed");
+  }
+  if (loaded.defaultCouncil !== "default-triad") {
+    fail(`expected default-triad from scaffold, got ${loaded.defaultCouncil}`);
+  }
   scaffoldDir.cleanup();
 
+  // 7j-2. Custom .omp/council.yaml: default council selection + arbitrary participant counts
+  const customConfigDir = createTempFixture("council-custom-yaml-");
+  const ompDir = join(customConfigDir.dir, ".omp");
+  mkdirSync(ompDir, { recursive: true });
+  writeFileSync(
+    join(ompDir, "council.yaml"),
+    [
+      "default: embedded",
+      "defaultMode: deep",
+      "councils:",
+      "  duo:",
+      "    - id: lead",
+      "      name: \"Lead\"",
+      "      role: \"Architecture\"",
+      "      systemPrompt: \"Design safe interfaces.\"",
+      "    - id: review",
+      "      name: \"Reviewer\"",
+      "      role: \"Verification\"",
+      "      systemPrompt: \"Challenge assumptions.\"",
+      "  quintet:",
+      "    - id: p1",
+      "      name: \"P1\"",
+      "      role: \"R1\"",
+      "    - id: p2",
+      "      name: \"P2\"",
+      "      role: \"R2\"",
+      "    - id: p3",
+      "      name: \"P3\"",
+      "      role: \"R3\"",
+      "    - id: p4",
+      "      name: \"P4\"",
+      "      role: \"R4\"",
+      "    - id: p5",
+      "      name: \"P5\"",
+      "      role: \"R5\"",
+    ].join("\n"),
+  );
+  const customLoaded = loadCouncilConfig(customConfigDir.dir);
+  if (customLoaded.defaultCouncil !== "embedded") {
+    fail(`loadCouncilConfig: expected default 'embedded', got '${customLoaded.defaultCouncil}'`);
+  }
+  if (customLoaded.defaultMode !== "deep") {
+    fail(`loadCouncilConfig: expected defaultMode 'deep', got '${customLoaded.defaultMode}'`);
+  }
+  if (!customLoaded.councils["duo"] || customLoaded.councils["duo"].length !== 2) {
+    fail(`loadCouncilConfig: expected 2 participants in 'duo', got ${customLoaded.councils["duo"]?.length}`);
+  }
+  if (!customLoaded.councils["quintet"] || customLoaded.councils["quintet"].length !== 5) {
+    fail(`loadCouncilConfig: expected 5 participants in 'quintet', got ${customLoaded.councils["quintet"]?.length}`);
+  }
+
+  // Verify verbose keyword parsing
+  const verboseArgs = parseCouncilArgs("ml verbose save Should we replace dense attention with GQA?");
+  if (verboseArgs.verbose !== true) fail("parseCouncilArgs: expected verbose === true");
+  if (verboseArgs.councilName !== "ml-research") fail("parseCouncilArgs: expected councilName === 'ml-research'");
+  if (verboseArgs.save !== true) fail("parseCouncilArgs: expected save === true");
+
+  // Verify runCouncilCommand uses defaultCouncil from YAML when no preset is typed
+  const testPi = ctx.pi;
+  const mockCtx = createInteractiveCommandContext();
+  let injectedBody = "";
+  const originalSend = testPi.sendMessage;
+  testPi.sendMessage = (msg: Record<string, unknown>) => {
+    if (msg.customType === "command:council" && typeof msg.content === "string") {
+      injectedBody = msg.content;
+    }
+    originalSend(msg);
+  };
+  try {
+    runCouncilCommand(testPi, customConfigDir.dir, "Should we use DMA buffers?", mockCtx, {
+      body: "Base instructions",
+      companionPaths: [],
+    });
+    const hasEmbeddedNotification = mockCtx.notifications.some((n) => n.msg.includes("embedded"));
+    if (!hasEmbeddedNotification) {
+      fail(`runCouncilCommand: expected notification to announce default council embedded, got ${JSON.stringify(mockCtx.notifications)}`);
+    }
+    if (!injectedBody.includes("Council Execution Contract (embedded · 3 participants)")) {
+      fail(`runCouncilCommand: missing Execution Contract in injected body: ${injectedBody.slice(0, 200)}`);
+    }
+    if (!injectedBody.includes("SILENT BY DEFAULT")) {
+      fail("runCouncilCommand: missing SILENT BY DEFAULT directive in injected body");
+    }
+  } finally {
+    testPi.sendMessage = originalSend;
+    customConfigDir.cleanup();
+  }
   // 7k. Interactive Council Overlay — render + keyboard routing
   const overlayVerdict: CouncilVerdict = {
     topic: "KV cache strategy",

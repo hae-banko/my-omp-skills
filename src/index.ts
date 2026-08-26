@@ -437,10 +437,11 @@ const COMMANDS: CommandSpec[] = [
           const result = await ctx.ui.custom<ResearchOverlayAction | undefined>(
             (_tui, _theme, _keybindings, done) => {
               return {
-                render: (width = 80, height = 24) => overlay.render(width, height),
+                render: (width = 80, height = 24) => overlay.renderLines(width, height),
                 handleInput: (data: string) => {
                   const act = overlay.handleInput(data);
                   if (act) done(act);
+                  return act;
                 },
               };
             },
@@ -1580,6 +1581,18 @@ const COMMANDS: CommandSpec[] = [
     name: "timeline",
     description: "Generate a unified project history & progress digest — /timeline [limit]. User-invoked: local, zero-agent execution.",
     bodyPath: "commands/timeline.md",
+    getArgumentCompletions: (argumentPrefix: string) => {
+      const options = [
+        { value: "5", label: "5", description: "Show latest 5 events" },
+        { value: "10", label: "10", description: "Show latest 10 events" },
+        { value: "15", label: "15", description: "Show latest 15 events (default)" },
+        { value: "25", label: "25", description: "Show latest 25 events" },
+        { value: "50", label: "50", description: "Show maximum 50 events" },
+      ];
+      const lower = argumentPrefix.toLowerCase().trim();
+      if (!lower) return options;
+      return options.filter((o) => o.value.startsWith(lower));
+    },
     handler: (pi) => async (args: string, ctx: CommandContext) => {
       const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
       const root = override && override.trim() ? override.trim() : findRepoRoot();
@@ -1657,58 +1670,39 @@ const COMMANDS: CommandSpec[] = [
       if (head === "init") {
         return [
           ...subcommandOptions.filter((o) => o.value === "init"),
-          { value: "--force", label: "--force", description: "Overwrite existing .omp/council.yaml" },
+          { value: "force", label: "force", description: "Overwrite existing .omp/council.yaml" },
         ];
       }
-      const flagOptions: CompletionOption[] = [
-        { value: "--quick", label: "--quick", description: "2-stage fast deliberation (Parallel drafts → Chairman synthesis)" },
-        { value: "--deep", label: "--deep", description: "3-stage debate (Drafts → Blind cross-critique → Synthesis)" },
-        { value: "--debate", label: "--debate", description: "Alias for --deep 3-stage blind deliberation" },
-        { value: "--raw", label: "--raw", description: "1-stage multi-perspective fan-out (no arbitration)" },
-        { value: "--save", label: "--save", description: "Persist decision record to .omp/scratch/debates/" },
-        { value: "--record", label: "--record", description: "Alias for --save record persistence" },
-        { value: "--actionable", label: "--actionable", description: "Propose executable follow-up commands in verdict" },
-        { value: "--overlay", label: "--overlay", description: "Open the interactive Council Verdict overlay (alias: --modal)" },
-        { value: "--modal", label: "--modal", description: "Alias for --overlay" },
-        { value: "--software", label: "--software", description: "Use the default software triad (Minimalist / Architect / Security)" },
-        { value: "--ml", label: "--ml", description: "Use the ML-research triad (Model Architect / Eval Critic / Inference Engineer)" },
-        { value: "--embedded", label: "--embedded", description: "Use the embedded triad (Realtime Auditor / Hardware Safety / Baremetal Pragmatist)" },
-        { value: "--firmware", label: "--firmware", description: "Alias for --embedded" },
-        { value: "--ee", label: "--ee", description: "Use the electrical-EE triad (Signal & Power Integrity / Component DFM / Safety)" },
-        { value: "--hardware", label: "--hardware", description: "Alias for --ee" },
-        { value: "--council", label: "--council <name>", description: "Select council preset from .omp/council.yaml (or built-in alias)" },
-        { value: "--preset", label: "--preset <name>", description: "Alias for --council <name>" },
-        { value: "quick", label: "quick", description: "Natural keyword: 2-stage fast deliberation (no -- prefix)" },
-        { value: "deep", label: "deep", description: "Natural keyword: 3-stage debate (no -- prefix)" },
-        { value: "debate", label: "debate", description: "Natural keyword: alias for --deep (no -- prefix)" },
-        { value: "raw", label: "raw", description: "Natural keyword: 1-stage multi-perspective fan-out (no -- prefix)" },
-        { value: "save", label: "save", description: "Natural keyword: persist decision record (no -- prefix)" },
-        { value: "record", label: "record", description: "Natural keyword: alias for --save (no -- prefix)" },
-        { value: "actionable", label: "actionable", description: "Natural keyword: propose executable follow-up commands (no -- prefix)" },
-        { value: "compact", label: "compact", description: "Natural keyword: 4-line ANSI verdict card (no -- prefix)" },
-        { value: "terse", label: "terse", description: "Natural keyword: alias for --compact (no -- prefix)" },
-        { value: "summary", label: "summary", description: "Natural keyword: alias for --compact (no -- prefix)" },
-        { value: "overlay", label: "overlay", description: "Natural keyword: open the interactive overlay (no -- prefix)" },
-        { value: "modal", label: "modal", description: "Natural keyword: alias for --overlay (no -- prefix)" },
-        { value: "software", label: "software", description: "Natural keyword: default software triad (no -- prefix)" },
-        { value: "ml", label: "ml", description: "Natural keyword: ML-research triad (no -- prefix)" },
-        { value: "embedded", label: "embedded", description: "Natural keyword: embedded firmware triad (no -- prefix)" },
-        { value: "firmware", label: "firmware", description: "Natural keyword: alias for --embedded (no -- prefix)" },
-        { value: "ee", label: "ee", description: "Natural keyword: electrical-EE triad (no -- prefix)" },
-        { value: "hardware", label: "hardware", description: "Natural keyword: alias for --ee (no -- prefix)" },
-        { value: "council", label: "council <name>", description: "Natural keyword: select council preset (no -- prefix)" },
-        { value: "preset", label: "preset <name>", description: "Natural keyword: alias for --council (no -- prefix)" },
+      const keywordOptions: CompletionOption[] = [
+        { value: "quick", label: "quick", description: "2-stage fast deliberation (Parallel drafts → Chairman synthesis)" },
+        { value: "deep", label: "deep", description: "3-stage debate (Drafts → Blind cross-critique → Synthesis)" },
+        { value: "debate", label: "debate", description: "Alias for deep (3-stage deliberation)" },
+        { value: "raw", label: "raw", description: "1-stage multi-perspective fan-out (no arbitration)" },
+        { value: "save", label: "save", description: "Persist decision record to .omp/scratch/debates/" },
+        { value: "record", label: "record", description: "Alias for save" },
+        { value: "actionable", label: "actionable", description: "Propose executable follow-up commands in verdict" },
+        { value: "verbose", label: "verbose", description: "Show detailed multi-stage discussions and critique transcripts" },
+        { value: "compact", label: "compact", description: "4-line ANSI verdict card" },
+        { value: "terse", label: "terse", description: "Alias for compact" },
+        { value: "summary", label: "summary", description: "Alias for compact" },
+        { value: "overlay", label: "overlay", description: "Open the interactive Council Verdict overlay" },
+        { value: "modal", label: "modal", description: "Alias for overlay" },
+        { value: "software", label: "software", description: "Use the default software triad (Minimalist / Architect / Security)" },
+        { value: "ml", label: "ml", description: "Use the ML-research triad (Model Architect / Eval Critic / Inference Engineer)" },
+        { value: "embedded", label: "embedded", description: "Use the embedded triad (Realtime Auditor / Hardware Safety / Baremetal Pragmatist)" },
+        { value: "firmware", label: "firmware", description: "Alias for embedded" },
+        { value: "ee", label: "ee", description: "Use the electrical-EE triad (Signal & Power Integrity / Component DFM / Safety)" },
+        { value: "hardware", label: "hardware", description: "Alias for ee" },
+        { value: "council", label: "council <name>", description: "Select council preset from .omp/council.yaml" },
+        { value: "preset", label: "preset <name>", description: "Alias for council <name>" },
         ...subcommandOptions,
       ];
-      if (!lower) return flagOptions;
-      // If the user is typing a flag, filter; otherwise treat as a subcommand
-      // prefix and return subcommandOptions if any match.
-      if (lower.startsWith("-")) {
-        return flagOptions.filter((o) => o.value.startsWith(lower));
-      }
-      const subMatches = subcommandOptions.filter((o) => o.value.startsWith(lower));
+      if (!lower) return keywordOptions;
+      // Strip any leading dashes so typing `--ml` or `ml` resolves cleanly to `ml`
+      const search = lower.replace(/^--?/, "");
+      const subMatches = subcommandOptions.filter((o) => o.value.startsWith(search));
       if (subMatches.length > 0) return subMatches;
-      return flagOptions.filter((o) => o.value.startsWith(lower));
+      return keywordOptions.filter((o) => o.value.startsWith(search));
     },
     handler: (pi, { body, companionPaths }) => (args: string, ctx: CommandContext) => {
       const override = process.env.MY_OMP_SKILLS_TEST_ROOT;

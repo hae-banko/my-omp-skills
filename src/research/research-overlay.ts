@@ -95,6 +95,7 @@ export interface ResearchOverlayComponent {
   setActiveSlug(slug: string): void;
   invalidate(): void;
   render(width: number, height: number): Container;
+  renderLines(width: number, height?: number): readonly string[];
   handleInput(key: string): ResearchOverlayAction | undefined;
 }
 
@@ -575,6 +576,10 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     lines.push(...this.renderHelp());
     if (lines.length > this.height) lines.length = this.height;
     return rowsToContainer(lines);
+  }
+
+  renderLines(width: number, height?: number): readonly string[] {
+    return this.render(width, height ?? 24).render(width);
   }
 
   private runCommandForActive(): string | undefined {

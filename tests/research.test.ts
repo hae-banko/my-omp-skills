@@ -283,7 +283,18 @@ export async function runResearchSuite(ctx: TestContext): Promise<void> {
   if (displayWidth("📊") !== 2) {
     fail(`displayWidth('📊') expected 2, got ${displayWidth("📊")}`);
   }
-  cjkFixture.cleanup();
 
+  // Verify renderLines returns actual string array for pi-tui overlay compositor
+  const overlayLines = cjkOverlay.renderLines(80, 24);
+  if (!Array.isArray(overlayLines) || overlayLines.length === 0) {
+    fail(`renderLines(80, 24): expected non-empty string array, got ${typeof overlayLines}`);
+  }
+  for (let i = 0; i < overlayLines.length; i++) {
+    if (typeof overlayLines[i] !== "string") {
+      fail(`renderLines row ${i} is not a string`);
+    }
+  }
+
+  cjkFixture.cleanup();
   fixture.cleanup();
 }

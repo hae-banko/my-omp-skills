@@ -72,36 +72,106 @@ function anyExistingProtectedPath(cwd: string, input: Record<string, unknown>): 
   return false;
 }
 
-/** True when the command text references the append-only stores. */
-function refersToProtected(command: string): boolean {
-  const normalizedCmd = command.replace(/\\/g, "/").replace(/\/\/+/g, "/").replace(/\/\.\//g, "/");
-  if (
-    /\.omp\/knowledge\/(?:records|pitfalls|INDEX\.md)\b/i.test(normalizedCmd) ||
-    /\.omp\/audits\b/i.test(normalizedCmd)
-  ) {
-    return true;
-  }
-
-  const tokens = command.split(/[\s"'`=;&|]+/);
-  const cwd = process.cwd();
-  for (const token of tokens) {
-    if (!token) continue;
-    if (isProtectedPath(cwd, token)) {
-      return true;
+/**
+ * Detects if a shell command is attempting to delete, truncate, or overwrite
+ * a protected path (.omp/knowledge/{records,pitfalls,INDEX.md} or .omp/audits/).
+ *
+ * Distinguishes true destructive targets from harmless references (e.g. reading,
+ * grepping, or temporary scripts in /tmp that happen to mention protected terms).
+ */
+export function isDestructiveBashAgainstProtected(
+  command: string,
+  cwd: string,
+): { blocked: boolean; target?: string; reason?: "knowledge" | "audit" } {
+  // 1. Check stdout overwrite redirection: `> <file>` (excluding `>>`, `>&`, and heredocs `<<`)
+  const redirectMatches = command.matchAll(/(?<![>&0-9])>\s*([^\s;&|]+)/g);
+  for (const m of redirectMatches) {
+    const target = m[1].replace(/^['"]|['"]$/g, "");
+    if (isProtectedPath(cwd, target)) {
+      const reason = isAuditSubpath(cwd, target) ? "audit" : "knowledge";
+      return { blocked: true, target, reason };
     }
   }
 
-  return false;
+  // 2. Check deletion commands: rm, unlink, git rm, shred
+  const deleteMatches = command.matchAll(
+    /\b(?:rm(?:\s+-[a-zA-Z0-9]+)*|unlink|shred|git\s+rm(?:\s+-[a-zA-Z0-9]+)*)\s+([^;&|]+)/g,
+  );
+  for (const m of deleteMatches) {
+    const args = m[1].split(/\s+/);
+    for (const rawArg of args) {
+      const arg = rawArg.replace(/^['"]|['"]$/g, "");
+      if (arg.startsWith("-") || !arg) continue;
+      if (isProtectedPath(cwd, arg)) {
+        const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
+        return { blocked: true, target: arg, reason };
+      }
+    }
+  }
+
+  // 3. Check move/rename commands: mv <src> <dest>
+  const mvMatches = command.matchAll(/\bmv(?:\s+-[a-zA-Z0-9]+)*\s+([^;&|]+)/g);
+  for (const m of mvMatches) {
+    const args = m[1]
+      .split(/\s+/)
+      .map((a) => a.replace(/^['"]|['"]$/g, ""))
+      .filter((a) => a && !a.startsWith("-"));
+    for (const arg of args) {
+      if (isProtectedPath(cwd, arg)) {
+        const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
+        return { blocked: true, target: arg, reason };
+      }
+    }
+  }
+
+  // 4. Check cp overwrite: cp ... <dest>
+  const cpMatches = command.matchAll(/\bcp(?:\s+-[a-zA-Z0-9]+)*\s+([^;&|]+)/g);
+  for (const m of cpMatches) {
+    const args = m[1]
+      .split(/\s+/)
+      .map((a) => a.replace(/^['"]|['"]$/g, ""))
+      .filter((a) => a && !a.startsWith("-"));
+    if (args.length >= 2) {
+      const dest = args[args.length - 1];
+      if (isProtectedPath(cwd, dest)) {
+        const reason = isAuditSubpath(cwd, dest) ? "audit" : "knowledge";
+        return { blocked: true, target: dest, reason };
+      }
+    }
+  }
+
+  // 5. Check in-place edits: sed -i ... <file>
+  const sedMatches = command.matchAll(/\bsed\s+-[a-zA-Z0-9]*i[a-zA-Z0-9]*\s+([^;&|]+)/g);
+  for (const m of sedMatches) {
+    const args = m[1]
+      .split(/\s+/)
+      .map((a) => a.replace(/^['"]|['"]$/g, ""))
+      .filter((a) => a && !a.startsWith("-"));
+    for (const arg of args) {
+      if (isProtectedPath(cwd, arg)) {
+        const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
+        return { blocked: true, target: arg, reason };
+      }
+    }
+  }
+
+  // 6. Check truncate: truncate -s ... <file>
+  const truncateMatches = command.matchAll(/\btruncate(?:\s+-[a-zA-Z0-9]+)*\s+([^;&|]+)/g);
+  for (const m of truncateMatches) {
+    const args = m[1]
+      .split(/\s+/)
+      .map((a) => a.replace(/^['"]|['"]$/g, ""))
+      .filter((a) => a && !a.startsWith("-"));
+    for (const arg of args) {
+      if (isProtectedPath(cwd, arg)) {
+        const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
+        return { blocked: true, target: arg, reason };
+      }
+    }
+  }
+
+  return { blocked: false };
 }
-
-const DESTRUCTIVE_SHELL_RE =
-  /(?:^|\s)(?:sed\s+-i\b|\btee\b|(?<!>)>(?!>)|\bmv\b|\brm\b|\bcp\b|\btruncate\b|\bshred\b|\bunlink\b|git\s+rm\b|find\b.*-delete\b|(?:python3?|node|bun|deno|perl|ruby)\s+-(?:c|e)\b)/i;
-
-/** True when the shell command can mutate a file (append `>>` excluded — INDEX.md grows by appending). */
-function isDestructiveShell(command: string): boolean {
-  return DESTRUCTIVE_SHELL_RE.test(command);
-}
-
 function isAuditSubpath(cwd: string, raw: unknown): boolean {
   const sub = knowledgeSubpath(cwd, raw);
   return !!sub && sub[0] === "audits";
@@ -299,10 +369,10 @@ export function installPolicy(pi: ExtensionApi): void {
 
     if (e.toolName === "bash") {
       const command = typeof e.input.command === "string" ? e.input.command : "";
-      if (refersToProtected(command) && isDestructiveShell(command)) {
-        const reason: "knowledge" | "audit" = command.includes(".omp/audits") ? "audit" : "knowledge";
-        recordBlock(e.toolName, "<bash>", reason);
-        if (reason === "audit") {
+      const check = isDestructiveBashAgainstProtected(command, cwd);
+      if (check.blocked) {
+        recordBlock(e.toolName, check.target ?? "<bash>", check.reason ?? "knowledge");
+        if (check.reason === "audit") {
           return { block: true, reason: AUDIT_REASON };
         }
         return { block: true, reason: KB_REASON };

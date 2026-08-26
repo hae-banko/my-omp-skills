@@ -19,6 +19,8 @@ import { dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
 import { listReferences } from "../core/locators.ts";
 import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
+import type { Component } from "@oh-my-pi/pi-tui";
+import { createTuiCard, type CardSpec } from "../core/card.ts";
 
 const REFERENCES_LINE = ".omp/references/";
 const RESULT_CUSTOM_TYPE = "reference-result";
@@ -329,11 +331,34 @@ export async function runReferenceCommand(
   }
 }
 
+/**
+ * Construct a native `@oh-my-pi/pi-tui` Box card representing a Reference operation result.
+ */
+export function createReferenceCard(content: string, theme?: unknown): Component {
+  const lines = content.split("\n").filter((l) => l.trim().length > 0);
+  const title = lines[0] || "REFERENCE CORPUS";
+  const body = lines.slice(1);
+
+  const spec: CardSpec = {
+    title,
+    intent: "accent",
+    badges: [{ label: "type", value: "cloned corpus", intent: "accent" }],
+    sections: [
+      {
+        content: body.length > 0 ? body : ["○ No reference repositories cloned yet — use /reference add <url> to add."],
+      },
+    ],
+    footerActions: ["/reference add <url> | update <name> | remove <name> | list", "Esc: Dismiss"],
+  };
+
+  return createTuiCard(spec, theme);
+}
+
 /** Transcript card renderer for `/reference` results (REFERENCE — …). */
 export function installReferenceResultRenderer(pi: ExtensionApi): void {
-  pi.registerMessageRenderer(RESULT_CUSTOM_TYPE, (message, _options, _theme) => {
+  pi.registerMessageRenderer(RESULT_CUSTOM_TYPE, (message, _options, theme) => {
     const content =
       message && typeof message === "object" && "content" in message ? String(message.content ?? "") : "";
-    return toolResultCard(content.split("\n").slice(0, 8), "REFERENCE", BORDER_COLORS.blue);
+    return createReferenceCard(content, theme);
   });
 }

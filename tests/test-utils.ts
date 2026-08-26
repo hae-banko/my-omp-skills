@@ -186,6 +186,99 @@ export function createTestContext(): TestContext {
   };
 }
 
+export interface CustomUiCall {
+  component: {
+    render: (width: number) => readonly string[];
+    handleInput?: (data: string) => unknown;
+    dispose?: () => void;
+  };
+  options?: Record<string, unknown>;
+  renderedFrames: Record<number, readonly string[]>;
+}
+
+export function createInteractiveCommandContext(onCustom?: (call: CustomUiCall) => void): {
+  hasUI: true;
+  ui: {
+    notify: (msg: string, level?: string) => void;
+    setStatus: (k: string, t?: string) => void;
+    custom: <T = unknown>(
+      factory: (tui: unknown, theme: unknown, keybindings: unknown, done: (result: T) => void) => unknown,
+      options?: Record<string, unknown>,
+    ) => Promise<T>;
+  };
+  notifications: Array<{ msg: string; level?: string }>;
+  statuses: Record<string, string | undefined>;
+  customCalls: CustomUiCall[];
+} {
+  const notifications: Array<{ msg: string; level?: string }> = [];
+  const statuses: Record<string, string | undefined> = {};
+  const customCalls: CustomUiCall[] = [];
+
+  const ui = {
+    notify: (msg: string, level?: string): void => {
+      notifications.push({ msg, level });
+    },
+    setStatus: (k: string, t?: string): void => {
+      statuses[k] = t;
+    },
+    custom: async <T = unknown>(
+      factory: (tui: unknown, theme: unknown, keybindings: unknown, done: (result: T) => void) => unknown,
+      options?: Record<string, unknown>,
+    ): Promise<T> => {
+      let resultVal: T = undefined as unknown as T;
+      const done = (val: T): void => {
+        resultVal = val;
+      };
+      const comp = (await factory({}, {}, {}, done)) as {
+        render?: (width: number) => unknown;
+        handleInput?: (key: string) => unknown;
+        dispose?: () => void;
+      } | null | undefined;
+      if (!comp || typeof comp !== "object") {
+        fail(`ctx.ui.custom factory must return an object, got ${typeof comp}`);
+        return resultVal;
+      }
+      if (typeof comp.render !== "function") {
+        fail(`ctx.ui.custom component must have a render(width) function`);
+        return resultVal;
+      }
+
+      const frames: Record<number, readonly string[]> = {};
+      for (const width of [50, 80, 120]) {
+        const lines = comp.render(width);
+        if (!Array.isArray(lines)) {
+          fail(
+            `ctx.ui.custom component.render(${width}) MUST return a string array (readonly string[]), got ${typeof lines} (constructor: ${(lines as unknown as Record<string, unknown>)?.constructor?.name ?? "unknown"}). Check if a Container was returned instead of container.render(width)!`,
+          );
+        } else {
+          frames[width] = lines;
+          for (let i = 0; i < lines.length; i++) {
+            if (typeof lines[i] !== "string") {
+              fail(`ctx.ui.custom row ${i} at width ${width} is not a string: ${typeof lines[i]}`);
+            }
+          }
+        }
+      }
+      const call: CustomUiCall = {
+        component: comp as CustomUiCall["component"],
+        options,
+        renderedFrames: frames,
+      };
+      customCalls.push(call);
+      onCustom?.(call);
+      return resultVal;
+    },
+  };
+
+  return {
+    hasUI: true,
+    ui,
+    notifications,
+    statuses,
+    customCalls,
+  };
+}
+
 export function createTempFixture(prefix = "omp-test-"): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   return {
@@ -194,7 +287,7 @@ export function createTempFixture(prefix = "omp-test-"): { dir: string; cleanup:
       try {
         rmSync(dir, { recursive: true, force: true });
       } catch {
-        // Ignore cleanup errors
+        // ignore cleanup error
       }
     },
   };

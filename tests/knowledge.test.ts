@@ -84,6 +84,52 @@ export async function runKnowledgeSuite(ctx: TestContext): Promise<void> {
     if (writeNew && (writeNew as { block?: boolean }).block === true) {
       fail("policy: incorrectly blocked new record write");
     }
+
+    // Bash policy checks
+    // 1. Destructive redirect to INDEX.md must block
+    const redirectBlock = policyToolCall({
+      toolName: "bash",
+      input: { command: `echo "truncate" > ${join(fixtureRoot, ".omp", "knowledge", "INDEX.md")}` },
+    }, { cwd: fixtureRoot });
+    if (!redirectBlock || (redirectBlock as { block: boolean }).block !== true) {
+      fail("policy: failed to block bash redirect overwrite on INDEX.md");
+    }
+
+    // 2. Destructive rm on record must block
+    const rmBlock = policyToolCall({
+      toolName: "bash",
+      input: { command: `rm -f ${existFile}` },
+    }, { cwd: fixtureRoot });
+    if (!rmBlock || (rmBlock as { block: boolean }).block !== true) {
+      fail("policy: failed to block bash rm on record");
+    }
+
+    // 3. Append to INDEX.md must NOT block
+    const appendAllowed = policyToolCall({
+      toolName: "bash",
+      input: { command: `echo "new line" >> ${join(fixtureRoot, ".omp", "knowledge", "INDEX.md")}` },
+    }, { cwd: fixtureRoot });
+    if (appendAllowed && (appendAllowed as { block?: boolean }).block === true) {
+      fail("policy: incorrectly blocked bash append >> to INDEX.md");
+    }
+
+    // 4. Temporary script in /tmp mentioning audit must NOT block
+    const tempScriptAllowed = policyToolCall({
+      toolName: "bash",
+      input: { command: `cat > /tmp/render-verdict.mjs << 'EOF'\nconsole.log(".omp/audits");\nEOF` },
+    }, { cwd: fixtureRoot });
+    if (tempScriptAllowed && (tempScriptAllowed as { block?: boolean }).block === true) {
+      fail("policy: incorrectly blocked temporary script in /tmp mentioning audits");
+    }
+
+    // 5. Grep reading INDEX.md redirected to /tmp must NOT block
+    const grepRedirectAllowed = policyToolCall({
+      toolName: "bash",
+      input: { command: `grep "index" ${join(fixtureRoot, ".omp", "knowledge", "INDEX.md")} > /tmp/search-results.txt` },
+    }, { cwd: fixtureRoot });
+    if (grepRedirectAllowed && (grepRedirectAllowed as { block?: boolean }).block === true) {
+      fail("policy: incorrectly blocked grep reading INDEX.md redirected to /tmp");
+    }
   }
   const knowledgeTool = tools.find((t) => t.name === "knowledge_read");
   if (!knowledgeTool) {

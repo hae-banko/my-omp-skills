@@ -4,7 +4,7 @@
 
 import type { ExtensionApi, ToolResult } from "../core/api.ts";
 import { findKnowledgeRoot, readKnowledge, type KnowledgeQuery } from "./knowledge.ts";
-import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
+import { createTuiCard } from "../core/card.ts";
 
 const TOOL_NAME = "knowledge_read";
 
@@ -57,24 +57,60 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
       });
       return { content: [{ type: "text", text: result.text }], details: result.details };
     },
-    renderResult: (result, _options, _theme) => {
-      // details: { found, type, count, paths } — validated by the execute path.
+    renderResult: (result, _options, theme) => {
       const details = result.details as { found?: boolean; type?: string; count?: number };
       if (details && details.found === false) {
-        return toolResultCard(["no knowledge base here"], "KNOWLEDGE — not found", BORDER_COLORS.cyan);
+        return createTuiCard(
+          {
+            title: "KNOWLEDGE — not found",
+            intent: "warning",
+            sections: [{ content: ["○ No knowledge base found in workspace. Run /record once to initialize."] }],
+          },
+          theme,
+        );
       }
-      const label = `KNOWLEDGE — ${String(details?.type ?? "index").toUpperCase()} (${details?.count ?? 0})`;
-      return toolResultCard(knowledgeResultLines(result).slice(0, 8), label, BORDER_COLORS.cyan);
+      const label = `KNOWLEDGE — ${String(details?.type ?? "index").toUpperCase()}`;
+      const lines = knowledgeResultLines(result);
+      return createTuiCard(
+        {
+          title: label,
+          intent: "neutral",
+          badges: [{ label: "entries", value: String(details?.count ?? lines.length), intent: "neutral" }],
+          sections: [{ content: lines.length > 0 ? lines : ["○ No matching entries found"] }],
+        },
+        theme,
+      );
     },
   });
 
   const registerMessageCard = (customType: string, label: string): void => {
-    pi.registerMessageRenderer(customType, (message, _options, _theme) => {
+    pi.registerMessageRenderer(customType, (message, _options, theme) => {
       const content =
         message && typeof message === "object" && "content" in message
           ? String(message.content ?? "")
           : "";
-      return toolResultCard(content.split("\n").slice(0, 8), label, BORDER_COLORS.cyan);
+      const lines = content.split("\n").filter((l) => l.trim().length > 0);
+      const isPitfall = customType === "knowledge-pitfall";
+      return createTuiCard(
+        {
+          title: label,
+          intent: isPitfall ? "warning" : "neutral",
+          badges: [
+            {
+              label: "type",
+              value: isPitfall ? "pitfall ledger" : "durable records",
+              intent: isPitfall ? "warning" : "neutral",
+            },
+          ],
+          sections: [
+            {
+              content: lines.length > 0 ? lines : [`○ No ${isPitfall ? "pitfalls" : "records"} recorded yet`],
+            },
+          ],
+          footerActions: [`/${isPitfall ? "pitfall" : "record"} <title> to add`, "Esc: Dismiss"],
+        },
+        theme,
+      );
     });
   };
   registerMessageCard("knowledge-record", "RECORD");

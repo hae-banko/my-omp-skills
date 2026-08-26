@@ -11,6 +11,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
+import type { Component } from "@oh-my-pi/pi-tui";
+import { createTuiCard, type CardSpec, type SemanticCardIntent } from "../core/card.ts";
 import {
   BORDER_COLORS,
   bold,
@@ -611,6 +613,126 @@ export function renderTiltCard(payload: TiltCardPayload): string[] {
 }
 
 /**
+ * Map local DEFCON level to semantic card intent.
+ */
+export function tiltDefconToIntent(defcon: number): SemanticCardIntent {
+  if (defcon <= 2) return "danger";
+  if (defcon === 3) return "warning";
+  if (defcon === 4) return "neutral";
+  return "success";
+}
+
+/**
+ * Map Tilt telemetry into a CardSpec for native TUI rendering.
+ */
+export function tiltToCardSpec(payload: TiltCardPayload): CardSpec {
+  const { local, global } = payload;
+  const def = defconLabel(local.defcon);
+  const intent = tiltDefconToIntent(local.defcon);
+  const stratum = getTiltStratum(local.swear_jar_total);
+
+  const vibeRatio = (6 - local.defcon) / 5;
+  const vibeBar = makeProgressBar(vibeRatio, 14);
+
+  const sections: CardSpec["sections"] = [
+    {
+      title: "RAGE ARCHETYPE & DEBUFFS",
+      content: [
+        `Stratum: [Tier ${stratum.tier} · Lv. ${stratum.level}] ${stratum.name}`,
+        `PPP Valuation: ${stratum.ppp}`,
+        `Active Debuff: ${stratum.debuff}`,
+      ],
+    },
+    {
+      title: "SESSION VIBE",
+      content: [
+        `Vibe: ${vibeBar} Level ${6 - local.defcon}/5 · Strikes: ${local.session_strikes}`,
+        `Swear Jar Total: $${local.swear_jar_total.toFixed(2)} (${(local.swear_jar_total / SWEAR_JAR_FEE_PER_POINT).toFixed(0)} rage pts)`,
+        ...(local.last_incident ? [`Last Incident: ${local.last_incident.trigger}`] : []),
+      ],
+      divider: true,
+    },
+  ];
+
+  if (stratum.tier < TILT_STRATA.length - 1) {
+    const nextStratum = TILT_STRATA[stratum.tier + 1];
+    const tierSpan = nextStratum.minDollars - stratum.minDollars;
+    const prog = tierSpan > 0 ? Math.min(1, Math.max(0, (local.swear_jar_total - stratum.minDollars) / tierSpan)) : 1;
+    const progBar = makeProgressBar(prog, 10);
+    sections[0].content = [
+      ...(sections[0].content as string[]),
+      `Next Tier: ${progBar} $${local.swear_jar_total.toFixed(2)} / $${nextStratum.minDollars.toFixed(2)} (${nextStratum.name})`,
+    ];
+  }
+
+  const maxCategory = Math.max(
+    local.breakdown.f_bombs,
+    local.breakdown.rage_words,
+    local.breakdown.wtfs,
+    local.breakdown.caps_rage,
+    1,
+  );
+  sections.push({
+    title: "PROFANITY CATEGORY BREAKDOWN",
+    content: [
+      `F-Bombs:    [${renderBar(local.breakdown.f_bombs, maxCategory)}] ${String(local.breakdown.f_bombs).padStart(3)} ($${(local.breakdown.f_bombs * 3 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`,
+      `Rage Words: [${renderBar(local.breakdown.rage_words, maxCategory)}] ${String(local.breakdown.rage_words).padStart(3)} ($${(local.breakdown.rage_words * 3 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`,
+      `WTFs/Shits: [${renderBar(local.breakdown.wtfs, maxCategory)}] ${String(local.breakdown.wtfs).padStart(3)} ($${(local.breakdown.wtfs * 1 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`,
+      `Caps Rage:  [${renderBar(local.breakdown.caps_rage, maxCategory)}] ${String(local.breakdown.caps_rage).padStart(3)} ($${(local.breakdown.caps_rage * 1 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`,
+    ],
+    divider: true,
+  });
+
+  const leaderboardEntries = Object.entries(global.repo_leaderboard).sort((a, b) => b[1] - a[1]);
+  if (leaderboardEntries.length > 0) {
+    const maxRepo = leaderboardEntries[0][1];
+    const topEntries = leaderboardEntries.slice(0, 4).map(([repo, count]) => {
+      const repoName = repo.length > 18 ? repo.slice(0, 15) + "..." : repo.padEnd(18);
+      const bar = renderBar(count, maxRepo, 14);
+      return `${repoName} [${bar}] ${String(count).padStart(3)} ($${(count * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`;
+    });
+    sections.push({
+      title: "GLOBAL RAGE LEADERBOARD (~/.omp/tilt.json)",
+      content: topEntries,
+      divider: true,
+    });
+  }
+
+  sections.push({
+    title: "DEFENSIVE HARNESS POLICY",
+    content: [
+      local.defcon <= 2
+        ? "● [GIT PUSH LOCK: HARD-ENGAGED] · [AUTO-RELEASE: DISABLED]"
+        : local.defcon === 3
+        ? "● [GIT PUSH LOCK: WARN] · Double-check destructive commands"
+        : "○ [HARNESS: UNLOCKED] · Autonomous actions permitted",
+    ],
+    divider: true,
+  });
+
+  return {
+    title: "🚨 TILT-O-METER & SWEAR JAR",
+    subtitle: `[${def.label}] · Tier ${stratum.tier} · ${stratum.name}`,
+    intent,
+    badges: [
+      { label: "defcon", value: def.label, intent },
+      { label: "swear jar", value: `$${local.swear_jar_total.toFixed(2)}`, intent: "accent" },
+      { label: "strikes", value: String(local.session_strikes), intent: local.session_strikes > 0 ? "warning" : "neutral" },
+    ],
+    sections,
+    footerActions: ["Type normally to calm down", "Clear: rm ~/.omp/tilt.json"],
+  };
+}
+
+/**
+ * Construct a native `@oh-my-pi/pi-tui` Box card representing the Tilt-O-Meter.
+ */
+export function createTiltCard(payload: TiltCardPayload, theme?: unknown): Component {
+  const spec = tiltToCardSpec(payload);
+  return createTuiCard(spec, theme);
+}
+
+/**
  * Handle /tilt command.
  */
 export async function runTiltCommand(
@@ -655,23 +777,18 @@ export async function runTiltCommand(
 
 export function installTilt(pi: ExtensionApi): void {
   // 1. Register message renderer for customType "tilt-meter"
-  pi.registerMessageRenderer(TILT_CUSTOM_TYPE, (message) => {
+  pi.registerMessageRenderer(TILT_CUSTOM_TYPE, (message, _options, theme) => {
     let payload: TiltCardPayload;
     if (message && typeof message === "object" && "payload" in message) {
-      payload = (message as { payload: TiltCardPayload }).payload;
+      const candidate = (message as Record<string, unknown>).payload;
+      payload = candidate as TiltCardPayload;
     } else {
       payload = {
         local: readLocalTilt(process.cwd()),
         global: readGlobalTilt(),
       };
     }
-    const lines = renderTiltCard(payload);
-    return {
-      children: lines.map((text) => ({ text })),
-      render() {
-        return lines;
-      },
-    };
+    return createTiltCard(payload, theme);
   });
 
   // 2. Passively track input events for tilt

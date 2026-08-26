@@ -14,6 +14,7 @@ import {
 } from "../src/core/markdown-lint.ts";
 import {
   createTempFixture,
+  createInteractiveCommandContext,
   EXPECTED_COMMANDS,
   fail,
   type RegisteredCommand,
@@ -205,33 +206,33 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     return fn(prefix) ?? [];
   };
 
-  // The completer returns ALL the new ergonomic flags + subcommands when the
-  // user has not typed anything.
+  // The completer returns ONLY clean natural keywords (zero -- prefixes).
   const allOptions = complete("");
+  if (allOptions.some((o) => o.value.startsWith("--"))) {
+    fail(`/council completions must NOT contain -- prefixes: found ${allOptions.filter((o) => o.value.startsWith("--")).map((o) => o.value).join(", ")}`);
+  }
   const expectedValues = [
-    "--software", "--ml", "--embedded", "--firmware", "--ee", "--hardware",
-    "--overlay", "--modal", "--preset", "--council",
-    "list", "init",
+    "software", "ml", "embedded", "firmware", "ee", "hardware",
+    "overlay", "modal", "preset", "council", "quick", "deep", "debate",
+    "save", "record", "actionable", "compact", "list", "init",
   ];
   for (const v of expectedValues) {
     if (!allOptions.some((o) => o.value === v)) {
-      fail(`/council completion missing: ${v}`);
+      fail(`/council completion missing natural keyword: ${v}`);
     }
   }
 
-  // Filtering by prefix still works for the new flags.
-  const mlOnly = complete("--ml");
-  if (mlOnly.length === 0 || mlOnly[0].value !== "--ml") fail("/council --ml completion");
-  const eeOnly = complete("--ee");
-  if (eeOnly.length === 0 || eeOnly[0].value !== "--ee") fail("/council --ee completion");
-  const overlayOnly = complete("--overlay");
-  if (overlayOnly.length === 0 || overlayOnly[0].value !== "--overlay") fail("/council --overlay completion");
+  // Filtering: typing "ml" or "--ml" both cleanly resolve to "ml".
+  const mlFromBare = complete("ml");
+  if (mlFromBare.length === 0 || mlFromBare[0].value !== "ml") fail("/council 'ml' completion");
+  const mlFromDash = complete("--ml");
+  if (mlFromDash.length === 0 || mlFromDash[0].value !== "ml") fail("/council '--ml' completion fallback");
 
-  // Subcommand filtering: typing "init" surfaces init + --force.
+  // Subcommand filtering: typing "init" surfaces init + force (no -- prefix).
   const initOnly = complete("init");
   if (initOnly.length === 0 || initOnly[0].value !== "init") fail("/council init completion");
-  if (!initOnly.some((o) => o.value === "--force")) fail("/council init --force completion");
-
+  if (!initOnly.some((o) => o.value === "force")) fail("/council init force completion");
+  if (initOnly.some((o) => o.value.startsWith("--"))) fail("/council init completions should not have -- prefix");
   // /council list routes through the runCouncilCommand subcommand path and
   // emits a customType=council-verdict listing message (no deliberation).
   sent.length = 0;
@@ -251,7 +252,7 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   try {
     sent.length = 0;
     ctx.customMessages.length = 0;
-    await registered["council"].handler("init --force", {});
+    await registered["council"].handler("init force", {});
     const initMsgs = ctx.customMessages.filter((m) => getCustomType(m) === "council-verdict");
     if (initMsgs.length === 0) fail("/council init: no council-verdict message");
     if (!existsSync(join(tmp.dir, ".omp", "council.yaml"))) {
@@ -261,5 +262,84 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     if (prevRoot === undefined) delete process.env.MY_OMP_SKILLS_TEST_ROOT;
     else process.env.MY_OMP_SKILLS_TEST_ROOT = prevRoot;
     tmp.cleanup();
+  }
+
+  // 9. /timeline argument completions
+  const timelineSpec = registered["timeline"];
+  if (!timelineSpec) fail("/timeline not registered");
+  const timelineCompleter = timelineSpec.getArgumentCompletions;
+  if (!timelineCompleter) {
+    fail("/timeline: getArgumentCompletions not defined");
+  } else {
+    const timelineOpts = timelineCompleter("") ?? [];
+    if (!timelineOpts.some((o) => o.value === "5") || !timelineOpts.some((o) => o.value === "15")) {
+      fail("/timeline: missing expected numeric completions");
+    }
+  }
+
+  // 10. Automated Interactive TUI Command Verification (Prevents "Mock Gap" Regressions)
+  // Ensures commands running inside interactive TUI (with ctx.ui.custom) return valid
+  // components whose render(width) returns readonly string[], not a Container or raw object.
+  const researchCmd = registered["research"];
+  if (researchCmd) {
+    const interactiveCtx = createInteractiveCommandContext();
+    await researchCmd.handler("dashboard", interactiveCtx);
+    if (interactiveCtx.customCalls.length === 0) {
+      fail("/research dashboard: expected ctx.ui.custom to be invoked in interactive mode");
+    } else {
+      const call = interactiveCtx.customCalls[0];
+      const lines80 = call.renderedFrames[80];
+      if (!lines80 || lines80.length === 0) {
+        fail("/research dashboard: rendered 0 lines in interactive overlay");
+      }
+      if (call.component.handleInput) {
+        const dismissAct = call.component.handleInput("q");
+        if (
+          !dismissAct ||
+          typeof dismissAct !== "object" ||
+          !("action" in dismissAct) ||
+          (dismissAct as Record<string, unknown>).action !== "dismiss"
+        ) {
+          fail("/research dashboard: 'q' key did not return dismiss action");
+        }
+      }
+    }
+  }
+
+  const councilCmd = registered["council"];
+  if (councilCmd) {
+    const interactiveCtx = createInteractiveCommandContext();
+    await councilCmd.handler("--overlay test topic", interactiveCtx);
+    if (interactiveCtx.customCalls.length === 0) {
+      fail("/council: expected ctx.ui.custom to be invoked in interactive mode");
+    } else {
+      const call = interactiveCtx.customCalls[0];
+      const lines80 = call.renderedFrames[80];
+      if (!lines80 || lines80.length === 0) {
+        fail("/council: rendered 0 lines in interactive verdict overlay");
+      }
+      if (call.component.handleInput) {
+        const dismissAct = call.component.handleInput("q");
+        if (
+          !dismissAct ||
+          typeof dismissAct !== "object" ||
+          !("action" in dismissAct) ||
+          (dismissAct as Record<string, unknown>).action !== "dismiss"
+        ) {
+          fail("/council: 'q' key did not return dismiss action");
+        }
+      }
+    }
+  }
+
+  // 11. Full-sweep interactive invocation across all commands
+  // Ensures every command executes safely when ctx.hasUI is true without crashing
+  for (const name of Object.keys(registered)) {
+    const sweepCtx = createInteractiveCommandContext();
+    try {
+      await registered[name].handler("", sweepCtx);
+    } catch (err) {
+      fail(`interactive sweep failed on /${name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }

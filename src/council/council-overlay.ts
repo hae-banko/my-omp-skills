@@ -50,6 +50,7 @@ export interface CouncilOverlayComponent {
   setVerdict(verdict: CouncilVerdict): void;
   invalidate(): void;
   render(width: number, height: number): Container;
+  renderLines(width: number, height?: number): readonly string[];
   handleInput(key: string): CouncilOverlayAction | undefined;
 }
 
@@ -307,6 +308,10 @@ export class CouncilOverlay implements CouncilOverlayComponent {
     lines.push(...this.renderHelp());
     if (lines.length > this.height) lines.length = this.height;
     return rowsToContainer(lines);
+  }
+
+  renderLines(width: number, height?: number): readonly string[] {
+    return this.render(width, height ?? 26).render(width);
   }
 
   private scrollActive(delta: number): void {

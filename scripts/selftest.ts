@@ -7,6 +7,7 @@ import { runKnowledgeSuite } from "../tests/knowledge.test.ts";
 import { runResearchSuite } from "../tests/research.test.ts";
 import { runFeaturesSuite } from "../tests/features.test.ts";
 import { runProtocolSuite } from "../tests/protocol.test.ts";
+import { runCardTests } from "../tests/card.test.ts";
 
 async function main(): Promise<void> {
   const ctx = createTestContext();
@@ -27,6 +28,9 @@ async function main(): Promise<void> {
 
   // 5. Protocol Suite (OMP-IAP/v1, Hub Messaging, Subagent Contracts)
   await runProtocolSuite(ctx);
+
+  // 6. Native TUI Card Engine Suite (SPEC-003 / ADR-0007)
+  runCardTests();
 
   const failures = getFailures();
   if (failures > 0) {

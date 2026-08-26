@@ -25,28 +25,33 @@ The personas may declare a `tools` allow-list (e.g. `web_search`, `read`, `grep`
 
 The `/council` command ships with four triads; pick the one that matches the domain:
 
-- `default-triad` (alias `--software`) — Minimalist · Systems Architect · Security Auditor. For software architecture, refactors, breaking changes.
-- `ml-research` (alias `--ml`) — Model Architect · Eval Critic · Inference Engineer. For ML research, benchmarking, and serving economics. Personas have `web_search` + `read` + `grep` so they can cite arXiv papers, official model repos, and `.omp/references/`.
-- `embedded` (alias `--firmware`, `--embedded`) — Realtime Auditor · Hardware Safety · Baremetal Pragmatist. For firmware, RTOS, and baremetal work. Personas have `read` + `grep` so they can inspect linker maps and HAL callsites.
-- `electrical-ee` (alias `--ee`, `--hardware`) — Signal & Power Integrity · Component DFM · Safety & Compliance. For SI/PI, DFM, and electrical safety. Personas have `web_search` + `read` so they can cite IPC / UL / IEC standards and reference designs.
-
+- `default-triad` (alias `software`) — Minimalist · Systems Architect · Security Auditor. For software architecture, refactors, breaking changes.
+- `ml-research` (alias `ml`) — Model Architect · Eval Critic · Inference Engineer. For ML research, benchmarking, and serving economics. Personas have `web_search` + `read` + `grep` so they can cite arXiv papers, official model repos, and `.omp/references/`.
+- `embedded` (alias `firmware`, `embedded`) — Realtime Auditor · Hardware Safety · Baremetal Pragmatist. For firmware, RTOS, and baremetal work. Personas have `read` + `grep` so they can inspect linker maps and HAL callsites.
+- `electrical-ee` (alias `ee`, `hardware`) — Signal & Power Integrity · Component DFM · Safety & Compliance. For SI/PI, DFM, and electrical safety. Personas have `web_search` + `read` so they can cite IPC / UL / IEC standards and reference designs.
 
 ### Natural keyword syntax
 
-The `/council` command accepts natural keywords without the `--` prefix so common invocations read like prose:
+The `/council` command uses clean natural keywords without any `--` prefix:
 
-- `/council ml <topic>` → ML-research triad (alias for `--ml`).
-- `/council debate <topic>` → 3-stage blind cross-critique (alias for `--deep`).
-- `/council embedded <topic>` → Embedded firmware triad (alias for `--embedded`).
-- `/council save <topic>` → Persist decision record (alias for `--save`).
+- `/council ml <topic>` → ML-research triad
+- `/council debate <topic>` → 3-stage blind cross-critique
+- `/council embedded <topic>` → Embedded firmware triad
+- `/council save <topic>` → Persist decision record to `.omp/scratch/debates/`
+- `/council overlay <topic>` → Open the interactive verdict overlay
+- `/council verbose <topic>` → Show detailed multi-stage debate and critique transcripts
 
-All keywords also work without `--`: `quick`, `deep`, `debate`, `raw`, `save`, `record`, `actionable`, `compact`, `terse`, `summary`, `overlay`, `modal`, `software`, `ml`, `embedded`, `firmware`, `ee`, `hardware`, plus `council <name>` and `preset <name>`. Both forms are accepted in the same invocation.
-
+All keywords combine naturally: `quick`, `deep`, `debate`, `raw`, `save`, `record`, `actionable`, `verbose`, `compact`, `terse`, `summary`, `overlay`, `modal`, `software`, `ml`, `embedded`, `firmware`, `ee`, `hardware`, plus `council <name>` and `preset <name>`.
 ---
 
 ## Stage 1 — Persona Resolution & Parallel Fan-Out (mandatory)
 
-You MUST spawn **3 real subagents in parallel** using the `task` tool. Pass a single `tasks[]` batch so the runtime executes them concurrently — do not serialize them. Each subagent must produce a strict JSON object:
+### SILENT-BY-DEFAULT DIRECTIVE
+You MUST be **completely silent** before and during subagent dispatch:
+- **ZERO commentary before task dispatch**: NEVER print text like "Spawning personas...", "Drafting tasks...", or intermediate planning walls of text in chat.
+- **Immediate dispatch**: Directly issue a single `task({ tasks: [...] })` tool call containing all active personas in parallel.
+
+You MUST spawn **all active personas in parallel** ($N \ge 1$, matching the project's `.omp/council.yaml` or preset configuration) — never simulate the personas yourself, never inline their prompts into your own response. Each subagent receives its persona system prompt, the user's proposal, the relevant codebase context, AND a `tools` allow-list (so ML researchers, software architects, and embedded engineers know they may execute web searches or read reference repos like `.omp/references/` to back claims with primary sources). Each subagent returns a strict JSON object:
 
 ```json
 {
@@ -120,11 +125,14 @@ Partition the (refined) opinions into 4 objective buckets:
 - � **`[MAJORITY RECOMMENDATIONS]` (2/3)** — Concrete architectural steps supported by 2 of 3 lenses with explicit trade-off notes.
 - 🔵 **`[UNIQUE INSIGHTS]` (1/3)** — Critical edge-case warnings or platform-native shortcuts surfaced by a single specialist.
 - � **`[CRITICAL DIVERGENCE]`** — Irreconcilable philosophical clashes (e.g. *Performance vs Simplicity*). Clearly state the exact condition under which each branch is preferred.
-
 Render via `renderCouncilVerdictCard` over `customType: "council-verdict"`.
 
----
+### MINIMAL DISCUSSION DIRECTIVE
+By default, do NOT print intermediate persona debates or walls of discussion. After emitting the verdict card:
+- Provide a **concise 3–5 bullet point executive summary** of the decision.
+- Only print detailed persona critique logs and debate transcripts if `verbose` was specified.
 
+---
 ## Stage 4 — Persistence *(only on `--save` or `--record`)*
 
 When the user requested persistence:
