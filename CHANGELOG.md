@@ -1,7 +1,30 @@
 # Changelog
 
-## v0.72.0 — Domain Council Presets, Interactive Verdict Overlay & Subcommands
+## v0.73.0 — Natural keyword syntax for `/council` (drop the `--`)
 
+- **Natural keyword CLI for `/council` (`src/features/council.ts`, `src/index.ts`)** — Replaces the mandatory `--` prefix with elegant bare-keyword forms so common invocations read like prose:
+  - **Mode**: `quick` / `deep` / `debate` / `raw` (or `--quick` / `--deep` etc.) — example: `/council debate <topic>` triggers the 3-stage Chatham-House blind cross-critique.
+  - **Actions**: `save` / `record` / `actionable` / `compact` / `terse` / `summary` / `overlay` / `modal` (or `--save` / `--record` etc.).
+  - **Domain presets**: `software` / `ml` / `embedded` / `firmware` / `ee` / `hardware` (or `--software` / `--ml` etc.) — example: `/council ml Should we use GQA?` selects the ML-research triad with no `--` flag.
+  - **Argument-taking keywords**: `council <name>` / `preset <name>` (or `--council <name>` / `--preset <name>`).
+  - Both forms (`--flag` and bare `flag`) are accepted in the same invocation, so users can mix and match without learning two syntaxes.
+  - `PRESET_FLAG_ALIASES` (`src/features/council.ts`) extended to register every bare-keyword alongside its `--` counterpart in a single canonical map.
+- **Clean terminal arrow for `/council list` (`src/features/council.ts`)** — Replaced the em-dash (`—`) in `runCouncilListSubcommand` with `→` so persona lines render as `Minimalist (minimalist) → YAGNI, …` instead of mixing left-to-right em-dashes with the right-to-left terminal text flow.
+- **Tab-completion advertises every natural keyword (`src/index.ts`)** — `getArgumentCompletions` for `council` now surfaces bare-keyword completions (`ml`, `embedded`, `ee`, `software`, `debate`, `quick`, `deep`, `save`, `compact`, `overlay`, `list`, `init`, …) alongside the `--` flag completions. Each completion entry documents the natural-keyword equivalent in its description so users discover the new syntax from autocomplete.
+- **Documentation refresh (`commands/council.md`, `skills/council/SKILL.md`)** — Added a “Natural keyword syntax” section with a table of common invocations (`/council ml <topic>`, `/council debate <topic>`, `/council embedded <topic>`, `/council save <topic>`) and a full keyword index.
+- **Test coverage (`tests/features.test.ts`)** — Added three assertion blocks confirming `parseCouncilArgs` resolves bare keywords to the same result as their `--` counterparts:
+  - `parseCouncilArgs("ml Should we use GQA?")` → `councilName === "ml-research"`, `topic === "Should we use GQA?"`.
+  - `parseCouncilArgs("debate save SQLite vs JSON")` → `mode === "deep"`, `save === true`, `topic === "SQLite vs JSON"`.
+  - `parseCouncilArgs("embedded compact DMA queue")` → `councilName === "embedded"`, `compact === true`, `topic === "DMA queue"`.
+
+
+## v0.72.1 — Fix `/council` TUI crash (`TypeError: t[i].render is not a function`)
+
+- **Bug fix (`src/features/council.ts`)** — `installCouncilVerdictRenderer` was returning the raw ANSI string from `renderCouncilVerdictCard`. The omp runtime iterates registered renderers and calls `t[i].render(width)` on each; plain strings have no `.render`, so the TUI render path crashed with `TypeError: t[i].render is not a function` whenever a `council-verdict` message was rendered. The fix wraps each line of the verdict card in a `@oh-my-pi/pi-tui` `Container` of `Text` widgets, matching the pattern used by every other renderer in the repo (`audit-card`, `ticket-breakdown`, `triage-status`, `research-*`, `timeline-digest`, `tilt-meter`, `clarify-debug`, `hindsight`, `knowledge-*`). The runtime now calls `.render(width)` on the returned Container and prints the verdict card lines normally.
+- **Test fix (`tests/features.test.ts`)** — Updated the `installCouncilVerdictRenderer` assertions to verify the renderer returns a `Container` whose children include the `COUNCIL VERDICT` header and whose `.render(width)` is a function (so the runtime won't crash). Also tightened the 76-column invariant check on the rendered line. The pre-existing `typeof === "string"` assertion was the bug's smoking gun in code.
+- **Stub fix (`scripts/stubs/pi-tui.ts`)** — Added `Container.render(width): string[]` to the selftest stub so future regressions of this class of bug are caught by `npm test` even without the real TUI runtime.
+
+## v0.72.0 — Domain Council Presets, Interactive Verdict Overlay & Subcommands
 - **Built-in Domain Council Presets (`src/features/council.ts`)** — Extended the `/council` engine from a single software triad to four domain-specialized panels, each with its own `tools` allow-list so the personas know when they may execute `web_search` or read `.omp/references/` for primary sources:
   - **`default-triad`** *(alias `--software`)* — Minimalist (`ponytail`) · Systems Architect · Security Auditor. Untouched persona set.
   - **`ml-research`** *(alias `--ml`)* — Model Architect (architectures, losses, scaling laws) · Eval Critic (benchmark rigor, leakage, statistical significance) · Inference Engineer (KV cache, quantization, throughput). Tools: `web_search`, `read`, `grep`.

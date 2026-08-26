@@ -918,21 +918,31 @@ export function installCouncilVerdictRenderer(pi: ExtensionApi): void {
  */
 export interface ParsedCouncilArgs {
   mode: CouncilMode;
+
   councilName?: string;
   save: boolean;
   actionable: boolean;
   overlay: boolean;
+  compact: boolean;
   topic: string;
 }
 
-/** Ergonomic preset flag → canonical council id. */
+/** Ergonomic preset flag → canonical council id. Maps both `--flag` and the
+ *  bare keyword so the user can type `/council ml Should we use GQA?` as
+ *  easily as `/council --ml Should we use GQA?`. */
 const PRESET_FLAG_ALIASES: Record<string, string> = {
   "--software": "default-triad",
+  "software": "default-triad",
   "--ml": "ml-research",
+  "ml": "ml-research",
   "--embedded": "embedded",
+  "embedded": "embedded",
   "--firmware": "embedded",
+  "firmware": "embedded",
   "--ee": "electrical-ee",
+  "ee": "electrical-ee",
   "--hardware": "electrical-ee",
+  "hardware": "electrical-ee",
 };
 
 export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
@@ -942,17 +952,25 @@ export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
   let save = false;
   let actionable = false;
   let overlay = false;
+  let compact = false;
   const topicParts: string[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    if (tok === "--quick") mode = "quick";
-    else if (tok === "--deep" || tok === "--debate") mode = "deep";
-    else if (tok === "--raw") mode = "raw";
-    else if (tok === "--save" || tok === "--record") save = true;
-    else if (tok === "--actionable") actionable = true;
-    else if (tok === "--overlay" || tok === "--modal") overlay = true;
-    else if (tok === "--council" || tok === "--preset") {
+    if (tok === "--quick" || tok === "quick") mode = "quick";
+    else if (tok === "--deep" || tok === "deep" || tok === "--debate" || tok === "debate") mode = "deep";
+    else if (tok === "--raw" || tok === "raw") mode = "raw";
+    else if (tok === "--save" || tok === "save" || tok === "--record" || tok === "record") save = true;
+    else if (tok === "--actionable" || tok === "actionable") actionable = true;
+    else if (tok === "--overlay" || tok === "overlay" || tok === "--modal" || tok === "modal") overlay = true;
+    else if (
+      tok === "--compact" || tok === "compact" ||
+      tok === "--terse" || tok === "terse" ||
+      tok === "--summary" || tok === "summary"
+    ) compact = true;
+    else if (
+      tok === "--council" || tok === "council" || tok === "--preset" || tok === "preset"
+    ) {
       const next = tokens[i + 1];
       if (next) {
         councilName = next;
@@ -963,7 +981,7 @@ export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
     } else topicParts.push(tok);
   }
 
-  return { mode, councilName, save, actionable, overlay, topic: topicParts.join(" ") };
+  return { mode, councilName, save, actionable, overlay, compact, topic: topicParts.join(" ") };
 }
 /** Detect `/council list` / `/council init` subcommands at the head of the args
  *  so the handler can short-circuit before invoking the default deliberation
@@ -1113,7 +1131,7 @@ function runCouncilListSubcommand(pi: ExtensionApi, root: string, ctx: CommandCo
       const toolTag = persona.tools && persona.tools.length > 0
         ? dim(` [tools: ${persona.tools.join(", ")}]`)
         : "";
-      lines.push(`  • ${bold(persona.name)} ${dim(`(${persona.id})`)} — ${persona.role}${toolTag}`);
+      lines.push(`  • ${bold(persona.name)} ${dim(`(${persona.id})`)} → ${persona.role}${toolTag}`);
     }
     lines.push("");
   }

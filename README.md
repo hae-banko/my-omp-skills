@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.72.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.73.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>

@@ -19,6 +19,19 @@ Summon an internal panel of specialized engineering personas (Software, ML, Embe
 /council init [--force]
 ```
 
+### Natural keyword syntax
+
+The CLI accepts natural keywords without the `--` prefix so common invocations read like prose:
+
+| Invocation | Equivalent | Effect |
+| --- | --- | --- |
+| `/council ml <topic>` | `/council --ml <topic>` | ML-research triad (Model Architect / Eval Critic / Inference Engineer). |
+| `/council debate <topic>` | `/council --debate <topic>` | 3-stage blind cross-critique deliberation. |
+| `/council embedded <topic>` | `/council --embedded <topic>` | Embedded firmware triad (Realtime / Hardware Safety / Baremetal). |
+| `/council save <topic>` | `/council --save <topic>` | Persist the verdict decision record to `.omp/scratch/debates/`. |
+
+Any keyword also works without `--`: `quick`, `deep`, `debate`, `raw`, `save`, `record`, `actionable`, `compact`, `terse`, `summary`, `overlay`, `modal`, `software`, `ml`, `embedded`, `firmware`, `ee`, `hardware`, plus `council <name>` and `preset <name>`. Both forms are accepted in the same invocation.
+
 ### Subcommands
 
 | Subcommand | Purpose |

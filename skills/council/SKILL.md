@@ -30,7 +30,17 @@ The `/council` command ships with four triads; pick the one that matches the dom
 - `embedded` (alias `--firmware`, `--embedded`) — Realtime Auditor · Hardware Safety · Baremetal Pragmatist. For firmware, RTOS, and baremetal work. Personas have `read` + `grep` so they can inspect linker maps and HAL callsites.
 - `electrical-ee` (alias `--ee`, `--hardware`) — Signal & Power Integrity · Component DFM · Safety & Compliance. For SI/PI, DFM, and electrical safety. Personas have `web_search` + `read` so they can cite IPC / UL / IEC standards and reference designs.
 
-Custom triads can be added by populating `.omp/council.yaml` (run `/council init` to scaffold).
+
+### Natural keyword syntax
+
+The `/council` command accepts natural keywords without the `--` prefix so common invocations read like prose:
+
+- `/council ml <topic>` → ML-research triad (alias for `--ml`).
+- `/council debate <topic>` → 3-stage blind cross-critique (alias for `--deep`).
+- `/council embedded <topic>` → Embedded firmware triad (alias for `--embedded`).
+- `/council save <topic>` → Persist decision record (alias for `--save`).
+
+All keywords also work without `--`: `quick`, `deep`, `debate`, `raw`, `save`, `record`, `actionable`, `compact`, `terse`, `summary`, `overlay`, `modal`, `software`, `ml`, `embedded`, `firmware`, `ee`, `hardware`, plus `council <name>` and `preset <name>`. Both forms are accepted in the same invocation.
 
 ---
 

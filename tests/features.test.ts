@@ -464,6 +464,21 @@ export default function (pi: ExtensionApi): void {
   if (!overlayArgs.overlay) fail("--overlay");
   if (overlayArgs.councilName !== "ml-research") fail("--overlay --ml");
 
+  // 7g-bis. parseCouncilArgs recognises natural keywords without `--` prefix
+  const naturalMl = parseCouncilArgs("ml Should we use GQA?");
+  if (naturalMl.councilName !== "ml-research") fail(`natural keyword 'ml' → ml-research: ${JSON.stringify(naturalMl)}`);
+  if (naturalMl.topic !== "Should we use GQA?") fail(`natural keyword 'ml' topic: ${JSON.stringify(naturalMl)}`);
+
+  const naturalDebateSave = parseCouncilArgs("debate save SQLite vs JSON");
+  if (naturalDebateSave.mode !== "deep") fail(`natural keyword 'debate' → deep: ${JSON.stringify(naturalDebateSave)}`);
+  if (naturalDebateSave.save !== true) fail(`natural keyword 'save' → save: ${JSON.stringify(naturalDebateSave)}`);
+  if (naturalDebateSave.topic !== "SQLite vs JSON") fail(`natural keyword topic: ${JSON.stringify(naturalDebateSave)}`);
+
+  const naturalEmbeddedCompact = parseCouncilArgs("embedded compact DMA queue");
+  if (naturalEmbeddedCompact.councilName !== "embedded") fail(`natural keyword 'embedded' → embedded: ${JSON.stringify(naturalEmbeddedCompact)}`);
+  if (naturalEmbeddedCompact.compact !== true) fail(`natural keyword 'compact' → compact: ${JSON.stringify(naturalEmbeddedCompact)}`);
+  if (naturalEmbeddedCompact.topic !== "DMA queue") fail(`natural keyword topic: ${JSON.stringify(naturalEmbeddedCompact)}`);
+
   // Subcommand short-circuit detection
   const subList = parseCouncilSubcommand("list");
   if (!subList || subList.sub !== "list") fail("parseCouncilSubcommand('list')");
