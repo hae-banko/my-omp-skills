@@ -172,6 +172,10 @@ Render the verdict via the engine's `renderCouncilVerdictCard` over `customType:
 By default, do NOT print intermediate persona debates or walls of discussion. After emitting the verdict card:
 - Provide a **concise 3–5 bullet point executive summary** of the decision.
 - Only print detailed persona critique logs and debate transcripts if `verbose: true` was specified.
+
+### SINGLE-TURN DELIBERATION DIRECTIVE
+Deliberation is strictly single-turn: once the verdict card and executive summary are emitted, deliberation concludes. Subsequent user turns are handled normally and must NOT be treated as council deliberations unless the user explicitly invokes /council again.
+
 ## Stage 4 — Persistence *(only when `save` or `record` is set)*
 If the user passed `save` or `record`:
 

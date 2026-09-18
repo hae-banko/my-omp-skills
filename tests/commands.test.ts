@@ -52,8 +52,7 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
         fail(`silent command /${name} queued a message: ${JSON.stringify(sent)}`);
       }
     } else if (spec?.noEcho) {
-      // noEcho: command routes via pi.sendMessage({ triggerTurn, deliverAs: "nextTurn" })
-      // and must NOT call pi.sendUserMessage with the command echo.
+      // noEcho: command routes via pi.sendMessage({ triggerTurn: true }) and must NOT call pi.sendUserMessage with the command echo.
       if (sent.length !== 0) {
         fail(`noEcho command /${name} must not echo into the input box: ${JSON.stringify(sent)}`);
       }
@@ -234,6 +233,47 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   const mlFromDash = complete("--ml");
   if (mlFromDash.length === 0 || mlFromDash[0].value !== "ml") fail("/council '--ml' completion fallback");
 
+  // Custom councils from council.yaml surface in completions when
+  // MY_OMP_SKILLS_TEST_ROOT points at a temp dir containing one.
+  const completionTmp = createTempFixture("council-completions-");
+  const prevCompletionRoot = process.env.MY_OMP_SKILLS_TEST_ROOT;
+  process.env.MY_OMP_SKILLS_TEST_ROOT = completionTmp.dir;
+  try {
+    mkdirSync(join(completionTmp.dir, ".omp"), { recursive: true });
+    writeFileSync(
+      join(completionTmp.dir, ".omp", "council.yaml"),
+      [
+        "councils:",
+        "  my-custom-team:",
+        "    - name: Team Lead",
+        "    - name: Analyst",
+        "    - name: Skeptic",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const withCustom = complete("");
+    const customOpt = withCustom.find((o) => o.value === "my-custom-team");
+    if (!customOpt) {
+      fail(`/council completions missing custom council id: ${JSON.stringify(withCustom.map((o) => o.value))}`);
+    } else if (!customOpt.description?.includes("my-custom-team") && !customOpt.description?.includes("Custom council")) {
+      fail(`/council custom council description unexpected: ${customOpt.description}`);
+    }
+    // council/preset heads offer all council ids (built-in + custom) matching rest.
+    const presetOptions = complete("preset my-c");
+    if (!presetOptions.some((o) => o.value === "my-custom-team")) {
+      fail(`/council 'preset my-c' completion missing my-custom-team: ${JSON.stringify(presetOptions)}`);
+    }
+    const councilOptions = complete("council default");
+    if (!councilOptions.some((o) => o.value === "default-triad")) {
+      fail(`/council 'council default' completion missing default-triad: ${JSON.stringify(councilOptions)}`);
+    }
+  } finally {
+    if (prevCompletionRoot === undefined) delete process.env.MY_OMP_SKILLS_TEST_ROOT;
+    else process.env.MY_OMP_SKILLS_TEST_ROOT = prevCompletionRoot;
+    completionTmp.cleanup();
+  }
+
   // Subcommand filtering: typing "init" surfaces init + force (no -- prefix).
   const initOnly = complete("init");
   if (initOnly.length === 0 || initOnly[0].value !== "init") fail("/council init completion");
@@ -268,6 +308,44 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     if (prevRoot === undefined) delete process.env.MY_OMP_SKILLS_TEST_ROOT;
     else process.env.MY_OMP_SKILLS_TEST_ROOT = prevRoot;
     tmp.cleanup();
+  }
+
+  // Council deliberation message options: the hidden command workflow body must
+  // dispatch via { triggerTurn: true } without deliverAs ("nextTurn" would leak
+  // council instructions into subsequent turns), and the placeholder verdict
+  // card must NOT pass deliverAs: "followUp" (which queued an extra user turn).
+  sent.length = 0;
+  ctx.customMessages.length = 0;
+  ctx.customMessageOptions.length = 0;
+  await registered["council"].handler("ml Should we use GQA?", {});
+  const optFor = (m: Record<string, unknown>): Record<string, unknown> | undefined => {
+    const idx = ctx.customMessages.indexOf(m);
+    return idx >= 0 ? ctx.customMessageOptions[idx] : undefined;
+  };
+  const commandMsg = ctx.customMessages.find((m) => getCustomType(m) === "command:council");
+  if (!commandMsg) {
+    fail("/council: no command:council custom message for deliberation");
+  } else {
+    const commandOpts = optFor(commandMsg);
+    if (!commandOpts) {
+      fail("/council: command:council message sent without options");
+    } else {
+      if (commandOpts.triggerTurn !== true) {
+        fail(`/council: command:council message must pass triggerTurn: true, got ${JSON.stringify(commandOpts)}`);
+      }
+      if (commandOpts.deliverAs === "nextTurn") {
+        fail("/council: command:council message must NOT use deliverAs: nextTurn (leaks prompt into later turns)");
+      }
+    }
+  }
+  const verdictMsg = ctx.customMessages.find((m) => getCustomType(m) === "council-verdict");
+  if (!verdictMsg) {
+    fail("/council: no council-verdict placeholder message");
+  } else {
+    const verdictOpts = optFor(verdictMsg);
+    if (verdictOpts && verdictOpts.deliverAs === "followUp") {
+      fail("/council: council-verdict placeholder must NOT use deliverAs: followUp (queues a stray user turn)");
+    }
   }
 
   // 9. /timeline argument completions

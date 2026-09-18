@@ -354,12 +354,29 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
  * are always present in the returned config; a user-supplied YAML can add
  * additional councils or override built-in entries by redeclaring the same id.
  */
-export function loadCouncilConfig(rootDir?: string): CouncilConfig {
+export function resolveCouncilConfigPath(rootDir?: string): string | null {
   const root = rootDir ?? process.cwd();
-  const configPath = join(root, ".omp", "council.yaml");
+  const candidates = [
+    join(root, ".omp", "council.yaml"),
+    join(root, "council.yaml"),
+    join(root, ".config", "council.yaml"),
+  ];
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (home) {
+    candidates.push(join(home, ".omp", "council.yaml"));
+    candidates.push(join(home, ".config", "omp", "council.yaml"));
+  }
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+export function loadCouncilConfig(rootDir?: string): CouncilConfig {
+  const configPath = resolveCouncilConfigPath(rootDir);
   const councils: Record<string, CouncilPersona[]> = { ...COUNCIL_PRESETS };
 
-  if (!existsSync(configPath)) {
+  if (!configPath) {
     return DEFAULT_COUNCIL_CONFIG;
   }
 
@@ -529,12 +546,13 @@ export function scaffoldCouncilYaml(rootDir?: string, options: { force?: boolean
   created: boolean;
 } {
   const root = rootDir ?? process.cwd();
+  const existingPath = resolveCouncilConfigPath(rootDir);
+  if (existingPath && !options?.force) {
+    return { path: existingPath, created: false };
+  }
   const targetDir = join(root, ".omp");
   const targetPath = join(targetDir, "council.yaml");
   if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true });
-  if (existsSync(targetPath) && !options.force) {
-    return { path: targetPath, created: false };
-  }
 
   const lines: string[] = [
     "# .omp/council.yaml — project council configuration",
@@ -1082,7 +1100,27 @@ const PRESET_FLAG_ALIASES: Record<string, string> = {
   "hardware": "electrical-ee",
 };
 
-export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
+const COUNCIL_ARG_KEYWORDS: Record<string, true> = {
+  "quick": true,
+  "deep": true,
+  "debate": true,
+  "raw": true,
+  "save": true,
+  "record": true,
+  "actionable": true,
+  "verbose": true,
+  "compact": true,
+  "terse": true,
+  "summary": true,
+  "overlay": true,
+  "modal": true,
+  "list": true,
+  "init": true,
+  "edit": true,
+  "config": true,
+};
+
+export function parseCouncilArgs(rawArgs: string, knownCouncilIds?: string[]): ParsedCouncilArgs {
   const tokens = rawArgs.trim().split(/\s+/).filter(Boolean);
   let mode: CouncilMode = "quick";
   let explicitMode = false;
@@ -1118,6 +1156,13 @@ export function parseCouncilArgs(rawArgs: string): ParsedCouncilArgs {
       }
     } else if (tok in PRESET_FLAG_ALIASES) {
       councilName = PRESET_FLAG_ALIASES[tok];
+    } else if (!councilName && knownCouncilIds && knownCouncilIds.length > 0) {
+      const lower = tok.toLowerCase();
+      if (!(lower in COUNCIL_ARG_KEYWORDS)) {
+        const matched = knownCouncilIds.find((id) => id.toLowerCase() === lower);
+        if (matched) councilName = matched;
+        else topicParts.push(tok);
+      } else topicParts.push(tok);
     } else topicParts.push(tok);
   }
 
@@ -1234,10 +1279,10 @@ export async function runCouncilCommand(
 
     return runCouncilCommand(pi, root, `${chosenCouncil} ${chosenTopic}`, ctx, resources);
   }
-  const parsed = parseCouncilArgs(rawArgs);
+  const config = loadCouncilConfig(root);
+  const parsed = parseCouncilArgs(rawArgs, Object.keys(config.councils));
   const topic = parsed.topic || "Untitled proposal";
   // 2. Resolve the council to use and load its personas for the receipt
-  const config = loadCouncilConfig(root);
   const resolvedCouncilName = parsed.councilName && config.councils[parsed.councilName]
     ? parsed.councilName
     : config.defaultCouncil;
@@ -1273,6 +1318,7 @@ export async function runCouncilCommand(
     `### Directives`,
     `1. SILENT BY DEFAULT: Do not output chatter, preamble, or drafting narration. Call the \`task\` tool immediately with all ${personas.length} personas in parallel.`,
     `2. MINIMAL DISCUSSION: Provide a 3-5 bullet point executive summary and emit the structured verdict card. Do NOT print intermediate persona debates or walls of text unless verbose is true.`,
+    `3. SINGLE-TURN DELIBERATION: Deliberation concludes upon emitting the verdict card and executive summary. Do NOT continue deliberating on subsequent user turns unless the user explicitly invokes /council again.`,
   ].join("\n");
   text += contract;
 
@@ -1281,8 +1327,8 @@ export async function runCouncilCommand(
   }
 
   // 4. Emit the workflow body (hidden) so the executing agent has full instructions.
-  //    Use deliverAs: "nextTurn" + triggerTurn so the agent turn starts without
-  //    repainting the user's editable input buffer (ADR-0008 §3).
+  //    triggerTurn starts the agent turn on the active turn without repainting
+  //    the user's editable input buffer (ADR-0008 §3).
   pi.sendMessage(
     {
       customType: `command:council`,
@@ -1290,7 +1336,7 @@ export async function runCouncilCommand(
       display: false,
       attribution: "user",
     },
-    { deliverAs: "nextTurn", triggerTurn: true },
+    { triggerTurn: true },
   );
 
   // 5. Queue the verdict receipt card so the user sees the structural placeholders
@@ -1315,7 +1361,6 @@ export async function runCouncilCommand(
         timestamp: new Date().toISOString(),
       },
     },
-    { deliverAs: "followUp" },
   );
 
   // 6. If the user requested an interactive overlay, launch it on the verdict
@@ -1416,10 +1461,10 @@ export async function runCouncilEditSubcommand(
   root: string,
   ctx: CommandContext,
 ): Promise<void> {
-  const targetDir = join(root, ".omp");
-  const targetPath = join(targetDir, "council.yaml");
-  if (!existsSync(targetPath)) {
-    scaffoldCouncilYaml(root);
+  let targetPath = resolveCouncilConfigPath(root);
+  if (!targetPath) {
+    const scaffolded = scaffoldCouncilYaml(root);
+    targetPath = scaffolded.path;
   }
 
   const initialContent = readFileSync(targetPath, "utf8");

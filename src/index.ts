@@ -50,7 +50,7 @@ import { installReferenceResultRenderer, runReferenceCommand } from "./features/
 import { runRecentCommand } from "./features/recent-command.ts";
 import { installTimelineRenderer, runTimelineCommand } from "./features/timeline.ts";
 import { installTilt, runTiltCommand } from "./features/tilt.ts";
-import { installCouncilVerdictRenderer, runCouncilCommand } from "./council/index.ts";
+import { installCouncilVerdictRenderer, listCouncils, runCouncilCommand } from "./council/index.ts";
 import {
   archiveResearchProject,
   getResearchDashboardMetrics,
@@ -1687,6 +1687,20 @@ const COMMANDS: CommandSpec[] = [
       if (head === "edit" || head === "config") {
         return subcommandOptions.filter((o) => o.value === head);
       }
+      const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+      const root = override && override.trim() ? override.trim() : findRepoRoot() ?? process.cwd();
+      const availableCouncils = listCouncils(root);
+      if (head === "council" || head === "preset") {
+        const restMatch = lower.match(/^(?:council|preset)\s+(?:--?)?(\S*)$/);
+        const rest = restMatch?.[1] ?? "";
+        return availableCouncils
+          .filter((c) => c.id.startsWith(rest))
+          .map((c) => ({
+            value: c.id,
+            label: c.id,
+            description: `${c.builtin ? "Built-in" : "Custom"} council (${c.personas.length} participants: ${c.personas.map((p) => p.name).join(", ")})`,
+          }));
+      }
       const keywordOptions: CompletionOption[] = [
         { value: "quick", label: "quick", description: "2-stage fast deliberation (Parallel drafts → Chairman synthesis)" },
         { value: "deep", label: "deep", description: "3-stage debate (Drafts → Blind cross-critique → Synthesis)" },
@@ -1711,6 +1725,15 @@ const COMMANDS: CommandSpec[] = [
         { value: "preset", label: "preset <name>", description: "Alias for council <name>" },
         ...subcommandOptions,
       ];
+      for (const c of availableCouncils) {
+        if (!c.builtin) {
+          keywordOptions.push({
+            value: c.id,
+            label: c.id,
+            description: `Custom council (${c.personas.length} participants: ${c.personas.map((p) => p.name).join(", ")})`,
+          });
+        }
+      }
       if (!lower) return keywordOptions;
       // Strip any leading dashes so typing `--ml` or `ml` resolves cleanly to `ml`
       const search = lower.replace(/^--?/, "");

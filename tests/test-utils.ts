@@ -96,6 +96,7 @@ export interface TestContext {
   registered: Record<string, RegisteredCommand>;
   sent: string[];
   customMessages: Array<Record<string, unknown>>;
+  customMessageOptions: Array<Record<string, unknown> | undefined>;
   handlers: Record<string, (event: unknown, ctx?: unknown) => unknown>;
   eventListeners: Record<string, Array<(event: unknown, ctx?: unknown) => unknown>>;
   tools: RegisteredTool[];
@@ -107,6 +108,7 @@ export function createTestContext(): TestContext {
   const registered: Record<string, RegisteredCommand> = {};
   const sent: string[] = [];
   const customMessages: Array<Record<string, unknown>> = [];
+  const customMessageOptions: Array<Record<string, unknown> | undefined> = [];
   const handlers: Record<string, (event: unknown, ctx?: unknown) => unknown> = {};
   const eventListeners: Record<string, Array<(event: unknown, ctx?: unknown) => unknown>> = {};
   const tools: RegisteredTool[] = [];
@@ -132,8 +134,9 @@ export function createTestContext(): TestContext {
     async sendUserMessage(content: string): Promise<void> {
       sent.push(content);
     },
-    sendMessage(message: Record<string, unknown>): void {
+    sendMessage(message: Record<string, unknown>, options?: Record<string, unknown>): void {
       customMessages.push(message);
+      customMessageOptions.push(options);
     },
     on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
       if (event === "input") {
@@ -178,6 +181,7 @@ export function createTestContext(): TestContext {
     registered,
     sent,
     customMessages,
+    customMessageOptions,
     handlers,
     eventListeners,
     tools,

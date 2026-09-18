@@ -21,6 +21,7 @@ export {
   listCouncils,
   loadCouncilConfig,
   parseCouncilSubcommand,
+  resolveCouncilConfigPath,
   partitionCouncilOpinions,
   renderCouncilVerdictCard,
   runCouncilCommand,
