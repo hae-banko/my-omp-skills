@@ -9,13 +9,6 @@
 
 ## [0.75.2] - 2026-09-18
 
-### Added
-- **Automatic Council Discovery**: multi-path resolution for `council.yaml`. In addition to `<root>/.omp/council.yaml`, the engine now automatically discovers `<root>/council.yaml`, `<root>/.config/council.yaml`, and user-global fallbacks (`~/.omp/council.yaml`, `~/.config/omp/council.yaml`).
-- **Dynamic Bare Council Names**: custom council ids defined in `council.yaml` can now be passed directly as bare keywords (e.g. `/council my-team <topic>`) without requiring the `--council` or `council` prefix.
-- **Dynamic Tab Autocompletion**: custom councils from `council.yaml` now surface dynamically in Tab-completions alongside built-in presets and in `council <name>` / `preset <name>` completions.
-
-## [0.75.2] - 2026-09-18
-
 ### Fixed
 - **Council**: eliminate sticky council discussion prompt across turns. The placeholder verdict card no longer passes `{ deliverAs: "followUp" }` (which queued an unintended second user turn in omp), and the hidden command workflow body no longer uses `{ deliverAs: "nextTurn" }` (which leaked council instructions into subsequent user prompt context). Deliberation is now cleanly dispatched on the active turn via `{ triggerTurn: true }`.
 
