@@ -771,7 +771,7 @@ export async function runTiltCommand(
   pi.sendMessage({
     customType: TILT_CUSTOM_TYPE,
     display: true,
-    payload,
+    details: payload,
   });
 }
 
@@ -779,9 +779,15 @@ export function installTilt(pi: ExtensionApi): void {
   // 1. Register message renderer for customType "tilt-meter"
   pi.registerMessageRenderer(TILT_CUSTOM_TYPE, (message, _options, theme) => {
     let payload: TiltCardPayload;
-    if (message && typeof message === "object" && "payload" in message) {
-      const candidate = (message as Record<string, unknown>).payload;
-      payload = candidate as TiltCardPayload;
+    const candidate = message && typeof message === "object" ? (message as Record<string, unknown>) : undefined;
+    const details = candidate?.details ?? candidate?.payload;
+    if (
+      details &&
+      typeof details === "object" &&
+      "local" in details &&
+      "global" in details
+    ) {
+      payload = details as TiltCardPayload;
     } else {
       payload = {
         local: readLocalTilt(process.cwd()),
@@ -794,25 +800,27 @@ export function installTilt(pi: ExtensionApi): void {
   // 2. Passively track input events for tilt
   if (typeof pi.on === "function") {
     pi.on("input", (event: unknown) => {
+      let text = "";
+      if (event && typeof event === "object" && "text" in event && typeof event.text === "string") {
+        text = event.text;
+      }
       if (
         event &&
         typeof event === "object" &&
         "source" in event &&
-        ((event as { source: unknown }).source === "extension" ||
-          (event as { source: unknown }).source === "system")
+        (event.source === "extension" || event.source === "system")
       ) {
-        return { action: "continue" };
+        return { text, action: "continue" };
       }
 
-      if (event && typeof event === "object" && "text" in event) {
-        const text = String((event as { text: unknown }).text ?? "");
+      if (text) {
         try {
           recordTiltIncident(text, process.cwd());
         } catch {
           // Never fail the input hook
         }
       }
-      return { action: "continue" };
+      return { text, action: "continue" };
     });
   }
 }

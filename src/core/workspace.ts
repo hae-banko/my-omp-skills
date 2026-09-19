@@ -65,6 +65,8 @@ export function findRepoRoot(startDir: string = process.cwd()): string {
  */
 export function getWorkspaceContext(startDir: string = process.cwd()): WorkspaceContext {
   const resolvedStart = resolve(startDir);
+  const cached = workspaceCache.get(resolvedStart);
+  if (cached) return cached;
   const root = findRepoRoot(resolvedStart);
   const isRepo = existsSync(join(root, ".git")) || existsSync(join(root, ".omp"));
   const kbRoot = join(root, ".omp", "knowledge");
@@ -162,4 +164,9 @@ export function getWorkspaceContext(startDir: string = process.cwd()): Workspace
 
   workspaceCache.set(resolvedStart, ctx);
   return ctx;
+}
+
+/** Clear cached workspace contexts for test isolation. */
+export function clearWorkspaceCache(): void {
+  workspaceCache.clear();
 }

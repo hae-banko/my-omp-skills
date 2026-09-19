@@ -102,6 +102,7 @@ export interface TestContext {
   tools: RegisteredTool[];
   renderers: Record<string, (message: unknown, options: unknown, theme: unknown) => unknown>;
   collectLines: (container: unknown) => string[];
+  assertNoDanglingTurnQueues: () => void;
 }
 
 export function createTestContext(): TestContext {
@@ -124,6 +125,17 @@ export function createTestContext(): TestContext {
     });
   };
 
+  const assertNoDanglingTurnQueues = (): void => {
+    for (const opt of customMessageOptions) {
+      if (opt?.deliverAs === "followUp") {
+        throw new Error(`Dangling followUp message detected in queue options: ${JSON.stringify(opt)}`);
+      }
+      if (opt?.deliverAs === "nextTurn") {
+        throw new Error(`Dangling nextTurn message detected in queue options: ${JSON.stringify(opt)}`);
+      }
+    }
+  };
+
   const mockPi: ExtensionApi = {
     registerCommand(
       name: string,
@@ -139,12 +151,13 @@ export function createTestContext(): TestContext {
       customMessageOptions.push(options);
     },
     on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void {
-      if (event === "input") {
-        if (!eventListeners["input"]) eventListeners["input"] = [];
-        eventListeners["input"].push(handler);
-        handlers["input"] = (evt: unknown, ctx?: unknown) => {
-          let lastResult: unknown = undefined;
-          for (const listener of eventListeners["input"]) {
+      const listeners = eventListeners[event] ?? (eventListeners[event] = []);
+      listeners.push(handler);
+      handlers[event] = (evt: unknown, ctx?: unknown): unknown => {
+        let lastResult: unknown = undefined;
+
+        if (event === "input") {
+          for (const listener of listeners) {
             const res = listener(evt, ctx);
             if (res !== undefined && res !== null) {
               if (
@@ -158,10 +171,56 @@ export function createTestContext(): TestContext {
             }
           }
           return lastResult ?? { action: "continue" };
-        };
-        return;
-      }
-      handlers[event] = handler;
+        }
+
+        if (event === "tool_call") {
+          for (const listener of listeners) {
+            const res = listener(evt, ctx);
+            if (
+              res &&
+              typeof res === "object" &&
+              (res as Record<string, unknown>).block === true
+            ) {
+              return res;
+            }
+            if (res !== undefined && res !== null) lastResult = res;
+          }
+          return lastResult;
+        }
+
+        if (event === "before_agent_start") {
+          const messages: unknown[] = [];
+          let chainedSystemPrompt: unknown;
+          let hasSystemPrompt = false;
+          for (const listener of listeners) {
+            const res = listener(evt, ctx);
+            if (!res || typeof res !== "object") continue;
+            const result = res as Record<string, unknown>;
+            if ("systemPrompt" in result && result.systemPrompt !== undefined) {
+              chainedSystemPrompt = result.systemPrompt;
+              hasSystemPrompt = true;
+              if (evt && typeof evt === "object") {
+                (evt as Record<string, unknown>).systemPrompt = result.systemPrompt;
+              }
+            }
+            if ("message" in result && result.message !== undefined) {
+              messages.push(result.message);
+            }
+          }
+          if (!hasSystemPrompt && messages.length === 0) return undefined;
+          const result: Record<string, unknown> = {};
+          if (hasSystemPrompt) result.systemPrompt = chainedSystemPrompt;
+          if (messages.length === 1) result.message = messages[0];
+          else if (messages.length > 1) result.message = messages;
+          return result;
+        }
+
+        for (const listener of listeners) {
+          const res = listener(evt, ctx);
+          if (res !== undefined && res !== null) lastResult = res;
+        }
+        return lastResult;
+      };
     },
     registerTool(def: unknown): void {
       tools.push(def as RegisteredTool);
@@ -187,6 +246,7 @@ export function createTestContext(): TestContext {
     tools,
     renderers,
     collectLines,
+    assertNoDanglingTurnQueues,
   };
 }
 

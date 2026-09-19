@@ -41,11 +41,12 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   }
 
   // 2. Command execution & companion pointers in hidden custom messages
-  for (const name of Object.keys(registered)) {
+  for (const name of Object.keys(EXPECTED_COMMANDS)) {
     sent.length = 0;
     ctx.customMessages.length = 0;
+    ctx.customMessageOptions.length = 0;
     await registered[name].handler("", {});
-
+    ctx.assertNoDanglingTurnQueues();
     const spec = EXPECTED_COMMANDS[name];
     if (spec?.silent) {
       if (sent.length !== 0) {
@@ -77,6 +78,20 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
         fail(`${name}: unexpected companion pointer`);
       }
     }
+  }
+
+  // Representative multi-turn invocations must not leave queued follow-up or
+  // next-turn messages behind for the next user prompt.
+  for (const [name, args] of [
+    ["record", "test record"],
+    ["pitfall", "test pitfall"],
+    ["council", "ml test topic"],
+  ] as const) {
+    sent.length = 0;
+    ctx.customMessages.length = 0;
+    ctx.customMessageOptions.length = 0;
+    await registered[name].handler(args, {});
+    ctx.assertNoDanglingTurnQueues();
   }
 
   // 3. Argument passthrough: args land in the hidden workflow body and visible user prompt

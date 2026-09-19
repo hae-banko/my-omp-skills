@@ -1326,20 +1326,7 @@ export async function runCouncilCommand(
     text += `\n\n## Companion reference files\nRead these files when the workflow refers to them:\n${resources.companionPaths.join("\n")}`;
   }
 
-  // 4. Emit the workflow body (hidden) so the executing agent has full instructions.
-  //    triggerTurn starts the agent turn on the active turn without repainting
-  //    the user's editable input buffer (ADR-0008 §3).
-  pi.sendMessage(
-    {
-      customType: `command:council`,
-      content: text,
-      display: false,
-      attribution: "user",
-    },
-    { triggerTurn: true },
-  );
-
-  // 5. Queue the verdict receipt card so the user sees the structural placeholders
+  // 4. Queue the verdict receipt card so the user sees the structural placeholders
   //    immediately and the renderer fills in the live verdict once Stage 3 lands.
   //    No sub-mode stamp in the visible content (ADR-0008 §4).
   pi.sendMessage(
@@ -1361,6 +1348,19 @@ export async function runCouncilCommand(
         timestamp: new Date().toISOString(),
       },
     },
+  );
+
+  // 5. Emit the workflow body (hidden) so the executing agent has full instructions.
+  //    triggerTurn starts the agent turn on the active turn without repainting
+  //    the user's editable input buffer (ADR-0008 §3).
+  pi.sendMessage(
+    {
+      customType: `command:council`,
+      content: text,
+      display: false,
+      attribution: "user",
+    },
+    { triggerTurn: true },
   );
 
   // 6. If the user requested an interactive overlay, launch it on the verdict

@@ -112,7 +112,9 @@ export function installKbIndexInjector(pi: ExtensionApi): void {
       readStringField(ctx, "cwd") ?? readStringField(event, "cwd") ?? process.cwd();
     const section = formatIndexSection(cwd);
     if (section === "") return;
-    evt.systemPrompt = evt.systemPrompt + "\n\n" + section;
+    const updatedPrompt = evt.systemPrompt + "\n\n" + section;
+    evt.systemPrompt = updatedPrompt;
+    return { systemPrompt: updatedPrompt };
   });
 }
 

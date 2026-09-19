@@ -73,9 +73,14 @@ export interface CustomMessagePayload {
   content?: string;
   display?: boolean;
   details?: unknown;
-  payload?: unknown;
   attribution?: "user" | "agent";
 }
+
+export interface SendMessageOptions {
+  deliverAs?: "steer" | "followUp" | "nextTurn" | "aside";
+  triggerTurn?: boolean;
+}
+
 
 /** Minimal view of the `tool_call` event (pre-exec, may block or revise). */
 export interface ToolCallEvent {
@@ -147,7 +152,7 @@ export interface ZodLike {
 export interface ExtensionApi {
   registerCommand(name: string, def: CommandHandlerDef): void;
   sendUserMessage(content: string, options?: { deliverAs?: string }): Promise<unknown>;
-  sendMessage(message: CustomMessagePayload, options?: Record<string, unknown>): void;
+  sendMessage(message: CustomMessagePayload, options?: SendMessageOptions): void;
   on(event: string, handler: (event: unknown, ctx?: unknown) => unknown): void;
   registerTool(def: ToolDefinition): void;
   registerMessageRenderer(

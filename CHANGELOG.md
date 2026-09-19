@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.76.0] - 2026-09-18
+
+### Fixed
+- **Systemic Message Delivery & Turn Scheduling (H1-H6)**: eliminated deterministic extra LLM turns caused by `{ deliverAs: "followUp" }` in `runDefaultHandler` (`/record`, `/pitfall`, `/audit`, `/triage`, `/to-tickets`). Reordered receipt cards before turn start while idle. Fixed command delegation for `/research 2|3` to load target command bodies instead of no-op `sendUserMessage` calls. Fixed council card emission order so the receipt card is never injected as a mid-turn steer.
+- **Event Hook Contract Alignment (E1-E5)**: aligned `before_agent_start` in `kb-index-injector` and `clarify` to return `{ systemPrompt: ... }` matching the oh-my-pi runtime contract. Aligned `input` hooks in `clarify` and `tilt` to return `{ text }` conforming to runtime chaining. Removed duplicate `installPolicy` registration. Wired `installKbGuardStatus`.
+- **Cache Invalidation & Isolation**: `knowledgeRootCache` no longer caches `null` forever; `workspaceCache` now performs read lookups with exportable cache resets.
+
+### Added
+- **Multi-Turn Integration Contracts & Mock Parity (M1-M2)**: upgraded test mock harness in `tests/test-utils.ts` to fan out across all event listener types (`tool_call`, `before_agent_start`, `session_start`, etc.) eliminating last-writer-wins shadowing. Added `assertNoDanglingTurnQueues()` verifying every command leaves zero leaked `followUp` or `nextTurn` queues.
+- **AGENTS.md Invariant Rule 7**: codified Zero Cross-Turn Queue Leaks invariant forbidding unmanaged follow-up/nextTurn queues and mandating correct hook return signatures.
+
 ## [0.75.3] - 2026-09-18
 
 ### Added

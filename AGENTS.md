@@ -92,6 +92,12 @@ Every slash command and every handler in `src/**` MUST respect the user-facing U
 5. **Autocomplete every flag and subcommand.** `getArgumentCompletions` MUST surface every subcommand (`list`, `init`, `edit`, `config`, `status`, `recent`, `show`, `add-items`, `add-fields`, `validate`, `dashboard`, `report`), every keyword, and every named preset. When the user types the first token of a subcommand (`/council e`), narrow to matching subcommand heads only.
 6. **Default verbosity = silent card.** Single visually rich card in chat; no wall of reasoning prose. `verbose` keyword (no `--`) opts in to multi-stage detail.
 
+7. **Zero Cross-Turn Queue Leaks (Interaction Invariant).**
+   - NEVER pass `{ deliverAs: "followUp" }` on receipt cards or display cards. `deliverAs: "followUp"` queues an extra agent turn after completion. Emit cards directly without options while idle.
+   - NEVER pass `{ deliverAs: "nextTurn" }` for immediate commands. `deliverAs: "nextTurn"` buffers instructions into `#pendingNextTurnMessages`, polluting whatever prompt the user enters on turn $N+1$. Use `{ triggerTurn: true }` directly.
+   - `before_agent_start` handlers MUST return `{ systemPrompt: ... }` rather than mutating `event.systemPrompt` in place (the runtime runner ignores in-place mutations).
+   - `input` event handlers MUST return `{ text: ... }` conforming to the active runtime chain contract.
+
 ## Rules
 
 - Every user-visible change bumps `package.json` **and** adds a `CHANGELOG.md` entry.

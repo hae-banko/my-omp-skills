@@ -57,6 +57,8 @@ let enabled = false;
 let debugEnabled = false;
 let bypassNextTurn = false;
 
+const CLARIFY_DEBUG_CUSTOM_TYPE = "clarify-debug";
+
 export function isClarifyEnabled(): boolean {
   return enabled;
 }
@@ -117,7 +119,7 @@ export function installClarify(pi: ExtensionApi): void {
     },
   });
 
-  pi.registerMessageRenderer("clarify-debug", (message: unknown) => {
+  pi.registerMessageRenderer(CLARIFY_DEBUG_CUSTOM_TYPE, (message: unknown) => {
     let contentStr = "";
     if (message && typeof message === "object") {
       if ("content" in message && typeof (message as { content: unknown }).content === "string") {
@@ -129,16 +131,6 @@ export function installClarify(pi: ExtensionApi): void {
   });
 
   pi.on("input", (event: unknown) => {
-    if (
-      event &&
-      typeof event === "object" &&
-      "source" in event &&
-      ((event as { source: unknown }).source === "extension" ||
-        (event as { source: unknown }).source === "system")
-    ) {
-      return { action: "continue" };
-    }
-
     let text = "";
     if (typeof event === "string") {
       text = event;
@@ -151,77 +143,89 @@ export function installClarify(pi: ExtensionApi): void {
       text = (event as { text: string }).text;
     }
 
-    if (shouldBypassClarify(text)) {
-      bypassNextTurn = true;
-      const stripped = stripClarifyBypassPrefix(text);
-      if (event && typeof event === "object" && "text" in event) {
-        (event as { text: string }).text = stripped;
-      }
-      return { action: "transform", text: stripped };
+    if (
+      event &&
+      typeof event === "object" &&
+      "source" in event &&
+      ((event as { source: unknown }).source === "extension" ||
+        (event as { source: unknown }).source === "system")
+    ) {
+      return { text, action: "continue" };
     }
 
-    return { action: "continue" };
+    if (shouldBypassClarify(text)) {
+      bypassNextTurn = true;
+      const trimmed = stripClarifyBypassPrefix(text);
+      if (event && typeof event === "object" && "text" in event) {
+        const inputEvent = event as { text: unknown };
+        if (typeof inputEvent.text === "string") inputEvent.text = trimmed;
+      }
+      return { text: trimmed, action: "transform" };
+    }
+
+    return { text, action: "continue" };
   });
 
   pi.on("before_agent_start", (event: unknown, ctx?: unknown) => {
-    if (event && typeof event === "object") {
-      const evt = event as {
-        prompt?: string;
-        promptText?: string;
-        systemPrompt?: string;
-        systemPromptOptions?: { selectedTools?: string[] };
-      };
-
-      const selectedTools = evt.systemPromptOptions?.selectedTools;
-      if (!Array.isArray(selectedTools) || selectedTools.includes("clarify_prompt")) {
-        if (enabled && !bypassNextTurn) {
-          const sysPrompt = evt.systemPrompt ?? "";
-          if (
-            !sysPrompt.includes(CLARIFY_GUIDELINES) &&
-            !sysPrompt.includes("## Prompt Clarification Active")
-          ) {
-            evt.systemPrompt = sysPrompt + CLARIFY_PROMPT;
-          }
-        }
-      }
-
-      if (debugEnabled && enabled && !bypassNextTurn) {
-        const promptText = evt.prompt ?? evt.promptText ?? "";
-        const content = [
-          "- System Prompt Injection: ACTIVE",
-          `- Prompt Text: ${promptText}`,
-          "- Injected Guidelines: Present",
-        ].join("\n");
-        pi.sendMessage({
-          customType: "clarify-debug",
-          content,
-          display: true,
-          attribution: "user",
-        });
-      }
-
-      // Zero-turn pitfall / record auto-surfacing
-      const promptText = evt.prompt ?? evt.promptText ?? "";
-      const cwd =
-        ctx && typeof ctx === "object" && "cwd" in ctx && typeof ctx.cwd === "string"
-          ? ctx.cwd
-          : process.cwd();
-      if (promptText) {
-        const root = findKnowledgeRoot(cwd) ?? cwd;
-        const matches = findRelevantKnowledge(root, promptText);
-        if (matches.length > 0) {
-          const sysPrompt = evt.systemPrompt ?? "";
-          if (!sysPrompt.includes("<relevant-knowledge>")) {
-            const lines = matches.map(
-              (m) => `- [${m.kind.toUpperCase()}] ${m.title} (${m.path}) — ${m.snippet}`,
-            );
-            evt.systemPrompt =
-              (evt.systemPrompt ?? "") +
-              `\n<relevant-knowledge>\nThe following repository knowledge matches terms in your prompt:\n${lines.join("\n")}\n</relevant-knowledge>`;
-          }
+    if (!event || typeof event !== "object") return;
+    const evt = event as {
+      prompt?: string;
+      promptText?: string;
+      systemPrompt?: string;
+      systemPromptOptions?: { selectedTools?: string[] };
+    };
+    let updatedPrompt = evt.systemPrompt ?? "";
+    const selectedTools = evt.systemPromptOptions?.selectedTools;
+    if (!Array.isArray(selectedTools) || selectedTools.includes("clarify_prompt")) {
+      if (enabled && !bypassNextTurn) {
+        if (
+          !updatedPrompt.includes(CLARIFY_GUIDELINES) &&
+          !updatedPrompt.includes("## Prompt Clarification Active")
+        ) {
+          updatedPrompt += CLARIFY_PROMPT;
         }
       }
     }
+
+    const promptText = evt.prompt ?? evt.promptText ?? "";
+    // Zero-turn pitfall / record auto-surfacing
+    const cwd =
+      ctx && typeof ctx === "object" && "cwd" in ctx && typeof ctx.cwd === "string"
+        ? ctx.cwd
+        : process.cwd();
+    if (promptText) {
+      const root = findKnowledgeRoot(cwd) ?? cwd;
+      const matches = findRelevantKnowledge(root, promptText);
+      if (matches.length > 0 && !updatedPrompt.includes("<relevant-knowledge>")) {
+        const lines = matches.map(
+          (m) => `- [${m.kind.toUpperCase()}] ${m.title} (${m.path}) — ${m.snippet}`,
+        );
+        updatedPrompt +=
+          `\n<relevant-knowledge>\nThe following repository knowledge matches terms in your prompt:\n${lines.join("\n")}\n</relevant-knowledge>`;
+      }
+    }
+    evt.systemPrompt = updatedPrompt;
+
+    if (debugEnabled && enabled && !bypassNextTurn) {
+      const content = [
+        "- System Prompt Injection: ACTIVE",
+        `- Prompt Text: ${promptText}`,
+        "- Injected Guidelines: Present",
+      ].join("\n");
+      return {
+        systemPrompt: updatedPrompt,
+        message: {
+          customType: CLARIFY_DEBUG_CUSTOM_TYPE,
+          content,
+          display: true,
+          attribution: "user",
+        },
+      };
+    }
+    return { systemPrompt: updatedPrompt };
+  });
+
+  pi.on("agent_end", () => {
     bypassNextTurn = false;
   });
 

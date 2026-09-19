@@ -210,11 +210,15 @@ export function findKnowledgeRoot(startDir: string): string | null {
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      knowledgeRootCache.set(startDir, null);
       return null;
     }
     dir = parent;
   }
+}
+
+/** Clear cached knowledge-root lookups for tests and session resets. */
+export function clearKnowledgeRootCache(): void {
+  knowledgeRootCache.clear();
 }
 
 function listMarkdownFiles(dir: string): string[] {

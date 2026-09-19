@@ -61,6 +61,7 @@ import {
   unarchiveResearchProject,
 } from "./research/research-store.ts";
 import { installKbIngestStatus } from "./knowledge/kb-ingest-status.ts";
+import { installKbGuardStatus } from "./knowledge/kb-guard-status.ts";
 import { installKbIndexInjector } from "./knowledge/kb-index-injector.ts";
 import {
   createResearchOverlay,
@@ -386,13 +387,34 @@ const COMMANDS: CommandSpec[] = [
       // Phase 2 / Phase 3 = ergonomic shortcuts that delegate to the
       // dedicated commands registered alongside `/research`.
       if (head === "2") {
-        await pi.sendUserMessage(`/research-deep ${rest}`.trimEnd());
+        const spec = COMMANDS.find((entry) => entry.name === "research-deep");
+        if (!spec) throw new Error("Missing research-deep command spec");
+        await runDefaultHandler({
+          pi,
+          name: spec.name,
+          customType: spec.customType,
+          body: loadBody(spec.bodyPath),
+          args: rest,
+          companionPaths: (spec.companions ?? []).map((path) => join(ROOT, path)),
+          ctx,
+        });
         return;
       }
       if (head === "3") {
-        await pi.sendUserMessage(`/research-report ${rest}`.trimEnd());
+        const spec = COMMANDS.find((entry) => entry.name === "research-report");
+        if (!spec) throw new Error("Missing research-report command spec");
+        await runDefaultHandler({
+          pi,
+          name: spec.name,
+          customType: spec.customType,
+          body: loadBody(spec.bodyPath),
+          args: rest,
+          companionPaths: (spec.companions ?? []).map((path) => join(ROOT, path)),
+          ctx,
+        });
         return;
       }
+
 
       if (head === "status") {
         if (rest.trim() === "off" || rest.includes("--bar off")) {
@@ -1392,29 +1414,23 @@ const COMMANDS: CommandSpec[] = [
       };
       // Status: report the current state without toggling.
       if (arg === "status" || arg === "state") {
-        pi.sendMessage(
-          {
-            customType: "hindsight",
-            content: `hindsight ${on ? "on" : "off"}`,
-            display: true,
-            attribution: "user",
-          },
-          { deliverAs: "followUp" },
-        );
+        pi.sendMessage({
+          customType: "hindsight",
+          content: `hindsight ${on ? "on" : "off"}`,
+          display: true,
+          attribution: "user",
+        });
         report(on);
         return;
       }
       const next = arg === "on" ? true : arg === "off" ? false : !on;
       setHindsightEnabled(next);
-      pi.sendMessage(
-        {
-          customType: "hindsight",
-          content: `hindsight ${next ? "on" : "off"}`,
-          display: true,
-          attribution: "user",
-        },
-        { deliverAs: "followUp" },
-      );
+      pi.sendMessage({
+        customType: "hindsight",
+        content: `hindsight ${next ? "on" : "off"}`,
+        display: true,
+        attribution: "user",
+      });
       report(next);
     },
     // TUI options: typing "/hindsight" surfaces the live state as a dim
@@ -1756,9 +1772,8 @@ function loadBody(rel: string): string {
 /**
  * Default body-send + user-prompt flow shared by every command that doesn't
  * override `spec.handler`. Substitutes $ARGUMENTS, appends the user's args
- * and a companion-pointer list, emits the hidden workflow body, queues the
- * user prompt, and (for commands with a customType) appends a follow-up
- * receipt card.
+ * and a companion-pointer list, emits a visible receipt and hidden workflow
+ * body, then queues the user prompt.
  */
 async function runDefaultHandler(args: {
   pi: ExtensionApi;
@@ -1790,25 +1805,25 @@ async function runDefaultHandler(args: {
     )}`;
   }
   if (!skipAgentTurn) {
+    // 1. Emit visible receipt card first (appended while idle, no follow-up queue)
+    if (customType) {
+      pi.sendMessage({
+        customType,
+        content: `${name} requested${argText ? ` — ${argText}` : ""}`,
+        display: true,
+        attribution: "user",
+      });
+    }
+    // 2. Emit hidden workflow body
     pi.sendMessage({
       customType: customType ?? `command:${name}`,
       content: text,
       display: false,
       attribution: "user",
     });
+    // 3. Start user prompt turn
     const userPrompt = `/${name}${argText ? ` ${argText}` : ""}`;
     await pi.sendUserMessage(userPrompt);
-  }
-  if (customType) {
-    pi.sendMessage(
-      {
-        customType,
-        content: `${name} requested${argText ? ` — ${argText}` : ""}`,
-        display: true,
-        attribution: "user",
-      },
-      { deliverAs: "followUp" },
-    );
   }
   ctx.ui?.notify?.(`Running ${name}`, "info");
 }
@@ -1820,16 +1835,8 @@ export default function (pi: ExtensionApi): void {
     process.env.VISUAL = "nvim";
   }
 
-  installPolicy(pi);
-  // runtime fans out registrations, so this ordering is harmless.
-  // kb-ingest-status registers `tool_call`; installPolicy registers
-  // `tool_call` too. The selftest mock stores ONE handler per event slot
-  // (last writer wins), so installPolicy must be the last writer for
-  // `tool_call` — policy's blocks are the ones the existing test surface
-  // inspects. ingest tests run against a separate mock (same pattern as
-  // kb-guard-status). In production the omp runtime fans out handlers,
-  // so this ordering is harmless.
   installKbIngestStatus(pi);
+  installKbGuardStatus(pi);
   installKbIndexInjector(pi);
   installPolicy(pi);
   installKnowledgeTool(pi);
