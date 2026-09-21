@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.75.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.76.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>
@@ -15,16 +15,32 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.75.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.76.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.75.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.76.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
+
+### Updating
+
+Git-sourced plugins are not covered by `omp plugin upgrade` (that verb only handles `name@marketplace` plugins and rejects a git URL with `Invalid plugin ID`). To move to a newer release, re-install with `--force`:
+
+```bash
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.76.0" --force
+```
+
+`--force` re-resolves the ref and replaces the existing install cleanly (no uninstall needed). Confirm the version that actually landed, then restart `omp`:
+
+```bash
+omp plugin list
+```
+
+Installed plugins live under `~/.omp/plugins/node_modules/<name>`, so `omp plugin list` (or reading `<that path>/package.json`) is the source of truth for what's live. Commands, skills, and tools are loaded at session startup — an already-running `omp` session keeps the old version until you exit and restart.
 
 ---
 
