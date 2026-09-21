@@ -105,6 +105,7 @@ Every slash command and every handler in `src/**` MUST respect the user-facing U
 - A user-invoked command must never invoke another user-invoked command — delegate to model-invoked skills instead.
 - `commands/` and `skills/` are both promoted: everything in them ships.
 - `/omp-setup` must run once per target repo before tracker-dependent commands (`/to-spec`, `/to-tickets`, `/triage`, `/wayfinder`, `code-review`) work.
+- **A pushed tag is not a GitHub Release.** `.github/workflows/release.yml` turns a tag into a Release by extracting that version's notes from `CHANGELOG.md`, so every release needs a heading in one of two accepted styles: `## [X.Y.Z] - <date>` or `## vX.Y.Z — <title>` (the extractor stops at the next `## ` heading). A tag whose `package.json` version or CHANGELOG heading is missing fails the run and publishes nothing — retry without moving the tag via `gh workflow run release.yml -f tag=vX.Y.Z`.
 
 ## Attribution
 
