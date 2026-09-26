@@ -47,36 +47,34 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     ctx.customMessageOptions.length = 0;
     await registered[name].handler("", {});
     ctx.assertNoDanglingTurnQueues();
+
+    // No command may echo itself back as user text. `pi.sendUserMessage("/<name>")`
+    // repaints the editable prompt buffer with the command line, and submitting
+    // that text runs the command a second time.
+    if (sent.length !== 0) {
+      fail(`/${name} echoed user text back into the prompt: ${JSON.stringify(sent)}`);
+    }
+
     const spec = EXPECTED_COMMANDS[name];
-    if (spec?.silent) {
-      if (sent.length !== 0) {
-        fail(`silent command /${name} queued a message: ${JSON.stringify(sent)}`);
-      }
-    } else if (spec?.noEcho) {
-      // noEcho: command routes via pi.sendMessage({ triggerTurn: true }) and must NOT call pi.sendUserMessage with the command echo.
-      if (sent.length !== 0) {
-        fail(`noEcho command /${name} must not echo into the input box: ${JSON.stringify(sent)}`);
-      }
-    } else {
-      const userPrompt = sent[0] ?? "";
-      if (userPrompt !== `/${name}`) {
-        fail(`${name}: expected clean user prompt "/${name}", got "${userPrompt}"`);
-      }
+    if (spec?.silent) continue;
 
-      const hiddenMsg = ctx.customMessages.find((m) => m.display === false);
-      const injected = (hiddenMsg?.content as string) ?? "";
-      if (injected.length === 0) {
-        fail(`${name}: empty injected workflow body in custom message`);
-      }
+    const hiddenIdx = ctx.customMessages.findIndex((m) => m.display === false);
+    const injected = (ctx.customMessages[hiddenIdx]?.content as string) ?? "";
+    if (injected.length === 0) {
+      fail(`${name}: empty injected workflow body in custom message`);
+    }
+    // The turn must be started by the hidden body itself, not a user message.
+    if (ctx.customMessageOptions[hiddenIdx]?.triggerTurn !== true) {
+      fail(`${name}: hidden workflow body must be sent with { triggerTurn: true }`);
+    }
 
-      const expectedCompanions = spec?.companions ?? 0;
-      const hasPointer = injected.includes("Companion reference files");
-      if (expectedCompanions > 0 && !hasPointer) {
-        fail(`${name}: companion pointer missing`);
-      }
-      if (expectedCompanions === 0 && hasPointer) {
-        fail(`${name}: unexpected companion pointer`);
-      }
+    const expectedCompanions = spec?.companions ?? 0;
+    const hasPointer = injected.includes("Companion reference files");
+    if (expectedCompanions > 0 && !hasPointer) {
+      fail(`${name}: companion pointer missing`);
+    }
+    if (expectedCompanions === 0 && hasPointer) {
+      fail(`${name}: unexpected companion pointer`);
     }
   }
 
@@ -94,12 +92,13 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     ctx.assertNoDanglingTurnQueues();
   }
 
-  // 3. Argument passthrough: args land in the hidden workflow body and visible user prompt
+  // 3. Argument passthrough: args land in the emitted messages (receipt/body),
+  //    never as an echoed command line in the prompt.
   sent.length = 0;
   ctx.customMessages.length = 0;
   await registered["omp-handoff"].handler("finish the auth flow", {});
-  if (!sent[0]?.includes("/omp-handoff finish the auth flow")) {
-    fail("omp-handoff: args not in visible prompt");
+  if (sent.length !== 0) {
+    fail(`omp-handoff: must not echo into the prompt, got ${JSON.stringify(sent)}`);
   }
   const handoffHidden = ctx.customMessages.find((m) => m.display === false);
   if (!((handoffHidden?.content as string) ?? "").includes("finish the auth flow")) {

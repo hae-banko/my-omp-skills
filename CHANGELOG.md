@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.76.1] - 2026-09-26
+
+### Fixed
+- **Commands no longer echo themselves — the double-execution bug.** `runDefaultHandler` started every default-handled command's turn with `pi.sendUserMessage("/<name> <args>")`. That injected the literal command line as user text; the TUI mirrored it back into the editable prompt buffer, and submitting that text re-ran the command. This hit **every** default-handled command (`/pitfall`, `/record`, `/audit`, `/to-spec`, `/to-tickets`, `/ask-me`, …), which is why it felt like it happened everywhere. The turn is now started by the hidden workflow body itself via `pi.sendMessage(<body>, { triggerTurn: true })` — the pattern `/council` already used. No command handler calls `pi.sendUserMessage` any more.
+- **Overlay actions dispatch through the command registry.** The `/research dashboard|review` overlay hotkeys (`d`, `r`, `Enter`) handed strings like `/research-deep <slug>` to `pi.sendUserMessage`. Synthetic slash text is not expanded by the runtime and echoed back into the prompt buffer; overlays now resolve the spec and invoke it through the new shared `invokeCommandSpec` path — the same handler construction the runtime's own registration uses. `dispatchCommandLine` also reports unknown overlay commands instead of silently no-oping.
+- **`INDEX.md` instructions no longer contradict the append-only guard.** The `/pitfall`, `/record`, and `/research` bodies told the agent to "append one line to `INDEX.md`", which the agent naturally attempted with `edit` — always blocked by `src/knowledge/policy.ts`, producing a visible `✘ Blocked` card and a wasted turn. The bodies now prescribe the operation the guard actually permits: a shell append (`printf '%s\n' "- <line>" >> .omp/knowledge/INDEX.md`), with `write` allowed only when creating the file. The accompanying "newest first" claim was also wrong (append-only ⇒ newest last; `/record --recent` reads the tail) and is corrected in the command bodies and AGENTS.md §6.
+
+### Changed
+- **AGENTS.md §9 rule 3 is now absolute**: a command handler MUST NOT call `pi.sendUserMessage` at all — start the turn with `pi.sendMessage(<hidden body>, { triggerTurn: true })`, and dispatch other commands through `invokeCommandSpec` / `dispatchCommandLine`.
+- **Tests assert the no-echo invariant for every command** instead of pinning the echo: each registered command must emit zero `pi.sendUserMessage` calls and must start its turn via a hidden body carrying `{ triggerTurn: true }`. The per-command `noEcho` opt-in flag was deleted — no-echo is universal now.
+
 ## [0.76.0] - 2026-09-18
 
 ### Fixed

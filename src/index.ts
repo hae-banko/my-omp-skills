@@ -482,7 +482,7 @@ const COMMANDS: CommandSpec[] = [
             },
           );
           if (result && result.action === "run" && result.command) {
-            await pi.sendUserMessage(result.command);
+            await dispatchCommandLine(pi, result.command, ctx);
           }
           return;
         }
@@ -613,7 +613,7 @@ const COMMANDS: CommandSpec[] = [
             },
           );
           if (result && result.action === "run" && result.command) {
-            await pi.sendUserMessage(result.command);
+            await dispatchCommandLine(pi, result.command, ctx);
           }
           return;
         }
@@ -1814,18 +1814,69 @@ async function runDefaultHandler(args: {
         attribution: "user",
       });
     }
-    // 2. Emit hidden workflow body
-    pi.sendMessage({
-      customType: customType ?? `command:${name}`,
-      content: text,
-      display: false,
-      attribution: "user",
-    });
-    // 3. Start user prompt turn
-    const userPrompt = `/${name}${argText ? ` ${argText}` : ""}`;
-    await pi.sendUserMessage(userPrompt);
+    // 2. Emit the hidden workflow body and start the turn from it.
+    //    This MUST be `triggerTurn: true` on the body, never a
+    //    `sendUserMessage("/name args")` round-trip: that injects the literal
+    //    command line as user text, the TUI mirrors it back into the editable
+    //    prompt buffer, and submitting it runs the command a second time
+    //    (ADR-0008 §3).
+    pi.sendMessage(
+      {
+        customType: customType ?? `command:${name}`,
+        content: text,
+        display: false,
+        attribution: "user",
+      },
+      { triggerTurn: true },
+    );
   }
   ctx.ui?.notify?.(`Running ${name}`, "info");
+}
+
+/**
+ * Invoke a command spec exactly as the runtime would, so programmatic dispatch
+ * (overlay actions, `/research 2|3` shortcuts) takes the same path as a user
+ * typing the command. NEVER route these through `pi.sendUserMessage`: slash
+ * commands are not expanded for synthetic messages, and the echoed command line
+ * lands back in the editable prompt buffer (ADR-0008 §3).
+ */
+async function invokeCommandSpec(
+  pi: ExtensionApi,
+  spec: CommandSpec,
+  args: string,
+  ctx: CommandContext,
+): Promise<void> {
+  const body = loadBody(spec.bodyPath);
+  const companionPaths = (spec.companions ?? []).map((path) => join(ROOT, path));
+  if (spec.handler) {
+    await spec.handler(pi, { body, companionPaths })(args, ctx);
+    return;
+  }
+  await runDefaultHandler({
+    pi,
+    name: spec.name,
+    customType: spec.customType,
+    body,
+    args,
+    companionPaths,
+    ctx,
+    skipAgentTurn: spec.skipAgentTurn,
+  });
+}
+
+/** Dispatch an overlay's `/<name> [args]` command line through the registry. */
+async function dispatchCommandLine(pi: ExtensionApi, line: string, ctx: CommandContext): Promise<void> {
+  const match = /^\/([A-Za-z0-9_-]+)(?:\s+([\s\S]*))?$/.exec(line.trim());
+  if (!match) {
+    ctx.ui?.notify?.(`Unrecognized overlay command: ${line}`, "warning");
+    return;
+  }
+  const spec = COMMANDS.find((entry) => entry.name === match[1]);
+  if (!spec) {
+    ctx.ui?.notify?.(`Unknown command: /${match[1]}`, "warning");
+    return;
+  }
+  await invokeCommandSpec(pi, spec, (match[2] ?? "").trim(), ctx);
 }
 
 export default function (pi: ExtensionApi): void {
@@ -1862,27 +1913,13 @@ export default function (pi: ExtensionApi): void {
     COMMANDS.map((spec) => ({ name: spec.name, description: spec.description })),
   );
   for (const spec of COMMANDS) {
-    const body = loadBody(spec.bodyPath);
-    const companionPaths = (spec.companions ?? []).map((p) => join(ROOT, p));
+    // Read every body once at install time so a bad `bodyPath` fails at startup
+    // rather than on first use.
+    loadBody(spec.bodyPath);
     pi.registerCommand(spec.name, {
       description: spec.description,
       getArgumentCompletions: spec.getArgumentCompletions,
-      handler: async (args: string, ctx: CommandContext) => {
-        if (spec.handler) {
-          await spec.handler(pi, { body, companionPaths })(args, ctx);
-          return;
-        }
-        await runDefaultHandler({
-          pi,
-          name: spec.name,
-          customType: spec.customType,
-          body,
-          args,
-          companionPaths,
-          ctx,
-          skipAgentTurn: spec.skipAgentTurn,
-        });
-      },
+      handler: (args: string, ctx: CommandContext) => invokeCommandSpec(pi, spec, args, ctx),
     });
   }
 }

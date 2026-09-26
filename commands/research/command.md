@@ -244,7 +244,7 @@ The TUI research cards (dashboard, review, wave progress, report preview) read a
 - Anchor to the repo root: `git rev-parse --show-toplevel` if unsure — never create research files under nested subdirectories.
 - Create the project directory: `<root>/.omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`, where `YYYY-MM-DD` is the current date and `<topic_slug>` is the dash-case slug of the topic.
 - Save `outline.yaml`, `fields.yaml`, and `research.md` into it.
-- Append one line to `<root>/.omp/knowledge/INDEX.md` (create it with a one-line header if missing, newest first): `- YYYY-MM-DD <topic> — .omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`.
+- Append one line to `<root>/.omp/knowledge/INDEX.md`: `- YYYY-MM-DD <topic> — .omp/knowledge/research/YYYY-MM-DD_<topic_slug>/`. `INDEX.md` is guard-protected: `edit` on it is always blocked and `write` is blocked once it exists — so append with a shell redirect (`printf '%s\n' "- <line>" >> .omp/knowledge/INDEX.md`) and create it with `write` plus the header `# Knowledge Base Index` only when it does not exist yet. Never `edit` it.
 
 ### Step 6: Emit TUI Research Review Window
 

@@ -1548,7 +1548,8 @@ async function launchCouncilOverlay(
   // Result handling is intentionally minimal: the overlay's primary purpose is
   // to let the user inspect the verdict. Dispatch is delegated to follow-up
   // commands the user types after the overlay closes. Future work: surface
-  // `s`/`Enter` actions through sendUserMessage.
+  // `s`/`Enter` actions through the same hidden-body + `{ triggerTurn: true }`
+  // path used above — never via `pi.sendUserMessage` (ADR-0008 §3).
   void result;
 }
 /** Truncate a string for use inside the status-bar widget (≈ 48 chars). */

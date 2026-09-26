@@ -22,7 +22,9 @@
 // onboarding view describing how to scaffold the first project.
 //
 // Returns an action payload from `handleInput(...)`:
-//   { action: "run", command }  — caller should pi.sendUserMessage(command)
+//   { action: "run", command }  — caller MUST dispatch `command` through the command
+//                                 registry (src/index.ts `dispatchCommandLine`), never by
+//                                 handing it to `pi.sendUserMessage` (ADR-0008 §3)
 //   { action: "dismiss" }       — caller should close the overlay
 
 import { Container, Text } from "@oh-my-pi/pi-tui";

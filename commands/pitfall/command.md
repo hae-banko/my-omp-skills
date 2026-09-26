@@ -12,7 +12,7 @@ The subagent brief must include:
 
 - The pitfall: title + tags + the context/finding/evidence/next-time content (from the user's argument and the conversation). Pin `kind: pitfall`.
 - The absolute path of the `RECORD-FORMAT.md` companion file (listed below) — the subagent composes from it.
-- The repo root and the three rules: create directories if missing (`mkdir -p .omp/knowledge/pitfalls/`), timestamped name (`YYYY-MM-DD_<slug>.md` under `.omp/knowledge/pitfalls/`, `-2` on collision), append-only (never edit an existing pitfall), append one line to `INDEX.md` (newest first, creating `INDEX.md` if missing) in the form `- YYYY-MM-DD <title> — .omp/knowledge/pitfalls/YYYY-MM-DD_<slug>.md`.
+- The repo root and the three rules: create directories if missing (`mkdir -p .omp/knowledge/pitfalls/`), timestamped name (`YYYY-MM-DD_<slug>.md` under `.omp/knowledge/pitfalls/`, `-2` on collision), append-only (never edit an existing pitfall), and append one line to `INDEX.md` in the form `- YYYY-MM-DD <title> — .omp/knowledge/pitfalls/YYYY-MM-DD_<slug>.md`. `INDEX.md` is guard-protected: `edit` on it is always blocked and `write` is blocked once it exists — so append with a shell redirect (`printf '%s\n' "- <line>" >> .omp/knowledge/INDEX.md`) and create it with `write` plus the header `# Knowledge Base Index` only when it does not exist yet. Never `edit` it.
 - The instruction to report the written path back.
 
 If the user invoked `/pitfall` as the sole purpose of the turn, write it inline instead.

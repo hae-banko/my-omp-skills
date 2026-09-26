@@ -39,7 +39,7 @@ export interface RegisteredTool {
   ) => unknown;
 }
 
-export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: boolean; noEcho?: boolean }> = {
+export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: boolean }> = {
   "ask-me": {},
   "grill-me": {},
   "grill-with-docs": {},
@@ -73,7 +73,7 @@ export const EXPECTED_COMMANDS: Record<string, { companions?: number; silent?: b
   "ponytail-review": {},
   "ponytail-debt": {},
   "ponytail-audit": {},
-  council: { noEcho: true },
+  council: {},
 };
 
 let globalFailures = 0;
