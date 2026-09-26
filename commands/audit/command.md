@@ -29,7 +29,7 @@ Audit reports are saved in the project repository under `.omp/audits/<slug>/`:
 When auditing multi-component topics, subagents or inline execution write detailed subtopic reports to subfolders (`.omp/audits/<slug>/subtopics/<subtopic-name>.md`) and write/update `overview.md` with high-level summaries and relative markdown hyperlinks (`[<Subtopic Name>](./subtopics/<subtopic-name>.md)`) under a `## Subtopics & Detailed Reports` section.
 
 When revising an active audit, update `.omp/audits/<slug>/overview.md` (or `report.md` if updating a legacy single-file audit) in place with updated frontmatter (`version`, `updated`, `status`) and append an entry to `## Revision History`.
-Optionally save a copy of the prior report state to `.omp/audits/<slug>/archive/vX.Y.Z.md` before overwriting the main report.
+Optionally save a snapshot of the prior report state to `.omp/audits/<slug>/archive/vX.Y.Z.md` before overwriting the main report: `read` the current report and `write` the snapshot as a **new** file. NEVER `cp`, `mv`, `rm`, or shell-redirect (`>`) inside `.omp/audits/` — that path is guard-protected and those operations are blocked.
 ## Semantic Versioning Policy
 
 Audit reports track their evolution using Semantic Versioning (`vX.Y.Z`):

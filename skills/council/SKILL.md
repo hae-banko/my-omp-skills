@@ -146,7 +146,7 @@ When the user requested persistence:
 When the user passed `overlay` (alias `modal`) and the runtime exposes `ctx.ui.custom`, launch the interactive Council Verdict overlay immediately. The overlay is modeled after `src/research/research-overlay.ts` and oh-my-pi TUI conventions.
 
 - **Tabs**: `[1] Verdict & Consensus` (consensus invariants / majority / divergences / summary), `[2] Persona A`, `[3] Persona B`, `[4] Persona C` (un-truncated stance, recommendation, key invariants, caveats, confidence).
-- **Keyboard**: `1-4` or `Tab`/`Shift+Tab` to switch tabs; `j`/`k` (or arrow keys) to scroll; `s` to save the record; `Enter` to dispatch `/implement` with the consensus invariants; `Esc` or `q` to close.
+- **Keyboard**: `1-4` or `Tab`/`Shift+Tab` to switch tabs; `j`/`k` (or arrow keys) to scroll; `Esc` or `q` to close. The overlay returns a structured save/implement action, but dispatch is not wired yet — act on a verdict with the follow-up commands in the card footer (`Next: /implement`, `Save: /council save <topic>`).
 
 ---
 

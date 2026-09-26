@@ -950,7 +950,7 @@ export function renderCouncilVerdictCard(verdict: CouncilVerdict): string {
   if (verdict.savedPath) {
     lines.push(boxLine(` 💾 ${dim(`Saved Record: ${verdict.savedPath}`)}`, borderColor));
   }
-  lines.push(boxLine(` ${dim("⟨Enter: Run /implement⟩ ⟨s: Save Record⟩ ⟨Esc: Dismiss⟩")}`, borderColor));
+  lines.push(boxLine(` ${dim("Next: /implement  ·  Save: /council save <topic>")}`, borderColor));
   lines.push(makeBottomBorder(borderColor));
 
   return lines.join("\n");
@@ -1026,7 +1026,7 @@ export function councilVerdictToCardSpec(verdict: CouncilVerdict): CardSpec {
       },
     ],
     sections,
-    footerActions: ["Enter: Run /implement", "s: Save Record", "Esc: Dismiss"],
+    footerActions: ["Next: /implement", "Save: /council save <topic>"],
   };
 }
 

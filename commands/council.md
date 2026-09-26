@@ -222,7 +222,7 @@ Status: Deliberation Concluded · <ISO timestamp>
    • <Persona>: <position>
 
 💾 Saved Record: <path when `save`>
-⟨Enter: Run /implement⟩ ⟨s: Save Record⟩ ⟨Esc: Dismiss⟩
+Next: /implement  ·  Save: /council save <topic>
 ```
 
 ---

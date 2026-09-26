@@ -54,6 +54,12 @@ export async function runKnowledgeSuite(ctx: TestContext): Promise<void> {
   writeFileSync(join(fixtureRoot, ".omp", "knowledge", "INDEX.md"), "- index\n");
 
   const policyToolCall = handlers["tool_call"];
+  /** True when a tool_call handler returned a block verdict. */
+  const blockedBy = (result: unknown): boolean => {
+    if (!result || typeof result !== "object" || !("block" in result)) return false;
+    const verdict: unknown = result.block;
+    return verdict === true;
+  };
   if (typeof policyToolCall === "function") {
     // Blocking edit on record
     const editRec = policyToolCall({
@@ -129,6 +135,31 @@ export async function runKnowledgeSuite(ctx: TestContext): Promise<void> {
     }, { cwd: fixtureRoot });
     if (grepRedirectAllowed && (grepRedirectAllowed as { block?: boolean }).block === true) {
       fail("policy: incorrectly blocked grep reading INDEX.md redirected to /tmp");
+    }
+
+    // 6. Writing a NEW snapshot under .omp/audits/ must NOT block -- this is the
+    //    archive-snapshot mechanism the /audit body now prescribes.
+    const auditsArchiveDir = join(fixtureRoot, ".omp", "audits", "test-slug", "archive");
+    mkdirSync(auditsArchiveDir, { recursive: true });
+    const snapshotPath = join(auditsArchiveDir, "v0.1.0.md");
+    const writeSnapshot = policyToolCall({
+      toolName: "write",
+      input: { path: snapshotPath, content: "## Revision History\n- v0.1.0 initial" },
+    }, { cwd: fixtureRoot });
+    if (blockedBy(writeSnapshot)) {
+      fail("policy: incorrectly blocked write of a new audit snapshot file");
+    }
+
+    // 7. Shell-copying INTO .omp/audits/ must block -- which is exactly why the
+    //    /audit body tells the agent to snapshot via read + write, never `cp`.
+    const cpIntoAudits = policyToolCall({
+      toolName: "bash",
+      input: {
+        command: `cp ${join(fixtureRoot, ".omp", "audits", "test-slug", "overview.md")} ${snapshotPath}`,
+      },
+    }, { cwd: fixtureRoot });
+    if (!blockedBy(cpIntoAudits)) {
+      fail("policy: failed to block bash cp into .omp/audits/");
     }
   }
   const knowledgeTool = tools.find((t) => t.name === "knowledge_read");

@@ -9,12 +9,15 @@
 // Keyboard navigation (modeled after research-overlay.ts):
 //   1-4 / Tab / Shift+Tab      switch tabs
 //   j / k or Up / Down         scroll the active tab
-//   s                          save decision record (emits "/council <topic> --save" command)
-//   Enter                      run "/implement" with consensus invariants pre-loaded
+//   s                          returns { action: "save" } to the caller (dispatch not wired yet)
+//   Enter                      returns { action: "implement" } to the caller (dispatch not wired yet)
 //   Esc / q                    dismiss overlay
 //
-// The overlay is state-driven: `handleInput(key)` mutates `state` and returns
-// an action payload the caller dispatches via `pi.sendUserMessage`.
+// The overlay is state-driven: `handleInput(key)` mutates `state` and returns a
+// structured `CouncilOverlayAction` for the caller. Dispatch is NOT wired yet, so
+// do not advertise action keys in `renderHelp()`; when it is wired, route it
+// through `dispatchCommandLine`/`invokeCommandSpec` in src/index.ts — NEVER
+// `pi.sendUserMessage` (ADR-0008 §3).
 //
 // The TUI renders fixed-width strings through `renderCouncilVerdictCard` so
 // the verdict stays consistent with the chat-rendered verdict card.
@@ -155,7 +158,7 @@ export class CouncilOverlay implements CouncilOverlayComponent {
   }
 
   private renderHelp(): string[] {
-    const helpLine = `  ${bold("⟨Enter: /implement⟩")}  ${bold("⟨s: Save Record⟩")}  ${bold("⟨j/k: Scroll⟩")}  ${bold("⟨Tab: Next Tab⟩")}  ${bold("⟨Esc: Close⟩")}`;
+    const helpLine = `  ${bold("⟨j/k: Scroll⟩")}  ${bold("⟨Tab: Next Tab⟩")}  ${bold("⟨Esc: Close⟩")}`;
     return [
       makeDivider(BORDER_COLORS.dim),
       boxLine(helpLine, BORDER_COLORS.dim),
@@ -375,9 +378,11 @@ export class CouncilOverlay implements CouncilOverlayComponent {
 }
 
 /**
- * Construct a fresh Council Verdict overlay bound to `verdict`. When the user
- * presses Enter or `s`, the overlay returns a structured `CouncilOverlayAction`
- * the caller dispatches through `pi.sendUserMessage`.
+ * Construct a fresh Council Verdict overlay bound to `verdict`. The overlay
+ * returns a structured `CouncilOverlayAction` (save / implement / dismiss) when
+ * the user presses `Enter` or `s`; the caller currently discards it — wiring it
+ * is a pending feature, and it must route through `dispatchCommandLine` /
+ * `invokeCommandSpec` in src/index.ts, never `pi.sendUserMessage` (ADR-0008 §3).
  */
 export function createCouncilOverlay(
   verdict: CouncilVerdict,

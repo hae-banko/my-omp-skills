@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.76.2] - 2026-09-26
+
+### Fixed
+- **Advertised-but-dead council affordances.** The verdict card, the interactive overlay, and `commands/council.md` all advertised `⟨Enter: Run /implement⟩` / `⟨s: Save Record⟩` — but `launchCouncilOverlay` discarded the returned `CouncilOverlayAction` (`void result`), and a chat card has no keybindings at all. The hints are gone, replaced by the follow-up commands that actually work (`Next: /implement`, `Save: /council save <topic>`). `council-overlay.ts` and `skills/council/SKILL.md` now state plainly that action dispatch is not wired, and that wiring it MUST route through `dispatchCommandLine` / `invokeCommandSpec` — never `pi.sendUserMessage`.
+- **`/audit`'s snapshot instruction collided with the guard.** The body said to "save a copy of the prior report state" into `.omp/audits/<slug>/archive/vX.Y.Z.md`; the natural `cp`, `mv`, and `>` into `.omp/audits/` are all blocked by `src/knowledge/policy.ts`, so the step dead-ended. It now prescribes `read` the current report + `write` the snapshot as a **new** file, and names the refused operations.
+- **`rules/knowledge-append-only.md` (shipped, always-on) repeated the stale "newest first" claim** and never said how to append past the guard. Corrected to append-at-end plus the permitted `>>` mechanism, and it now names what is refused.
+
+### Changed
+- **AGENTS.md §9 rule 8** — command bodies, skills, and rule files MUST NOT document operations the runtime guards block, and a card/overlay MUST NOT advertise a key action no handler implements: fix the affordance or delete it.
+- **Guard-contract tests for the audit path** — `write` of a new `.omp/audits/**/archive/*.md` snapshot is allowed, and `cp` into `.omp/audits/` is blocked. Those are the two facts the rewritten `/audit` body depends on. The policy assertions also dropped their unchecked inline casts in favour of a `blockedBy()` narrowing helper.
+- **Local knowledge record** — `.omp/knowledge/records/2026-09-26_command-echo-double-execution-ux.md` documents the stacked UX failure (command echo → double execution, dispatcher echo, guard-blocked instructions) with its reproduction and next-time rules.
+
 ## [0.76.1] - 2026-09-26
 
 ### Fixed

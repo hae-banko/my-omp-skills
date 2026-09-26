@@ -98,6 +98,8 @@ Every slash command and every handler in `src/**` MUST respect the user-facing U
    - `before_agent_start` handlers MUST return `{ systemPrompt: ... }` rather than mutating `event.systemPrompt` in place (the runtime runner ignores in-place mutations).
    - `input` event handlers MUST return `{ text: ... }` conforming to the active runtime chain contract.
 
+8. **Never document an operation the guards block; never advertise an unwired affordance.** Command bodies, skills, and rule files MUST prescribe only operations the runtime guards permit. In `.omp/knowledge/` and `.omp/audits/`: `edit` is blocked on `records/`, `pitfalls/`, `INDEX.md`, and on audit files lacking a `## Revision History` marker; `write` is blocked over any *existing* protected file; `cp`, `mv`, `rm`, and shell `>` against those paths are blocked. So `INDEX.md` gains lines by shell append (`printf '%s\n' "- <line>" >> .omp/knowledge/INDEX.md`), audit snapshots by `read` + `write` of a **new** file, and nothing else is offered as an option. The same rule governs the UI: a card, overlay, or doc MUST NOT advertise key actions no handler implements — the dead `⟨Enter: Run /implement⟩ ⟨s: Save Record⟩` council hints were removed for this reason. Correct or wire the affordance; never leave it lying.
+
 ## Rules
 
 - Every user-visible change bumps `package.json` **and** adds a `CHANGELOG.md` entry.
