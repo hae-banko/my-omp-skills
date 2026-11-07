@@ -10,6 +10,7 @@ import { runCouncilSuite } from "../tests/council.test.ts";
 import { runProtocolSuite } from "../tests/protocol.test.ts";
 import { runCardTests } from "../tests/card.test.ts";
 import { runToolsSuite } from "../tests/tools.test.ts";
+import { runKbIndexSuite } from "../tests/kb-index.test.ts";
 
 async function main(): Promise<void> {
   const ctx = createTestContext();
@@ -21,6 +22,9 @@ async function main(): Promise<void> {
 
   // 2. Knowledge Base, Policy Guard & Injector Suite
   await runKnowledgeSuite(ctx);
+
+  // 2b. KB Search Index Suite (freshness invariants, docs/state-machines.md §3)
+  await runKbIndexSuite();
 
   // 3. Research Subsystem Suite (DAG, Dashboard, Report Generator)
   await runResearchSuite(ctx);

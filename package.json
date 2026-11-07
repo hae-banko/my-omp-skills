@@ -1,6 +1,6 @@
 {
  "name": "my-omp-skills",
-  "version": "0.77.0",
+  "version": "0.78.0",
  "files": [
     "commands",
     "skills",
@@ -32,7 +32,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "esbuild scripts/selftest.ts --bundle --platform=node --format=esm --outfile=/tmp/my-omp-selftest.mjs --define:import.meta.dirname='\"./src\"' --alias:@oh-my-pi/pi-tui=./scripts/stubs/pi-tui.ts --alias:@earendil-works/pi-tui=./scripts/stubs/pi-tui.ts && bun /tmp/my-omp-selftest.mjs"
+    "test": "esbuild scripts/selftest.ts --bundle --platform=node --format=esm --outfile=/tmp/my-omp-selftest.mjs --define:import.meta.dirname='\"./src\"' --alias:@oh-my-pi/pi-tui=./scripts/stubs/pi-tui.ts --alias:@earendil-works/pi-tui=./scripts/stubs/pi-tui.ts --external:bun:sqlite && bun /tmp/my-omp-selftest.mjs"
   },
   "devDependencies": {
     "@sinclair/typebox": "^0.34.52",

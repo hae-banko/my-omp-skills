@@ -44,7 +44,7 @@ Kinds: **explicit** = a named state field or enum drives behavior; **implicit** 
 | Knowledge Root Cache (`knowledge.ts`) | implicit | §3 | process-shared module `Map<string, string \| null>` |
 | Audit Report Lifecycle (`commands/audit/`, `policy.ts`) | explicit | §3 | on-disk + policy guard |
 | Knowledge Base Query Engine (`knowledge.ts`) | implicit | §3 | per-call read-only query engine |
-| Knowledge Relevance Retrieval Engine (`knowledge.ts`) | implicit | §3 | per-call search engine |
+| KB Search Index (`kb-index.ts`) | implicit, model-checked | §3 | on-disk cache `.omp/cache/kb-index.sqlite`, shared by every session and process on the repo |
 | Research Project On-Disk Lifecycle | implicit | §4 | on-disk filesystem state & front-matter metadata |
 | Research Project Locators & Deletion | implicit | §4 | process-shared filesystem resolution |
 | Research DAG Node State | explicit/implicit | §4 | per-call DAG data structure |
@@ -401,17 +401,63 @@ Kinds: **explicit** = a named state field or enum drives behavior; **implicit** 
 
 
 ### Knowledge Base Query Engine (`knowledge.ts`) — implicit
-**Where:** `src/knowledge/knowledge.ts:274-935`; scope = per-call read-only query engine
+**Where:** `src/knowledge/knowledge.ts:99-647`; scope = per-call read-only query engine
 **Invariants:**
-- I1: Read-only calls never mutate or create `.omp/knowledge` directories on disk (`knowledge.ts:275`).
-- I2: Index queries (`type="index"`) return newest tail entries excluding markdown headers (`knowledge.ts:415-423`).
+- I1: Read-only calls never create `.omp/knowledge/` (`knowledge.ts:100`); the only write is the search cache `.omp/cache/`, and only when corpus files exist.
+- I2: Index queries (`type="index"`) return newest tail entries excluding markdown headers.
+- I3: Text search has one implementation: `knowledge_read` `query` and the `<relevant-knowledge>` block (`findRelevantKnowledge`, `knowledge.ts:38-41`, records/pitfalls/research only) both call `searchKnowledge` in the KB Search Index.
 
+### KB Search Index (`kb-index.ts`) — implicit, model-checked
+**Where:** `src/knowledge/kb-index.ts:122-272`; scope = on-disk cache `.omp/cache/kb-index.sqlite` (SQLite FTS5, porter stemming, bm25 with title 10 / name 5 / body 1 / frontmatter 0.5). Every session and process on the repo shares it. The freshness design was model-checked with TLA+/TLC; the model itself is a local design artifact and is not part of the repository, so the results are recorded below.
 
-### Knowledge Relevance Retrieval Engine (`knowledge.ts`) — implicit
-**Where:** `src/knowledge/knowledge.ts:38-182`; scope = per-call search engine
+The markdown files are the source of truth. The index is a snapshot of the corpus (records, pitfalls, research projects one level deep with `.archive` excluded, audit reports and subtopics with `archive/` excluded) plus a watermark `wm`. Deleting `.omp/cache/` loses nothing.
+
+**States** (per repo):
+| State | Encoding | Meaning |
+|---|---|---|
+| `ABSENT` | no `kb-index.sqlite`, or `user_version` ≠ 2 | next search creates or migrates the schema |
+| `FRESH` | `wm` set, every corpus mtime `< wm`, indexed path set = path set on disk | search answers from the index |
+| `STALE` | `wm` missing, or some mtime `>= wm`, or the path sets differ | next search rebuilds first |
+
+Each session's rebuild runs `idle → stamped → scanned → idle`: stamp `wm`, then list and read the files, then commit. The spec calls this `pc`. Sessions may stall or die at any step; nothing is left half-written because the commit is one transaction.
+
 **Invariants:**
-- I1: Research projects in `INDEX.md` retain distinct `refPath` values preventing duplicate deduplication suppression (`knowledge.ts:74-75`).
-- I2: Classified kind includes `"research"` alongside `"pitfall"`, `"record"`, and `"index"` (`knowledge.ts:25,82-88`).
+- I1 `StalenessDetected`: whenever the index content differs from the files, the reader's check says stale. False positives cost one rebuild; a miss is a bug.
+- I2 `Converges`: once the files stop changing, a reader that keeps searching ends with a correct, fresh index even if every other session stalls or dies mid-rebuild.
+- I3: `.omp/cache/.gitignore` is `*`; a repo with no corpus files gets no `.omp/` at all.
+
+**Transitions:**
+| From | Trigger | Guard | To | Effect | Code |
+|---|---|---|---|---|---|
+| `ABSENT` | search | corpus non-empty | `STALE` | create or migrate the schema in an IMMEDIATE transaction, re-checking the version inside it | `kb-index.ts:154-173` |
+| any | file written or revised | — | `STALE` | mtime `>= wm` | (filesystem) |
+| any | file removed or archived | — | `STALE` | path sets differ | `kb-index.ts:222-231` |
+| any | file restored with its old mtime (`/research unarchive`) | — | `STALE` | path sets differ | `kb-index.ts:222-231` |
+| `FRESH` | search | check says fresh, inside the read transaction that then searches | `FRESH` | bm25 search over the same snapshot | `kb-index.ts:249-272` |
+| `STALE` | search | check says stale | `FRESH` (or `STALE` if a write landed after the stamp) | stamp sentinel → list and read files → IMMEDIATE transaction replaces rows and `wm`, then searches | `kb-index.ts:181-214, 262-268` |
+
+**Design rounds** (each rule in the code exists because TLC found a counterexample without it; model = 2 files, 2 sessions, 3 file changes, clock 0..2 unless noted):
+| # | Design | Expect | Result | Distinct states | Counterexample |
+|---|---|---|---|---|---|
+| 1 | `wm` = time the rebuild finished; stale iff mtime `> wm` | violation | violation | 563 | a write lands between scan and commit; the later `wm` hides it |
+| 2 | `wm` = scan start; stale iff mtime `> wm` | violation | violation | 720 | a write in the same clock tick as the scan has mtime = `wm` |
+| 3 | `wm` = scan start; stale iff mtime `>= wm` | pass | pass | 149,800 | — |
+| 4 | round 3, rows and `wm` written in two steps | violation | violation | 24,960 | rows from an older scan end up paired with a newer scan's `wm` |
+| 5 | round 3 with remove / archive / unarchive | violation | violation | 1,549 | a removed file stays indexed; no mtime changes |
+| 6 | round 5 + compare indexed paths with paths on disk | pass | pass | 261,306 | — |
+| 7 | round 6 with the filesystem clock lagging `Date.now()` | violation | violation | 2,220 | a write after the scan gets an mtime older than `wm` |
+| 8 | round 7 + `wm` = mtime of a sentinel file (the filesystem's clock) | pass | pass | 314,300 | — |
+| 9 | round 8, but stamp after reading the files | violation | violation | 4,928 | a write between the read and the stamp, then a tick |
+| 10 | final design, 3 sessions | pass | pass | 9,053,112 (4 min) | — |
+| 11 | final design, 3 files | pass | pass | 911,930 (26 s) | — |
+| L | final design, `Converges` under `FairSpec` (clock 0..3) | pass | pass | 1,159,335 (55 s) | — |
+
+Liveness is not vacuous: with the safety invariant dropped, `Converges` fails (stuttering trace) when `wm` comes from `Date.now()` under clock lag, and when the path-set check is removed. All 12 runs together took about 6.5 minutes and under 1 GB.
+
+**Environment checked on this machine** (WSL2, ext4): mtimes have sub-millisecond resolution (2,000 back-to-back writes gave 2,000 distinct mtimes), but 1 write in 20,000 was stamped before the preceding `Date.now()`, by up to 4.6 ms. That is the clock lag of round 7, so `wm` comes from a sentinel file. Outside the model: a file replaced by a copy that keeps an old mtime and the same path (`cp -p` over an existing file) is not detected.
+
+**Verification of the code against the model:** `tests/kb-index.test.ts` drives the real implementation through the spec's actions — writes, removes, restores, scans and commits by two sessions on a controlled clock, with writes injected just before and just after the stamp — and checks I1 after every step and I2 at the end (300 seeds × 30 steps). Each of the round-2, round-5 and round-9 mistakes, applied to `kb-index.ts`, makes that test fail. A real `omp` run (`-p`, provider request captured before sending) showed new records, an archived research project, an unarchived one, a v1→v2 schema migration, and three concurrent sessions rebuilding the same stale index all producing the correct `<relevant-knowledge>` block.
+
 
 ## 4. Research pipeline
 
@@ -1524,12 +1570,12 @@ Findings from the mapping pass outside D01–D56, re-checked against a real entr
 - **Status:** fixed
 
 #### X-KNOWLEDGE-9 — findRelevantKnowledge drops multiple research project matches due to duplicate seenPaths key
-- **Machine / invariant:** Knowledge Relevance Retrieval Engine — Invariants 1, 2.
+- **Machine / invariant:** Knowledge Relevance Retrieval Engine (since replaced by the KB Search Index, §3) — Invariants 1, 2.
 - **Reachable via:** Prompt matching multiple research projects listed in `INDEX.md`. Regex matched only `pitfalls` and `records`, defaulting `refPath` to `".omp/knowledge/INDEX.md"` for research lines. Second matching project hit `seenPaths.has(".omp/knowledge/INDEX.md")` and was discarded.
 - **Evidence (pre-fix):** `src/knowledge/knowledge.ts:74-76,82-86`. Repro output: second research project dropped from hits.
 - **Fix:** `src/knowledge/knowledge.ts:25,74-75,82-88`. Broadened `pathMatch` to `(pitfalls|records|research)`, allowing each research project its unique `refPath`, and classified kind as `"research"`.
-- **Regression test:** `tests/knowledge.test.ts` — "X-KNOWLEDGE-9: findRelevantKnowledge with multiple research projects".
-- **Status:** fixed
+- **Regression test:** `tests/knowledge.test.ts` — "X-KNOWLEDGE-9: two research projects that both match are both returned" (now built from real project directories, since matching no longer reads `INDEX.md`).
+- **Status:** fixed; the `INDEX.md` matcher it fixed was removed in 0.78.0, and the test still guards the behavior through the index.
 
 #### X-RESEARCH-11 — `derivePipelineStatus` prioritizes stale explicit status over generated `report.md`
 - **Machine / invariant:** Research Project On-Disk Lifecycle, Invariant I1

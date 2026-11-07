@@ -301,16 +301,23 @@ export async function runKnowledgeSuite(ctx: TestContext): Promise<void> {
     }
     indexFixture.cleanup();
 
-    // X-KNOWLEDGE-9: findRelevantKnowledge with multiple research projects
+    // X-KNOWLEDGE-9: two research projects that both match are both returned
     const researchFixture = createTempFixture("kb-research-test-");
-    mkdirSync(join(researchFixture.dir, ".omp", "knowledge"), { recursive: true });
-    writeFileSync(
-      join(researchFixture.dir, ".omp", "knowledge", "INDEX.md"),
-      "- 2026-08-25 Multi-LLM Debate — .omp/knowledge/research/2026-08-25_multi-llm/\n- 2026-08-26 Distributed Consensus — .omp/knowledge/research/2026-08-26_consensus/\n",
-      "utf8",
-    );
+    for (const [slug, title] of [
+      ["2026-08-25_multi-llm", "Multi-LLM Debate"],
+      ["2026-08-26_consensus", "Distributed Consensus"],
+    ]) {
+      const projDir = join(researchFixture.dir, ".omp", "knowledge", "research", slug);
+      mkdirSync(projDir, { recursive: true });
+      writeFileSync(join(projDir, "research.md"), `---\ntitle: ${title}\n---\n# ${title}\n`, "utf8");
+    }
     const relHits = findRelevantKnowledge(researchFixture.dir, "multi-llm debate and distributed consensus");
-    if (relHits.length < 2) {
+    const relPaths = relHits.map((h) => h.path).sort();
+    if (
+      relPaths.length !== 2 ||
+      !relPaths[0].includes("2026-08-25_multi-llm/") ||
+      !relPaths[1].includes("2026-08-26_consensus/")
+    ) {
       fail(`X-KNOWLEDGE-9: findRelevantKnowledge dropped research hits: ${JSON.stringify(relHits)}`);
     }
     researchFixture.cleanup();

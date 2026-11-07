@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.78.0] - 2026-11-07
+
+Knowledge-base search runs on a SQLite FTS5 index whose freshness rule was model-checked before the code was written.
+
+### Added
+- **Full-text knowledge search (`src/knowledge/kb-index.ts`).** `knowledge_read` `query` and the `<relevant-knowledge>` prompt block share one bm25-ranked index over records, pitfalls, research projects and audits, with porter stemming (`locks` finds `locking`), any word order, and prefix matching. `knowledge_read` used to match the whole query as one substring, so `starvation writer` found nothing in "writer starvation". Snippets are prose (frontmatter is indexed but kept out of the snippet). The index is a cache at `.omp/cache/kb-index.sqlite` (the directory ignores itself in git); the markdown stays the source of truth, and a repo without knowledge files gets no `.omp/`. Uses the runtime's `bun:sqlite`, so there is no new dependency.
+- **Freshness rules, model-checked.** The rule that decides when the index is stale was designed with TLA+/TLC against concurrent sessions rebuilding the index while files are written, removed and restored, on a filesystem clock that can lag `Date.now()`. Six naive designs failed with counterexamples (end-time watermark, strict `>`, split commit, mtime-only checks under removal, `Date.now()` watermark under clock lag, stamping after the read); the shipped design passed safety at 3 sessions and 3 files and liveness for one fair reader. `docs/state-machines.md` §3 records each round and the machine's states and transitions.
+- **Interleaving property test (`tests/kb-index.test.ts`).** Drives the real index through random writes, removals, restores, scans and commits by two sessions, with writes injected around the watermark stamp (300 seeds), checking the freshness invariants after every step. The strict-`>`, mtime-only and stamp-after-read mistakes, applied to the code, each fail it.
+
+### Changed
+- `findRelevantKnowledge` finds research projects from their files instead of `INDEX.md` lines.
+- `AGENTS.md` §6: changes to the index's freshness logic keep `tests/kb-index.test.ts` passing and update `docs/state-machines.md` §3.
+
 ## [0.77.0] - 2026-11-07
 
 State-machine audit: every explicit and implicit state machine is now documented in `docs/state-machines.md` (states, invariants, transition tables, runtime model), with the 56 reachable invalid states/transitions it found, their evidence, and fix status. Issues: `.omp/scratch/state-machine-audit/`.

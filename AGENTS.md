@@ -17,7 +17,7 @@ authoring contract.
   user-invoked command.
 - `src/` — **TypeScript extension engine** organized by domain:
   - `src/core/` — `workspace.ts` (unified context), `completions.ts`, `markdown-lint.ts`, `locators.ts`, `bootstrap.ts`, `api.ts`.
-  - `src/knowledge/` — `knowledge.ts`, `knowledge-tool.ts`, `policy.ts`, `kb-guard-status.ts`, `kb-index-injector.ts`.
+  - `src/knowledge/` — `knowledge.ts`, `knowledge-tool.ts`, `kb-index.ts` (SQLite FTS5 search index), `policy.ts`, `kb-guard-status.ts`, `kb-index-injector.ts`.
   - `src/research/` — `research-dag.ts` (dependency engine), `research-report.ts` (zero-dep TS report generator), `research-store.ts`, `research-renderer.ts`, `research-format.ts`.
   - `src/protocol/` — `iap.ts` (`OMP-IAP/v1` envelopes, performatives, pointer offloading), `iap-hub.ts` (message bus adapter).
   - `src/features/` — `timeline.ts`, `tilt.ts` (14-tier swear jar), `references.ts`, `recent-command.ts`, `clarify.ts`, `hindsight.ts`, `herdr-tools.ts`, `routines.ts`, `subagent-contract.ts`.
@@ -29,6 +29,8 @@ authoring contract.
   - `research.test.ts` — DAG resolution, Kahn's cycle detection, report generator.
   - `features.test.ts` — timeline, tilt meter, clarify, hindsight, herdr output, routines.
   - `protocol.test.ts` — OMP-IAP/v1 envelopes, hash integrity, reactive DAG ingestion.
+  - `tools.test.ts` — references, workspace roots, routines, triage, herdr argv.
+  - `kb-index.test.ts` — search index: random interleavings checked against the freshness invariants (`docs/state-machines.md` §3), ranking, removals.
 
 ## Adding a command
 
@@ -73,6 +75,7 @@ All markdown files across `commands/` and `skills/` are validated on every `npm 
 - **Append-only** — existing records/pitfalls/INDEX are protected by `src/knowledge/policy.ts` against `edit`, overwriting `write`, and destructive shell operations.
 - **Timestamped names** — `YYYY-MM-DD_<slug>.md`.
 - **Indexed** — every entry appends one line to `INDEX.md`. Append-only, so entries accumulate oldest→newest in file order (`/record --recent` reads the tail). NEVER `edit` `INDEX.md` — the runtime guard blocks it; append via a shell redirect (`>>`) and create the file with `write` only when it is missing.
+- **Searched through a rebuildable index** — `knowledge_read` `query` and `<relevant-knowledge>` use `src/knowledge/kb-index.ts`, an FTS5 cache at `.omp/cache/kb-index.sqlite` that ignores itself in git. The markdown stays the source of truth. Its freshness rules are listed in `docs/state-machines.md` §3 (KB Search Index), each with the race it prevents. A change to the watermark, the stale check, the scan order or the commit must keep `tests/kb-index.test.ts` passing and update that section.
 
 ### 7. TUI Card Rendering (76-Column ANSI Invariant)
 Custom message renderers (`pi.registerMessageRenderer`) must calculate display width via `displayWidth` (which strips ANSI escape sequences before measuring character width) to ensure colored borders (`BORDER_COLORS`) strictly respect 76-column box boundaries.
