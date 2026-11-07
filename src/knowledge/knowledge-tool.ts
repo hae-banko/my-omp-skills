@@ -23,7 +23,8 @@ export function installKnowledgeTool(pi: ExtensionApi): void {
     name: TOOL_NAME,
     label: "Knowledge Base Read",
     description:
-      "Read entries from the repo-local knowledge base (.omp/knowledge/): the INDEX, records, pitfalls, or research projects. " +
+      "Read entries from the repo-local knowledge base (.omp/knowledge/): the INDEX, records, pitfalls, research projects, or audits. " +
+      "Supports bm25 full-text query search with porter stemming, content-hash-backed freshness, stable tie-breaking, and resilient cache recovery. " +
       "Use when the user asks about past findings, lessons, or recorded pitfalls.",
     parameters: zod.object({
       type: zod.enum(["index", "records", "pitfalls", "research", "audits"]).default("index"),

@@ -408,33 +408,39 @@ Kinds: **explicit** = a named state field or enum drives behavior; **implicit** 
 - I3: Text search has one implementation: `knowledge_read` `query` and the `<relevant-knowledge>` block (`findRelevantKnowledge`, `knowledge.ts:38-41`, records/pitfalls/research only) both call `searchKnowledge` in the KB Search Index.
 
 ### KB Search Index (`kb-index.ts`) — implicit, model-checked
-**Where:** `src/knowledge/kb-index.ts:122-272`; scope = on-disk cache `.omp/cache/kb-index.sqlite` (SQLite FTS5, porter stemming, bm25 with title 10 / name 5 / body 1 / frontmatter 0.5). Every session and process on the repo shares it. The freshness design was model-checked with TLA+/TLC; the model itself is a local design artifact and is not part of the repository, so the results are recorded below.
+**Where:** `src/knowledge/kb-index.ts`; scope = shared on-disk cache `.omp/cache/kb-index.sqlite` (SQLite FTS5, porter stemming, BM25 with title 10 / name 5 / body 1 / frontmatter 0.5, stable path tie-break), or an ephemeral in-memory index when persistent storage is unavailable. The freshness design was model-checked with TLA+/TLC; model files remain local, ignored design artifacts. Results and bounds follow.
 
-The markdown files are the source of truth. The index is a snapshot of the corpus (records, pitfalls, research projects one level deep with `.archive` excluded, audit reports and subtopics with `archive/` excluded) plus a watermark `wm`. Deleting `.omp/cache/` loses nothing.
+The markdown files are the source of truth. Path resolution and ownership are unified through `getWorkspaceContext(startDir)`. The index is a snapshot of the corpus (records, pitfalls, research projects one level deep with `.archive` excluded, audit reports and subtopics with `archive/` excluded) plus a watermark `wm` and per-file SHA-256 fingerprints of the full original content. Deleting `.omp/cache/` loses nothing.
 
 **States** (per repo):
 | State | Encoding | Meaning |
 |---|---|---|
-| `ABSENT` | no `kb-index.sqlite`, or `user_version` ≠ 2 | next search creates or migrates the schema |
-| `FRESH` | `wm` set, every corpus mtime `< wm`, indexed path set = path set on disk | search answers from the index |
-| `STALE` | `wm` missing, or some mtime `>= wm`, or the path sets differ | next search rebuilds first |
+| `ABSENT` | no `kb-index.sqlite`, or `user_version` ≠ 3 | next search creates or migrates the schema |
+| `FRESH` | `wm` set, every corpus mtime `< wm`, indexed path set = path set on disk, and content SHA-256 fingerprints match | search answers from the persistent index |
+| `STALE` | `wm` missing, some mtime `>= wm`, path sets differ, or a fingerprint differs (e.g. preserved-mtime replacement) | next search rebuilds persistent index first |
+| `FALLBACK_MEMORY` | persistent cache unwritable, locked/busy (busy_timeout 100ms exceeded), or SQLite corrupt | builds ephemeral in-memory SQLite FTS5 index over Markdown corpus; same BM25/path ranking, never empty hit fallback; unexpected errors and source read errors propagate |
 
-Each session's rebuild runs `idle → stamped → scanned → idle`: stamp `wm`, then list and read the files, then commit. The spec calls this `pc`. Sessions may stall or die at any step; nothing is left half-written because the commit is one transaction.
+Each session's rebuild runs `idle → stamped → scanned → idle`: stamp `wm`, then list and read the files (computing SHA-256 content fingerprints), then commit. The spec calls this `pc`. Sessions may stall or die at any step; nothing is left half-written because the commit is one transaction.
 
 **Invariants:**
 - I1 `StalenessDetected`: whenever the index content differs from the files, the reader's check says stale. False positives cost one rebuild; a miss is a bug.
 - I2 `Converges`: once the files stop changing, a reader that keeps searching ends with a correct, fresh index even if every other session stalls or dies mid-rebuild.
 - I3: `.omp/cache/.gitignore` is `*`; a repo with no corpus files gets no `.omp/` at all.
+- I4 `NeverEmptyOnFailure`: known cache failures rebuild searchable in-memory FTS; they never substitute empty results for a failed search. Unreadable Markdown and unexpected errors propagate.
+- I5 `NoUnsafeUnlink`: live SQLite/WAL files are never unlinked/renamed while sessions run (unsafe concurrency). Persistent repair is manual/offline: close sessions then delete `kb-index.sqlite`, `-wal`, `-shm`, and `kb-index.stamp`.
+- I6 `DeterministicRanking`: lower SQLite BM25 scores first, ties broken by repo-relative path ascending using binary collation.
 
 **Transitions:**
 | From | Trigger | Guard | To | Effect | Code |
 |---|---|---|---|---|---|
-| `ABSENT` | search | corpus non-empty | `STALE` | create or migrate the schema in an IMMEDIATE transaction, re-checking the version inside it | `kb-index.ts:154-173` |
-| any | file written or revised | — | `STALE` | mtime `>= wm` | (filesystem) |
-| any | file removed or archived | — | `STALE` | path sets differ | `kb-index.ts:222-231` |
-| any | file restored with its old mtime (`/research unarchive`) | — | `STALE` | path sets differ | `kb-index.ts:222-231` |
-| `FRESH` | search | check says fresh, inside the read transaction that then searches | `FRESH` | bm25 search over the same snapshot | `kb-index.ts:249-272` |
-| `STALE` | search | check says stale | `FRESH` (or `STALE` if a write landed after the stamp) | stamp sentinel → list and read files → IMMEDIATE transaction replaces rows and `wm`, then searches | `kb-index.ts:181-214, 262-268` |
+| `ABSENT` | search | corpus non-empty | `STALE` | create or migrate schema to v3 in an IMMEDIATE transaction, re-checking the version inside it | `kb-index.ts` |
+| any | file written or revised | timestamp/path/digest check detects change | `STALE` | next search rebuilds from Markdown | (filesystem) |
+| any | file replaced with preserved mtime (`cp -p`) | mtime `< wm` but content changed | `STALE` | fingerprint comparison detects changed SHA-256 digest | `kb-index.ts` |
+| any | file removed or archived | — | `STALE` | path sets differ | `kb-index.ts` |
+| any | file restored with its old mtime (`/research unarchive`) | — | `STALE` | path sets differ | `kb-index.ts` |
+| `FRESH` | search | check says fresh, inside read transaction | `FRESH` | bm25 search with path tie-breaker over snapshot | `kb-index.ts` |
+| `STALE` | search | check says stale | `FRESH` (or `STALE` if a write landed after the stamp) | stamp sentinel → list, read, fingerprint files → IMMEDIATE transaction replaces rows, wm, and fingerprints in schema 3, then searches | `kb-index.ts` |
+| any | search / open / rebuild | busy timeout (100ms), readonly, disk error, SQLite corruption | `FALLBACK_MEMORY` | does not unlink/rename live files; builds in-memory FTS database directly from Markdown scan and executes search | `kb-index.ts` |
 
 **Design rounds** (each rule in the code exists because TLC found a counterexample without it; model = 2 files, 2 sessions, 3 file changes, clock 0..2 unless noted):
 | # | Design | Expect | Result | Distinct states | Counterexample |
@@ -452,11 +458,23 @@ Each session's rebuild runs `idle → stamped → scanned → idle`: stamp `wm`,
 | 11 | final design, 3 files | pass | pass | 911,930 (26 s) | — |
 | L | final design, `Converges` under `FairSpec` (clock 0..3) | pass | pass | 1,159,335 (55 s) | — |
 
-Liveness is not vacuous: with the safety invariant dropped, `Converges` fails (stuttering trace) when `wm` comes from `Date.now()` under clock lag, and when the path-set check is removed. All 12 runs together took about 6.5 minutes and under 1 GB.
+Historical liveness checks were not vacuous: with the safety invariant dropped, `Converges` failed (stuttering trace) when `wm` came from `Date.now()` under clock lag, and when the path-set check was removed. The original 12 runs took about 6.5 minutes and under 1 GB.
 
-**Environment checked on this machine** (WSL2, ext4): mtimes have sub-millisecond resolution (2,000 back-to-back writes gave 2,000 distinct mtimes), but 1 write in 20,000 was stamped before the preceding `Date.now()`, by up to 4.6 ms. That is the clock lag of round 7, so `wm` comes from a sentinel file. Outside the model: a file replaced by a copy that keeps an old mtime and the same path (`cp -p` over an existing file) is not detected.
+**Environment checked on this machine** (WSL2, ext4): mtimes have sub-millisecond resolution (2,000 back-to-back writes gave 2,000 distinct mtimes), but 1 write in 20,000 was stamped before the preceding `Date.now()`, by up to 4.6 ms. That is the clock lag of round 7, so `wm` comes from a sentinel file.
 
-**Verification of the code against the model:** `tests/kb-index.test.ts` drives the real implementation through the spec's actions — writes, removes, restores, scans and commits by two sessions on a controlled clock, with writes injected just before and just after the stamp — and checks I1 after every step and I2 at the end (300 seeds × 30 steps). Each of the round-2, round-5 and round-9 mistakes, applied to `kb-index.ts`, makes that test fail. A real `omp` run (`-p`, provider request captured before sending) showed new records, an archived research project, an unarchived one, a v1→v2 schema migration, and three concurrent sessions rebuilding the same stale index all producing the correct `<relevant-knowledge>` block.
+**Preserved-mtime replacement extension:** The original model excluded same-path overwrites preserving an old mtime. The extension adds `Overwrite` (changes content version without changing mtime) and `CompareDigests`. Bounds below are 2 records, 2 sessions, 2 file changes, clock 0..1:
+
+| Round | Digest comparison | Property | Result | Distinct states |
+|---|---|---|---|---|
+| 12 | off | `StalenessDetected` | violation at depth 8: overwrite after scan, before commit; paths and old mtime hide new content | 1,014 |
+| 13 | on | `StalenessDetected` | pass, depth 14 | 11,579 |
+| 14 | on | `Converges`, one fair reader | pass, depth 14 | 11,579 |
+
+The model abstracts content digests as versions: it assumes distinct content has distinct fingerprints. Code computes SHA-256 from the same full-file read used to build each indexed document, and commits it alongside rows and watermark in schema 3. Freshness verification reads corpus files even on cache hits; this trades file-read/hash work for correct preserved-mtime invalidation.
+
+**Verification against code:** `tests/kb-index.test.ts` drives writes, preserved-mtime overwrites, removes, restores, scans and commits by two sessions on a controlled clock, with writes injected around the stamp (300 seeds × 30 steps). It checks I1 after each step and I2 at the end. Before digest comparison was added, mutation experiments caught the strict-`>`, path-check-removal and stamp-after-read mistakes; digest comparison now also detects content changes hidden by timestamps. Additional regressions exercise actual old-schema migration, unusable/read-only/corrupt caches, a held writer lock, source read errors, stable ties across reverse scan order, and nested workspace resolution.
+
+Real `omp` runs invoked the registered `knowledge_read` tool from a nested working directory: existing Markdown without a cache, preserved-mtime replacement, corrupt cache, and unwritable cache all returned the expected source finding. Prompt injection also remained present in every scenario. The preserved-mtime scenario failed before the digest comparison and passed afterward. Offline typecheck and the full test suite passed.
 
 
 ## 4. Research pipeline

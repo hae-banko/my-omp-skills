@@ -3,9 +3,9 @@
 // freshness invariants of docs/state-machines.md §3 (KB Search Index):
 // StalenessDetected after every step, Converges at the end.
 
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { commitScan, indexIsStale, openIndex, scanCorpus, searchKnowledge, type KbScan } from "../src/knowledge/kb-index.ts";
 import { readKnowledge } from "../src/knowledge/knowledge.ts";
 import { createTempFixture, fail } from "./test-utils.ts";
@@ -16,7 +16,7 @@ const FILES = [
   ".omp/knowledge/research/p1/c.md",
   ".omp/audits/x/overview.md",
 ];
-const OPS = ["tick", "write", "write", "remove", "restore", "scan", "commit", "commit"] as const;
+const OPS = ["tick", "write", "write", "replace", "remove", "restore", "scan", "commit", "commit"] as const;
 // Synthetic filesystem clock in whole seconds: coarse, so same-tick races are common.
 const T0 = 1_700_000_000;
 
@@ -98,6 +98,12 @@ function runInterleaving(seed: number, steps: number): string | null {
       const attic = join(root, "attic", String(f)); // outside the corpus
       if (op === "tick") tick++;
       else if (op === "write") writeFile(f);
+      else if (op === "replace") {
+        if (!existsSync(abs)) continue;
+        const old = statSync(abs);
+        writeFile(f);
+        utimesSync(abs, old.atime, old.mtime);
+      }
       else if (op === "remove") {
         if (!existsSync(abs)) continue;
         mkdirSync(dirname(attic), { recursive: true });
@@ -145,6 +151,162 @@ export async function runKbIndexSuite(): Promise<void> {
     if (failure) {
       fail(`KB index freshness: ${failure}`);
       break;
+    }
+  }
+
+  // Replacing an existing path with preserved timestamps must invalidate search.
+  {
+    const fixture = createTempFixture("kb-index-preserved-");
+    try {
+      const file = join(fixture.dir, ".omp/knowledge/records/note.md");
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "# Note\nstarvation\n");
+      const old = new Date(1_600_000_000_000);
+      utimesSync(file, old, old);
+      searchKnowledge(fixture.dir, ["starvation"], { limit: 3 });
+      writeFileSync(file, "# Note\ncheckpoint\n");
+      utimesSync(file, old, old);
+      if (searchKnowledge(fixture.dir, ["checkpoint"], { limit: 3 })[0]?.path !== ".omp/knowledge/records/note.md" ||
+          searchKnowledge(fixture.dir, ["starvation"], { limit: 3 }).length !== 0) {
+        fail("KB index: preserved-mtime replacement served obsolete content");
+      }
+    } finally {
+      fixture.cleanup();
+    }
+  }
+
+  // An unusable persistent cache must not make authoritative Markdown unsearchable.
+  for (const mode of ["corrupt", "occupied", "readonly"] as const) {
+    if (mode === "readonly" && process.getuid?.() === 0) continue;
+    const fixture = createTempFixture(`kb-index-${mode}-`);
+    try {
+      const file = join(fixture.dir, ".omp/knowledge/records/note.md");
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "# Checkpoint\nsqlite recovery\n");
+      const cache = join(fixture.dir, ".omp/cache");
+      if (mode === "occupied") writeFileSync(cache, "not a directory");
+      else {
+        mkdirSync(cache);
+        if (mode === "corrupt") writeFileSync(join(cache, "kb-index.sqlite"), "not a database");
+        else chmodSync(cache, 0o555);
+      }
+      try {
+        const hits = searchKnowledge(fixture.dir, ["sqlite"], { limit: 3 });
+        if (hits[0]?.path !== ".omp/knowledge/records/note.md") fail(`KB index: ${mode} cache hid Markdown`);
+      } catch (error) {
+        fail(`KB index: ${mode} cache interrupted search: ${error}`);
+      }
+    } finally {
+      const cache = join(fixture.dir, ".omp/cache");
+      if (mode === "readonly" && existsSync(cache)) chmodSync(cache, 0o755);
+      fixture.cleanup();
+    }
+  }
+
+  // Upgrade an actual old six-column cache without changing its Markdown.
+  {
+    const fixture = createTempFixture("kb-index-migration-");
+    try {
+      const file = join(fixture.dir, ".omp/knowledge/records/note.md");
+      const body = "# Checkpoint\nsqlite recovery\n";
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, body);
+      const cache = join(fixture.dir, ".omp/cache");
+      mkdirSync(cache);
+      const legacy = new Database(join(cache, "kb-index.sqlite"));
+      try {
+        legacy.exec("CREATE VIRTUAL TABLE docs USING fts5(path UNINDEXED, kind UNINDEXED, title, name, body, frontmatter); CREATE TABLE meta (key TEXT PRIMARY KEY, value REAL NOT NULL); PRAGMA user_version = 2");
+        legacy.query("INSERT INTO docs VALUES (?, ?, ?, ?, ?, ?)").run("obsolete.md", "record", "Obsolete", "old", "obsolete", "");
+      } finally {
+        legacy.close();
+      }
+      const hits = searchKnowledge(fixture.dir, ["sqlite"], { limit: 3 });
+      if (hits[0]?.path !== ".omp/knowledge/records/note.md" ||
+          searchKnowledge(fixture.dir, ["obsolete"], { limit: 3 }).length !== 0 ||
+          readFileSync(file, "utf8") !== body) {
+        fail("KB index: schema upgrade did not rebuild from unchanged authoritative Markdown");
+      }
+    } finally {
+      fixture.cleanup();
+    }
+  }
+
+  // Cache recovery must not turn an unreadable Markdown source into empty success.
+  if (process.getuid?.() !== 0) {
+    const fixture = createTempFixture("kb-index-source-error-");
+    const file = join(fixture.dir, ".omp/knowledge/records/note.md");
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "# SQLite\ncheckpoint\n");
+      chmodSync(file, 0o000);
+      let code: string | undefined;
+      try {
+        searchKnowledge(fixture.dir, ["sqlite"], { limit: 3 });
+      } catch (error) {
+        code = (error as NodeJS.ErrnoException).code;
+      }
+      if (code !== "EACCES") fail(`KB index: unreadable source did not surface EACCES: ${code}`);
+    } finally {
+      chmodSync(file, 0o644);
+      fixture.cleanup();
+    }
+  }
+
+  // Equal-score ranking must not depend on scan insertion order.
+  {
+    const fixture = createTempFixture("kb-index-ties-");
+    try {
+      const records = join(fixture.dir, ".omp/knowledge/records");
+      mkdirSync(records, { recursive: true });
+      for (const name of ["b.md", "a.md"]) {
+        const file = join(records, name);
+        writeFileSync(file, "# Quartz\nQuartz note.\n");
+        utimesSync(file, 1_600_000_000, 1_600_000_000);
+      }
+      const db = openIndex(fixture.dir);
+      try {
+        const scan = scanCorpus(fixture.dir);
+        for (const docs of [scan.docs, [...scan.docs].reverse()]) {
+          commitScan(db, { ...scan, docs });
+          const paths = searchKnowledge(fixture.dir, ["quartz"], { limit: 2 }).map(h => h.path);
+          if (paths.join(",") !== ".omp/knowledge/records/a.md,.omp/knowledge/records/b.md") {
+            fail(`KB index: tie order depends on scan insertion order: ${paths}`);
+          }
+        }
+      } finally {
+        db.close();
+      }
+      const nested = join(fixture.dir, "src/nested");
+      mkdirSync(nested, { recursive: true });
+      if (searchKnowledge(nested, ["quartz"], { limit: 2 }).length !== 2) {
+        fail("KB index: nested working directory did not resolve workspace corpus");
+      }
+    } finally {
+      fixture.cleanup();
+    }
+  }
+
+  // A concurrent writer cannot prevent searching new Markdown.
+  {
+    const fixture = createTempFixture("kb-index-locked-");
+    try {
+      const file = join(fixture.dir, ".omp/knowledge/records/note.md");
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "# Note\nstarvation\n");
+      searchKnowledge(fixture.dir, ["starvation"], { limit: 3 });
+      const held = openIndex(fixture.dir);
+      try {
+        held.exec("BEGIN IMMEDIATE");
+        writeFileSync(file, "# Note\ncheckpoint\n");
+        if (searchKnowledge(fixture.dir, ["checkpoint"], { limit: 3 })[0]?.path !== ".omp/knowledge/records/note.md") {
+          fail("KB index: writer lock hid new Markdown");
+        }
+      } finally {
+        held.exec("ROLLBACK");
+        held.close();
+      }
+    } finally {
+      fixture.cleanup();
     }
   }
 

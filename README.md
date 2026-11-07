@@ -1,7 +1,7 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.76.2-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.78.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>
@@ -15,13 +15,13 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.76.2"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.78.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.76.2"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.78.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
@@ -31,7 +31,7 @@ omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.76.2"
 Git-sourced plugins are not covered by `omp plugin upgrade` (that verb only handles `name@marketplace` plugins and rejects a git URL with `Invalid plugin ID`). To move to a newer release, re-install with `--force`:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.76.2" --force
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.78.0" --force
 ```
 
 `--force` re-resolves the ref and replaces the existing install cleanly (no uninstall needed). Confirm the version that actually landed, then restart `omp`:
@@ -41,6 +41,28 @@ omp plugin list
 ```
 
 Installed plugins live under `~/.omp/plugins/node_modules/<name>`, so `omp plugin list` (or reading `<that path>/package.json`) is the source of truth for what's live. Commands, skills, and tools are loaded at session startup — an already-running `omp` session keeps the old version until you exit and restart.
+
+#### Knowledge-search upgrade and recovery
+
+No knowledge migration is required. After restarting, the first text search builds
+`.omp/cache/kb-index.sqlite` from existing Markdown; older cache schemas rebuild
+automatically. Records, pitfalls, research files, audits, and `INDEX.md` are not
+rewritten. Continue using the same Markdown-writing workflows.
+
+Search uses tokenized OR/prefix matching, porter stemming, and BM25 ranking with
+stable path tie-breaking, rather than matching the entire query as a substring.
+Freshness checks read and hash corpus files, including replacements that preserve
+their old modification time. The cache avoids repeated FTS construction, not
+source-file reads.
+
+If the disk cache is corrupt, locked, or unwritable, search builds the same FTS
+index in memory instead. Markdown read errors still surface. No database/WAL
+files are removed while other sessions might be using them.
+
+For persistent cache repair, close all `omp` sessions using that repository, then
+remove only `.omp/cache/kb-index.sqlite`, `.omp/cache/kb-index.sqlite-wal`,
+`.omp/cache/kb-index.sqlite-shm`, and `.omp/cache/kb-index.stamp`, if present.
+The next search rebuilds them. **Never remove `.omp/knowledge/` for cache repair.**
 
 ---
 
@@ -161,7 +183,7 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 
 ## Extension Architecture & Guardrails
 
-- **Append-Only Knowledge Base (`.omp/knowledge/`)**: Records, pitfalls, and index files are protected from overwrites and in-place edits. Two status-bar widgets track session blocks and new file ingest counts.
+- **Append-Only Knowledge Base (`.omp/knowledge/`)**: Records, pitfalls, and index files are protected from overwrites and in-place edits. Two status-bar widgets track session blocks and new file ingest counts. Search is driven by a SQLite FTS5 index with content SHA-256 fingerprint freshness checking, stable BM25/path tie-breaking, in-place schema recovery on corruption, and in-memory FTS fallback when the on-disk cache cannot be opened or written.
 - **KV Cache Prefix Stability**: Dynamic system prompt extensions (`clarify`, `kb-index-injector`) strictly append to `evt.systemPrompt` tail, preserving base prompt prefix hashing to maintain high LLM prompt cache hit rates (>90%).
 - **ANSI Card Layout Engine (`src/research/research-format.ts`)**: TUI transcript cards use width-aware layout primitives with ANSI escape sequence stripping, preserving 76-column box alignment across CJK text, emoji, and colored borders.
 

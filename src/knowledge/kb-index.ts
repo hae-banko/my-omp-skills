@@ -6,20 +6,16 @@
 // git). Deleting it loses nothing.
 //
 // Freshness follows the "KB Search Index" machine in docs/state-machines.md
-// §3. Each rule below is one a model checker found a counterexample
-// without:
-//   - the watermark `wm` is the mtime of a sentinel written BEFORE the files
-//     are read, i.e. the filesystem's own clock (Date.now() can run ahead of
-//     the clock mtimes are stamped with -- measured up to 4.6 ms here);
-//   - a file is stale when mtime >= wm (same-tick writes are ambiguous);
-//   - the indexed path set must equal the paths on disk (removals, and
-//     restores that keep an old mtime, are invisible to the mtime check);
-//   - rows and wm are written in one transaction;
-//   - the check and the search read one database snapshot.
+// §3: timestamp/path checks cheaply detect ordinary changes, while full-file
+// SHA-256 digests detect replacements that preserve the old mtime.
+// The filesystem watermark is stamped before reading; rows, digests and
+// watermark commit atomically. Checking and searching use one DB snapshot.
 
 import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { getWorkspaceContext } from "../core/workspace.ts";
 
 export type KbDocKind = "record" | "pitfall" | "research" | "audit";
 
@@ -33,7 +29,7 @@ export interface KbHit {
 
 export interface KbScan {
   wm: number;
-  docs: Array<{ path: string; kind: KbDocKind; title: string; name: string; body: string; frontmatter: string }>;
+  docs: Array<{ path: string; kind: KbDocKind; title: string; name: string; body: string; frontmatter: string; digest: string }>;
 }
 
 interface CorpusFile {
@@ -43,7 +39,7 @@ interface CorpusFile {
   mtimeMs: number;
 }
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*(?:\r?\n|$)/;
 const MAX_TERMS = 32;
 
@@ -92,6 +88,7 @@ function entries(abs: string): Array<{ name: string; dir: boolean }> {
   try {
     return readdirSync(abs, { withFileTypes: true })
       .filter((e) => !e.name.startsWith("."))
+      .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
       .map((e) => ({ name: e.name, dir: e.isDirectory() }));
   } catch (err) {
     if (isMissing(err) || (err as { code?: string }).code === "ENOTDIR") return [];
@@ -121,23 +118,25 @@ function markdownIn(root: string, rel: string, kind: KbDocKind, out: CorpusFile[
  */
 function listCorpus(root: string): CorpusFile[] {
   const out: CorpusFile[] = [];
-  markdownIn(root, ".omp/knowledge/records", "record", out);
-  markdownIn(root, ".omp/knowledge/pitfalls", "pitfall", out);
-  markdownIn(root, ".omp/knowledge/research", "research", out);
-  for (const e of entries(join(root, ".omp/knowledge/research"))) {
-    if (e.dir) markdownIn(root, `.omp/knowledge/research/${e.name}`, "research", out);
+  const ws = getWorkspaceContext(root);
+  const add = (abs: string, kind: KbDocKind) => markdownIn(ws.root, relative(ws.root, abs).replaceAll("\\", "/"), kind, out);
+  add(ws.knowledge.records, "record");
+  add(ws.knowledge.pitfalls, "pitfall");
+  add(ws.knowledge.research, "research");
+  for (const e of entries(ws.knowledge.research)) {
+    if (e.dir) add(join(ws.knowledge.research, e.name), "research");
   }
-  markdownIn(root, ".omp/audits", "audit", out);
-  for (const e of entries(join(root, ".omp/audits"))) {
+  add(ws.audits, "audit");
+  for (const e of entries(ws.audits)) {
     if (!e.dir) continue;
-    markdownIn(root, `.omp/audits/${e.name}`, "audit", out);
-    markdownIn(root, `.omp/audits/${e.name}/subtopics`, "audit", out);
+    add(join(ws.audits, e.name), "audit");
+    add(join(ws.audits, e.name, "subtopics"), "audit");
   }
   return out;
 }
 
 function cacheDir(root: string): string {
-  const dir = join(root, ".omp", "cache");
+  const dir = join(getWorkspaceContext(root).root, ".omp", "cache");
   mkdirSync(dir, { recursive: true });
   const ignore = join(dir, ".gitignore");
   if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
@@ -146,6 +145,7 @@ function cacheDir(root: string): string {
 
 /** Write the sentinel and return its mtime: "now" on the filesystem's clock. */
 function touchStamp(sentinel: string): number {
+  mkdirSync(dirname(sentinel), { recursive: true });
   writeFileSync(sentinel, "kb-index scan\n");
   return statSync(sentinel).mtimeMs;
 }
@@ -153,9 +153,19 @@ function touchStamp(sentinel: string): number {
 /** Open (creating or migrating) the index. Callers close it. */
 export function openIndex(root: string): Database {
   const db = new Database(join(cacheDir(root), "kb-index.sqlite"));
-  db.exec("PRAGMA busy_timeout = 5000");
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA synchronous = NORMAL"); // a rebuildable cache: no fsync per commit
+  try {
+    db.exec("PRAGMA busy_timeout = 100");
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL"); // a rebuildable cache: no fsync per commit
+    initializeIndex(db);
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+function initializeIndex(db: Database): void {
   const version = () => db.query<{ user_version: number }>("PRAGMA user_version").get()?.user_version;
   if (version() !== SCHEMA_VERSION) {
     db.transaction(() => {
@@ -163,13 +173,12 @@ export function openIndex(root: string): Database {
       db.exec("DROP TABLE IF EXISTS docs");
       db.exec("DROP TABLE IF EXISTS meta");
       db.exec(
-        "CREATE VIRTUAL TABLE docs USING fts5(path UNINDEXED, kind UNINDEXED, title, name, body, frontmatter, tokenize = 'porter unicode61')",
+        "CREATE VIRTUAL TABLE docs USING fts5(path UNINDEXED, kind UNINDEXED, title, name, body, frontmatter, digest UNINDEXED, tokenize = 'porter unicode61')",
       );
       db.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value REAL NOT NULL)");
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     }).immediate();
   }
-  return db;
 }
 
 /**
@@ -179,7 +188,7 @@ export function openIndex(root: string): Database {
  * controlled filesystem clock.
  */
 export function scanCorpus(root: string, stamp: (sentinel: string) => number = touchStamp): KbScan {
-  const wm = stamp(join(cacheDir(root), "kb-index.stamp"));
+  const wm = stamp(join(getWorkspaceContext(root).root, ".omp", "cache", "kb-index.stamp"));
   const docs: KbScan["docs"] = [];
   for (const f of listCorpus(root)) {
     let body: string;
@@ -199,6 +208,7 @@ export function scanCorpus(root: string, stamp: (sentinel: string) => number = t
       // Snippets come from the prose; frontmatter stays searchable on its own.
       body: fm ? body.slice(fm[0].length) : body,
       frontmatter: fm ? fm[1] : "",
+      digest: createHash("sha256").update(body).digest("hex"),
     });
   }
   return { wm, docs };
@@ -206,8 +216,8 @@ export function scanCorpus(root: string, stamp: (sentinel: string) => number = t
 
 function writeScan(db: Database, scan: KbScan): void {
   db.exec("DELETE FROM docs");
-  const insert = db.query("INSERT INTO docs (path, kind, title, name, body, frontmatter) VALUES (?, ?, ?, ?, ?, ?)");
-  for (const d of scan.docs) insert.run(d.path, d.kind, d.title, d.name, d.body, d.frontmatter);
+  const insert = db.query("INSERT INTO docs (path, kind, title, name, body, frontmatter, digest) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  for (const d of scan.docs) insert.run(d.path, d.kind, d.title, d.name, d.body, d.frontmatter, d.digest);
   db.query("INSERT INTO meta (key, value) VALUES ('wm', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
     scan.wm,
   );
@@ -224,10 +234,19 @@ export function indexIsStale(db: Database, root: string): boolean {
   if (wm === undefined) return true;
   const files = listCorpus(root);
   if (files.some((f) => f.mtimeMs >= wm)) return true;
-  const indexed = db.query<{ path: string }>("SELECT path FROM docs").all();
+  const indexed = db.query<{ path: string; digest: string }>("SELECT path, digest FROM docs").all();
   if (indexed.length !== files.length) return true;
-  const onDisk = new Set(files.map((f) => f.path));
-  return indexed.some((row) => !onDisk.has(row.path));
+  const digests = new Map(indexed.map(row => [row.path, row.digest]));
+  for (const file of files) {
+    if (!digests.has(file.path)) return true;
+    try {
+      if (createHash("sha256").update(readFileSync(file.abs, "utf8")).digest("hex") !== digests.get(file.path)) return true;
+    } catch (error) {
+      if (isMissing(error)) return true; // removed since the listing
+      throw error;
+    }
+  }
+  return false;
 }
 
 function runSearch(db: Database, match: string, limit: number, kinds?: readonly KbDocKind[]): KbHit[] {
@@ -235,7 +254,7 @@ function runSearch(db: Database, match: string, limit: number, kinds?: readonly 
   const rows = db
     .query<KbHit>(
       `SELECT kind, path, title, snippet(docs, 4, '', '', '…', 12) AS snippet FROM docs
-       WHERE docs MATCH ?${kindFilter} ORDER BY bm25(docs, 0, 0, 10.0, 5.0, 1.0, 0.5) LIMIT ?`,
+       WHERE docs MATCH ?${kindFilter} ORDER BY bm25(docs, 0, 0, 10.0, 5.0, 1.0, 0.5), path COLLATE BINARY LIMIT ?`,
     )
     .all(match, ...(kinds ?? []), limit);
   return rows.map((r) => ({ ...r, snippet: r.snippet.replace(/\s+/g, " ").trim().slice(0, 120) }));
@@ -251,22 +270,38 @@ export function searchKnowledge(
   terms: readonly string[],
   opts: { limit: number; kinds?: readonly KbDocKind[] },
 ): KbHit[] {
+  root = getWorkspaceContext(root).root;
   if (terms.length === 0 || listCorpus(root).length === 0) return [];
   const match = terms
     .slice(0, MAX_TERMS)
     .map((t) => `"${t.replaceAll('"', '""')}"*`)
     .join(" OR ");
-  const db = openIndex(root);
+  let db: Database | undefined;
   try {
-    const search = () => runSearch(db, match, opts.limit, opts.kinds);
-    const fresh = db.transaction(() => (indexIsStale(db, root) ? null : search()))();
+    const persistent = openIndex(root);
+    db = persistent;
+    const search = () => runSearch(persistent, match, opts.limit, opts.kinds);
+    const fresh = persistent.transaction(() => (indexIsStale(persistent, root) ? null : search()))();
     if (fresh) return fresh;
     const scan = scanCorpus(root);
-    return db.transaction(() => {
-      writeScan(db, scan);
+    return persistent.transaction(() => {
+      writeScan(persistent, scan);
       return search();
     }).immediate();
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code ?? "";
+    if (!/^(?:SQLITE_(?:BUSY|LOCKED|CANTOPEN|NOTADB|CORRUPT|READONLY|FULL|IOERR)(?:_|$)|EACCES$|EPERM$|EROFS$|ENOSPC$|EEXIST$|ENOTDIR$)/.test(code)) throw error;
+    // Do not unlink a database another session may still have open. Recover
+    // search from authoritative Markdown without touching the unusable cache.
+    const memory = new Database(":memory:");
+    try {
+      initializeIndex(memory);
+      commitScan(memory, scanCorpus(root, () => 0));
+      return runSearch(memory, match, opts.limit, opts.kinds);
+    } finally {
+      memory.close();
+    }
   } finally {
-    db.close();
+    db?.close();
   }
 }
