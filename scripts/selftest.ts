@@ -1,5 +1,5 @@
 // Master Selftest Suite Runner
-// Aggregates modular domain suites: commands, knowledge, research, features, protocol, and council.
+// Aggregates modular domain suites: commands, knowledge, research, features, council, tools and cards.
 
 import { createTestContext, getFailures } from "../tests/test-utils.ts";
 import { runCommandsSuite } from "../tests/commands.test.ts";
@@ -7,7 +7,6 @@ import { runKnowledgeSuite } from "../tests/knowledge.test.ts";
 import { runResearchSuite } from "../tests/research.test.ts";
 import { runFeaturesSuite } from "../tests/features.test.ts";
 import { runCouncilSuite } from "../tests/council.test.ts";
-import { runProtocolSuite } from "../tests/protocol.test.ts";
 import { runCardTests } from "../tests/card.test.ts";
 import { runToolsSuite } from "../tests/tools.test.ts";
 import { runKbIndexSuite } from "../tests/kb-index.test.ts";
@@ -35,10 +34,7 @@ async function main(): Promise<void> {
   // 5. Council Deliberation, Consensus & UX Suite (SPEC-002 / ADR-0008)
   await runCouncilSuite(ctx);
 
-  // 6. Protocol Suite (OMP-IAP/v1, Hub Messaging, Subagent Contracts)
-  await runProtocolSuite(ctx);
-
-  // 6b. Tools & Core Protocol Suite (Workspace, Routines, Herdr, References, Triage)
+  // 6. Tools & Core Protocol Suite (Workspace, Routines, Herdr, References, Triage)
   await runToolsSuite(ctx);
 
   // 7. Native TUI Card Engine Suite (SPEC-003 / ADR-0007)
@@ -50,7 +46,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log("\n✅ OK — All test suites (commands, knowledge, research, features, council, protocol, card) passed cleanly.");
+  console.log("\n✅ OK — All test suites (commands, knowledge, research, features, council, tools, card) passed cleanly.");
 }
 
 main().catch((err) => {

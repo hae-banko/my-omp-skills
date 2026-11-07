@@ -9,24 +9,14 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { sessionIdOf, type CommandContext, type ExtensionApi } from "../core/api.ts";
 import { findRepoRoot } from "../core/workspace.ts";
 import { createTuiCard, type CardSpec, type SemanticCardIntent } from "../core/card.ts";
 import type { Component } from "@oh-my-pi/pi-tui";
 import {
   BORDER_COLORS,
-  bold,
-  colorize,
-  dim,
-  displayWidth,
-  italic,
-  makeBottomBorder,
-  makeDivider,
   makeProgressBar,
-  makeTopBorder,
-  statusBorderColor,
-  truncateToWidth,
 } from "../research/research-format.ts";
 
 export const TILT_CUSTOM_TYPE = "tilt-meter";
@@ -557,103 +547,6 @@ export function renderBar(value: number, max: number, width = 12): string {
   const ratio = Math.min(1, Math.max(0, value / max));
   const filled = Math.round(ratio * width);
   return "█".repeat(filled) + "░".repeat(width - filled);
-}
-
-const BOX_WIDTH = 76;
-const INNER_WIDTH = BOX_WIDTH - 2;
-
-function boxLine(text: string, borderColor: string = BORDER_COLORS.dim): string {
-  const visible = displayWidth(text);
-  if (visible > INNER_WIDTH) {
-    const truncated = truncateToWidth(text, INNER_WIDTH);
-    const pad = Math.max(0, INNER_WIDTH - displayWidth(truncated));
-    return `${colorize("│", borderColor)}${truncated}${" ".repeat(pad)}${colorize("│", borderColor)}`;
-  }
-  const pad = Math.max(0, INNER_WIDTH - visible);
-  return `${colorize("│", borderColor)}${text}${" ".repeat(pad)}${colorize("│", borderColor)}`;
-}
-
-/**
- * Render the /tilt TUI card.
- */
-export function renderTiltCard(payload: TiltCardPayload): string[] {
-  const { local, global } = payload;
-  const def = defconLabel(local.defcon);
-  const borderColor = def.color;
-
-  const lines: string[] = [];
-  lines.push(makeTopBorder(borderColor));
-  lines.push(boxLine(` ${bold("TILT-O-METER & SWEAR JAR")} ${colorize(`[${def.label}]`, def.color)}`, borderColor));
-  lines.push(makeDivider(borderColor));
-
-  // Granular Stratum & Archetype
-  const stratum = getTiltStratum(local.swear_jar_total);
-  lines.push(boxLine(` ${bold("Rage Archetype:")} ${colorize(`[Tier ${stratum.tier} · Lv. ${stratum.level}] ${stratum.name}`, stratum.color)}`, borderColor));
-  lines.push(boxLine(`   ${dim("PPP Valuation:")} ${italic(stratum.ppp)}`, borderColor));
-  lines.push(boxLine(`   ${dim("Active Debuff:")} ${colorize(stratum.debuff, BORDER_COLORS.yellow)}`, borderColor));
-
-  if (stratum.tier < TILT_STRATA.length - 1) {
-    const nextStratum = TILT_STRATA[stratum.tier + 1];
-    const tierSpan = nextStratum.minDollars - stratum.minDollars;
-    const prog = tierSpan > 0 ? Math.min(1, Math.max(0, (local.swear_jar_total - stratum.minDollars) / tierSpan)) : 1;
-    const progBar = makeProgressBar(prog, 10);
-    lines.push(boxLine(`   ${dim("Next Tier:")}     ${progBar} $${local.swear_jar_total.toFixed(2)} / $${nextStratum.minDollars.toFixed(2)} (${nextStratum.name})`, borderColor));
-  }
-  lines.push(makeDivider(borderColor));
-
-  // Vibe Meter Bar
-  const vibeRatio = (6 - local.defcon) / 5; // 0.2 (chill) to 1.0 (rage)
-  const vibeBar = makeProgressBar(vibeRatio, 16);
-  lines.push(boxLine(` ${bold("Session Vibe:")} ${vibeBar} Level ${6 - local.defcon}/5 · Strikes: ${bold(String(local.session_strikes))}`, borderColor));
-  lines.push(boxLine(`   Swear Jar Total: ${colorize(`$${local.swear_jar_total.toFixed(2)}`, BORDER_COLORS.green)} (${(local.swear_jar_total / SWEAR_JAR_FEE_PER_POINT).toFixed(0)} rage pts)`, borderColor));
-
-  if (local.last_incident) {
-    const trig = local.last_incident.trigger;
-    lines.push(boxLine(`   ${dim("Last Incident:")} ${italic(truncateToWidth(trig, INNER_WIDTH - 20))}`, borderColor));
-  }
-  lines.push(makeDivider(borderColor));
-  // Category Breakdown Bar Chart
-  lines.push(boxLine(` ${bold("Profanity Category Breakdown:")}`, borderColor));
-  const maxCategory = Math.max(
-    local.breakdown.f_bombs,
-    local.breakdown.rage_words,
-    local.breakdown.wtfs,
-    local.breakdown.caps_rage,
-    1,
-  );
-
-  lines.push(boxLine(`   F-Bombs:    [${renderBar(local.breakdown.f_bombs, maxCategory)}] ${String(local.breakdown.f_bombs).padStart(3)} ($${(local.breakdown.f_bombs * 3 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`, borderColor));
-  lines.push(boxLine(`   Rage Words: [${renderBar(local.breakdown.rage_words, maxCategory)}] ${String(local.breakdown.rage_words).padStart(3)} ($${(local.breakdown.rage_words * 3 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`, borderColor));
-  lines.push(boxLine(`   WTFs/Shits: [${renderBar(local.breakdown.wtfs, maxCategory)}] ${String(local.breakdown.wtfs).padStart(3)} ($${(local.breakdown.wtfs * 1 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`, borderColor));
-  lines.push(boxLine(`   Caps Rage:  [${renderBar(local.breakdown.caps_rage, maxCategory)}] ${String(local.breakdown.caps_rage).padStart(3)} ($${(local.breakdown.caps_rage * 1 * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`, borderColor));
-  lines.push(makeDivider(borderColor));
-
-  // Global Repo Rage Leaderboard Bar Chart
-  lines.push(boxLine(` ${bold("Global Rage Leaderboard (~/.omp/tilt.json):")}`, borderColor));
-  const leaderboardEntries = Object.entries(global.repo_leaderboard).sort((a, b) => b[1] - a[1]);
-  if (leaderboardEntries.length > 0) {
-    const maxRepo = leaderboardEntries[0][1];
-    for (const [repo, count] of leaderboardEntries.slice(0, 4)) {
-      const repoName = truncateToWidth(repo, 18).padEnd(18);
-      const bar = renderBar(count, maxRepo, 14);
-      lines.push(boxLine(`   ${repoName} [${bar}] ${String(count).padStart(3)} ($${(count * SWEAR_JAR_FEE_PER_POINT).toFixed(2)})`, borderColor));
-    }
-  } else {
-    lines.push(boxLine(`   ${dim("○ No global tilt incidents recorded yet")}`, borderColor));
-  }
-  lines.push(makeDivider(borderColor));
-
-  // Defensive Policy
-  lines.push(boxLine(` ${bold("Defensive Harness Policy:")}`, borderColor));
-  if (local.defcon <= 2) {
-    lines.push(boxLine(`   ${colorize("● [GIT PUSH LOCK: HARD-ENGAGED]", BORDER_COLORS.red)} · ${colorize("[AUTO-RELEASE: DISABLED]", BORDER_COLORS.yellow)}`, borderColor));
-    lines.push(boxLine(`   ${dim("Assistant is operating in Maximum Caution Mode (zero assumptions)")}`, borderColor));
-  } else {
-    lines.push(boxLine(`   ${colorize("○ [NORMAL OPERATION]", BORDER_COLORS.green)} · Autonomous push remains user-gated`, borderColor));
-  }
-
-  lines.push(makeBottomBorder(borderColor));
-  return lines;
 }
 
 /**

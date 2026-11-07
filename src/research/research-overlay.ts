@@ -30,14 +30,10 @@
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import {
   BORDER_COLORS,
-  BOTTOM_BORDER,
-  DIVIDER,
-  TOP_BORDER,
   bold,
   boxLine,
   colorize,
   dim,
-  displayWidth,
   italic,
   makeProgressBar,
   makeBottomBorder,
@@ -448,7 +444,6 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     formatRow: (item: T, idx: number, isActive: boolean) => string,
     emptyMessage: string,
   ): string[] {
-    const inner = Math.max(20, this.width - 2);
     const usableHeight = Math.max(4, this.height - HEADER_HEIGHT - FOOTER_HEIGHT);
     const lines: string[] = [makeTopBorder(borderColor)];
     lines.push(boxLine(`  ${title} (${items.length})`, borderColor));
@@ -550,7 +545,6 @@ export class ResearchOverlay implements ResearchOverlayComponent {
   }
 
   private renderHelp(): string[] {
-    const inner = Math.max(20, this.width - 2);
     const helpLine = `  ${bold("⟨Enter: Run Next⟩")}  ${bold("⟨d: Deep Waves⟩")}  ${bold("⟨r: Report⟩")}  ${bold("⟨[ / ]: Switch⟩")}  ${bold("⟨Esc: Close⟩")}`;
     return [
       makeTopBorder(BORDER_COLORS.dim),

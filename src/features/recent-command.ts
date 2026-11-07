@@ -9,7 +9,6 @@
 
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
 import { findKnowledgeRoot, readKnowledge } from "../knowledge/knowledge.ts";
-import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 
 /** Default number of entries shown when `--recent` is passed without a count. */
 export const DEFAULT_LIMIT = 10;
@@ -66,7 +65,6 @@ export async function runRecentCommand(args: RunRecentCommandArgs): Promise<{ ha
   const { kind, rawArgs, root, pi, ctx } = args;
   if (!isRecentArgs(rawArgs)) return { handled: false };
   const customType = kind === "record" ? RECORD_CUSTOM_TYPE : PITFALL_CUSTOM_TYPE;
-  const kindLabel = kind === "record" ? "RECORD" : "PITFALL";
   const kindNoun = kind === "record" ? "record" : "pitfall";
   const kbRoot = findKnowledgeRoot(root);
   if (!kbRoot) {

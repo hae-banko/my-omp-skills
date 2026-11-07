@@ -7,14 +7,12 @@
 // start, agent `send_keys`, pane `wait_output`, agent `prompt`) are composed
 // from 0.7.x primitives instead (send + wait; read + poll).
 //
-// Activation: these tools only make sense inside a herdr-managed pane
-// (HERDR_ENV=1 + HERDR_PANE_ID). Outside herdr, execute returns a clear
-// gate message instead of failing cryptically. Invocation is opt-in: the
-// model uses them when the user mentions herdr or asks to inspect/control
-// herdr panes, workspaces, or agents.
+// Activation: the tools are registered only inside a herdr-managed pane
+// (HERDR_ENV=1 + HERDR_PANE_ID). Elsewhere (plain terminals, Tern) they would
+// only cost context in every session's tool list, so they are absent.
 
 import { execFile } from "node:child_process";
-import type { ExtensionApi, ToolDefinition, ToolResult } from "../core/api.ts";
+import type { ExtensionApi, ToolResult } from "../core/api.ts";
 import { toolResultCard } from "../research/research-format.ts";
 const WHITESPACE_RE = /\s+/;
 
@@ -22,8 +20,6 @@ function inHerdr(): boolean {
   return process.env.HERDR_ENV === "1" && Boolean(process.env.HERDR_PANE_ID);
 }
 
-const GATE_MESSAGE =
-  "herdr tools require running inside a herdr-managed pane (HERDR_ENV=1 and HERDR_PANE_ID set). This session is not inside herdr — use the herdr CLI directly or start one from herdr.";
 
 interface HerdrEnvelope {
   result?: unknown;
@@ -130,21 +126,13 @@ function herdrCardContent(result: ToolResult): { lines: string[]; action: string
   return { lines, action: details?.action ?? "?" };
 }
 
-type ExecuteArgs = Parameters<ToolDefinition["execute"]>;
 
-function gateOrRun(
+function runAction(
   args: string[],
-  label: string,
   action: string,
   signal?: AbortSignal,
   timeoutMs?: number,
 ): Promise<ToolResult> {
-  if (!inHerdr()) {
-    return Promise.resolve({
-      content: [{ type: "text", text: GATE_MESSAGE }],
-      details: { action, summary: "not inside herdr" },
-    });
-  }
   return runHerdr(args, signal, timeoutMs).then((result) => {
     const summary = Array.isArray(result)
       ? (result as unknown[]).map(summarize).join("\n")
@@ -157,6 +145,7 @@ function gateOrRun(
 }
 
 export function installHerdrTools(pi: ExtensionApi): void {
+  if (!inHerdr()) return;
   const { zod } = pi;
 
   pi.registerTool({
@@ -188,7 +177,7 @@ export function installHerdrTools(pi: ExtensionApi): void {
       direction: zod.enum(["right", "down"]).optional(),
       focus: zod.boolean().optional(),
     }),
-    execute: async (toolCallId, rawParams, signal, _onUpdate, ctx) => {
+    execute: async (toolCallId, rawParams, signal, _onUpdate) => {
       const p = rawParams as Record<string, string | boolean | undefined>;
       const action = String(p.action ?? "current");
       let args: string[];
@@ -236,7 +225,7 @@ export function installHerdrTools(pi: ExtensionApi): void {
         default:
           args = ["pane", "current"];
       }
-      const result = await gateOrRun(args, "HERDR — LAYOUT", action, signal);
+      const result = await runAction(args, action, signal);
       return result;
     },
     renderResult: (result, _options, _theme) => {
@@ -264,16 +253,10 @@ export function installHerdrTools(pi: ExtensionApi): void {
       lines: zod.number().int().min(1).max(2000).optional(),
       timeout: zod.number().int().min(100).max(600000).optional(),
     }),
-    execute: async (toolCallId, rawParams, signal, _onUpdate, ctx) => {
+    execute: async (toolCallId, rawParams, signal, _onUpdate) => {
       const p = rawParams as Record<string, string | number | boolean | undefined>;
       const action = String(p.action ?? "get");
       const pane = String(p.pane ?? "");
-      if (!inHerdr()) {
-        return {
-          content: [{ type: "text", text: GATE_MESSAGE }],
-          details: { action, summary: "not inside herdr" },
-        };
-      }
       if (!pane && action !== "get") {
         return {
           content: [{ type: "text", text: `herdr_pane ${action} requires a pane id` }],
@@ -384,15 +367,9 @@ export function installHerdrTools(pi: ExtensionApi): void {
       focus: zod.boolean().optional(),
       argv: zod.string().optional(),
     }),
-    execute: async (toolCallId, rawParams, signal, _onUpdate, ctx) => {
+    execute: async (toolCallId, rawParams, signal, _onUpdate) => {
       const p = rawParams as Record<string, string | number | boolean | undefined>;
       const action = String(p.action ?? "list");
-      if (!inHerdr()) {
-        return {
-          content: [{ type: "text", text: GATE_MESSAGE }],
-          details: { action, summary: "not inside herdr" },
-        };
-      }
       const target = String(p.target ?? "");
       const timeout = Number(p.timeout ?? 60000);
 

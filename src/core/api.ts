@@ -88,11 +88,6 @@ export interface ToolCallEvent {
   input: Record<string, unknown>;
 }
 
-export interface ToolCallEventResult {
-  block?: boolean;
-  reason?: string;
-}
-
 /** Minimal view of the `context` event (messages about to hit the LLM). */
 export interface ContextEvent {
   messages: unknown[];

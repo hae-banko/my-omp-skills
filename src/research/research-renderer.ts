@@ -27,7 +27,6 @@ import {
   makeDivider,
   makeProgressBar,
   makeTopBorder,
-  padToWidth,
   starsFor,
   statusBorderColor,
   truncateMiddle,
@@ -35,7 +34,7 @@ import {
 } from "./research-format.ts";
 import { PIPELINE_STATUSES, phaseOf, phaseStepper, type PipelineStatus } from "./research-status.ts";
 import { freshnessLabel, type Freshness } from "./research-freshness.ts";
-import { resolveResearchTheme, type ResearchTheme } from "./research-theme.ts";
+import { resolveResearchTheme } from "./research-theme.ts";
 export type ResearchPreset = "small" | "medium" | "high";
 export type ResearchReviewStatus = "DRAFT REVIEW" | "READY";
 export type ResearchDetail = "compact" | "full";

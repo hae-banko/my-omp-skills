@@ -1,12 +1,12 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.80.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.81.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>
 
-An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **17 model-invoked skills** (5 of them routers over 25 playbooks, 2 of them hidden references that playbooks link to), multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **18 model-invoked skills** (5 of them routers over 25 playbooks, 2 of them hidden references that playbooks link to), multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
@@ -15,13 +15,13 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.80.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.81.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.80.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.81.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
@@ -31,7 +31,7 @@ omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.80.0"
 Git-sourced plugins are not covered by `omp plugin upgrade` (that verb only handles `name@marketplace` plugins and rejects a git URL with `Invalid plugin ID`). To move to a newer release, re-install with `--force`:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.80.0" --force
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.81.0" --force
 ```
 
 `--force` re-resolves the ref and replaces the existing install cleanly (no uninstall needed). Confirm the version that actually landed, then restart `omp`:
@@ -153,7 +153,7 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 
 ---
 
-## Model-Invoked Skills (17 Skills)
+## Model-Invoked Skills (18 Skills)
 
 Omp automatically loads model-invoked skills when conversation or codebase context matches the skill condition. A **router** skill lists every task its family covers and reads exactly one **playbook** for the task at hand, so only that procedure enters the context.
 
@@ -176,7 +176,8 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 | `research` | Fact-finding against primary sources using subagents (`librarian`/`scout`). | Questions requiring evidence from docs, source, or APIs. |
 | `resolving-merge-conflicts` | Resolves git merge/rebase conflicts hunk-by-hunk by intent. | Active git merge or rebase conflict in progress. |
 | `using-references` | Consults cloned reference corpus before reconstructing external algorithms. | Implementing complex algorithms with available reference source. |
-| `using-herdr` | Controls herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent`). | User mentions herdr or asks to manage panes/workspaces. |
+| `using-herdr` | Controls herdr terminal workspace manager (`herdr_layout`/`herdr_pane`/`herdr_agent`); the tools exist only inside a herdr pane. | User mentions herdr or asks to manage panes/workspaces. |
+| `using-tern` | Drives the Tern terminal with the `tern` CLI: long processes in their own session, reading pane output, opening files for the user. | Session runs in Tern and a dev server/long build needs its own pane, or user asks about Tern sessions/panes. |
 | `using-git-worktrees` | Isolates feature work in a dedicated git worktree (`.worktrees/`). | **User-invoked only**: explicitly requested by user. |
 | `show-me` | Visual explanations via sketches, call trees, file layouts, Mermaid, or HTML. | Explaining structure, control flow, UI hierarchy, or architecture. |
 | `ponytail` | Enforces the Ladder: YAGNI → reuse in codebase → stdlib → native platform → shortest diff. | Any coding, refactoring, fixing, or designing task. |

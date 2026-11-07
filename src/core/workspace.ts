@@ -1,7 +1,7 @@
 // Workspace Context — Single authoritative layout and directory resolver
 // Unifies scattered path joins and filesystem walks across knowledge base, routines, ADRs, and research.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 

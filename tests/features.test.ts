@@ -1,53 +1,26 @@
 // Features Subsystem Test Suite: Timeline, Tilt, Clarify, Hindsight, Herdr, and Routines
 
-import {
-  BORDER_COLORS,
-  bold,
-  boxLine,
-  colorize,
-  dim,
-  italic,
-  makeTopBorder,
-  statusBorderColor,
-  stripAnsi,
-} from "../src/research/research-format.ts";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  calculateDefcon,
-  clearActiveSessionStrikes,
   createTiltCard,
-  defconLabel,
-  getActiveSessionStrikes,
   getTiltStratum,
-  installTilt,
   readLocalTilt,
   recordTiltIncident,
-  renderTiltCard,
   scanPromptTilt,
-  setActiveSessionStrikes,
   tiltDefconToIntent,
-  TILT_CUSTOM_TYPE,
   TILT_DICTIONARY,
   TILT_STRATA,
-  writeLocalTilt,
 } from "../src/features/tilt.ts";
 import type { ExtensionApi } from "../src/core/api.ts";
 import {
   createTimelineCard,
-  formatTimelineLines,
-  getUnifiedTimeline,
   parseTimelineLimit,
   runTimelineCommand,
   TIMELINE_CUSTOM_TYPE,
 } from "../src/features/timeline.ts";
 import {
-  CLARIFY_PROMPT,
   installClarify,
-  isClarifyDebugEnabled,
-  isClarifyEnabled,
-  isVagueInput,
-  setClarifyDebugEnabled,
   setClarifyEnabled,
   shouldBypassClarify,
   stripClarifyBypassPrefix,
@@ -60,11 +33,6 @@ import {
   setHindsightEnabled,
 } from "../src/features/hindsight.ts";
 import { parseHerdrOutput } from "../src/features/herdr-tools.ts";
-import {
-  isSkillProceduralCandidate,
-  scaffoldLocalExtension,
-  validateExtensionSyntax,
-} from "../src/features/routines.ts";
 import {
   createTempFixture,
   fail,
@@ -155,9 +123,6 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
   }
   if (!tiltRows.some((r) => r.includes("TILT-O-METER"))) {
     fail("createTiltCard: missing header title");
-  }
-  if (isVagueInput("git status") || isVagueInput("npm test")) {
-    fail("isVagueInput: common developer commands flagged as vague");
   }
   if (!shouldBypassClarify("~make it faster")) {
     fail("shouldBypassClarify: tilde prefix bypass failed");
@@ -366,50 +331,5 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
   if (!resOut.ok || (resOut.value as { id: string })?.id !== "p1") fail("parseHerdrOutput: json-success mismatch");
   const rawOut = parseHerdrOutput("raw terminal output line 1\nline 2");
   if (!rawOut.ok || rawOut.value !== "raw terminal output line 1\nline 2") fail("parseHerdrOutput: raw-text mismatch");
-
-  // 6. Routinize Extension Evolution & Syntax Validation
-  const validExt = `
-export interface ExtensionApi {
-  registerCommand(name: string, def: any): void;
-}
-export default function (pi: ExtensionApi): void {
-  pi.registerCommand("test-cmd", {
-    description: "test",
-    handler: () => {}
-  });
-}
-`;
-  const validRes = validateExtensionSyntax(validExt);
-  if (!validRes.valid) {
-    fail(`validateExtensionSyntax: valid template rejected: ${validRes.error}`);
-  }
-  const invalidRes = validateExtensionSyntax("export default function() { return ( }");
-  if (invalidRes.valid) {
-    fail("validateExtensionSyntax: unclosed delimiter accepted");
-  }
-
-  const scaffolded = scaffoldLocalExtension({
-    slug: "deploy-app",
-    description: "Deploy application",
-    commandName: "deploy-app",
-    implementationBody: 'ctx.ui?.notify?.("Deployed", "info");',
-  });
-  if (scaffolded.path !== ".omp/extensions/deploy-app.ts") {
-    fail(`scaffoldLocalExtension: unexpected path: ${scaffolded.path}`);
-  }
-  if (!validateExtensionSyntax(scaffolded.content).valid) {
-    fail("scaffoldLocalExtension: generated invalid syntax template");
-  }
-
-  const creativeSkill = "Run an interview loop to stress-test your design. Ask one question at a time.";
-  if (isSkillProceduralCandidate(creativeSkill).isCandidate) {
-    fail("isSkillProceduralCandidate: creative skill flagged as procedural");
-  }
-
-  const proceduralSkill = "Run these commands:\n```bash\nnpm run build\ncargo test\n```";
-  if (!isSkillProceduralCandidate(proceduralSkill).isCandidate) {
-    fail("isSkillProceduralCandidate: procedural skill not flagged");
-  }
-
 }
 

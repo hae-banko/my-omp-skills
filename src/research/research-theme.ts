@@ -17,19 +17,6 @@ export interface ResearchTheme {
   };
 }
 
-export const CONTRAST = { text: 4.5, critical: 7, ui: 3 } as const;
-
-/** Okabe-Ito colorblind-safe palette (reference for any future accent work). */
-export const OKABE_ITO = {
-  orange: "#E69F00",
-  skyBlue: "#56B4E9",
-  blueGreen: "#009E73",
-  yellow: "#F0E442",
-  blue: "#0072B2",
-  vermillion: "#D55E00",
-  reddishPurple: "#CC79A7",
-} as const;
-
 export interface ColorEnv {
   NO_COLOR?: string;
   COLORTERM?: string;

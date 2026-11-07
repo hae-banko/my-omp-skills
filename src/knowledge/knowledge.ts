@@ -5,7 +5,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { findRepoRoot, listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
+import { listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
 import { readOutlineItems, readProject } from "../research/research-store.ts";
 import { extractEntryTitle, searchKnowledge, searchTerms, type KbHit } from "./kb-index.ts";
 
@@ -73,11 +73,6 @@ export function findKnowledgeRoot(startDir: string): string | null {
     }
     dir = parent;
   }
-}
-
-/** Clear cached knowledge-root lookups for tests and session resets. */
-export function clearKnowledgeRootCache(): void {
-  knowledgeRootCache.clear();
 }
 
 function listMarkdownFiles(dir: string): string[] {

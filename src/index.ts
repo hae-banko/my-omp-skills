@@ -13,7 +13,7 @@
 // is a structural superset, so this remains assignable both ways.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "./core/api.ts";
 import { installBootstrap } from "./core/bootstrap.ts";
 import { installClarify, isClarifyDebugEnabled, isClarifyEnabled, toggleClarifyState } from "./features/clarify.ts";
@@ -40,8 +40,6 @@ import {
   resolveResearchProjectDir,
 } from "./core/locators.ts";
 import {
-  completeStrings,
-  createSubcommandCompleter,
   filterCompletions,
   type CompletionOption,
 } from "./core/completions.ts";
@@ -66,7 +64,6 @@ import { installKbIndexInjector } from "./knowledge/kb-index-injector.ts";
 import {
   createResearchOverlay,
   type ResearchOverlayAction,
-  type ResearchOverlayComponent,
 } from "./research/research-overlay.ts";
 import { installRoutinesTool } from "./features/routines.ts";
 import {
@@ -76,15 +73,9 @@ import {
   installResearchReportPreviewRenderer,
   installResearchReviewCardRenderer,
   installResearchWaveProgressRenderer,
-  type ResearchDashboardPayload,
   type ResearchErrorPayload,
-  type ResearchFieldSpec,
   type ResearchHelpPayload,
-  type ResearchItemSpec,
-  type ResearchReviewPayload,
 } from "./research/research-renderer.ts";
-import { EXPECTED_INTERVAL_SECONDS, freshnessOf } from "./research/research-freshness.ts";
-import { derivePipelineStatus, phaseOf } from "./research/research-status.ts";
 import {
   installAuditCardRenderer,
   installTicketBreakdownRenderer,

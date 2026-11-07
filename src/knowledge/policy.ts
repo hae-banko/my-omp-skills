@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
-import { sessionIdOf, type ExtensionApi, type ToolCallEvent, type ToolCallEventResult } from "../core/api.ts";
+import { sessionIdOf, type ExtensionApi, type ToolCallEvent } from "../core/api.ts";
 import { recordBlock } from "./kb-guard-status.ts";
 
 const KB_REASON =
@@ -63,29 +63,7 @@ function isProtectedPath(cwd: string, raw: unknown): boolean {
   );
 }
 
-function anyProtectedPath(cwd: string, input: Record<string, unknown>): boolean {
-  const single = input.path;
-  if (typeof single === "string" && isProtectedPath(cwd, single)) return true;
-  const many = input.paths;
-  if (Array.isArray(many)) {
-    return many.some((p) => typeof p === "string" && isProtectedPath(cwd, p));
-  }
-  return false;
-}
 
-function anyExistingProtectedPath(cwd: string, input: Record<string, unknown>): boolean {
-  const single = input.path;
-  if (typeof single === "string" && isProtectedPath(cwd, single) && existsSync(resolve(cwd, single))) {
-    return true;
-  }
-  const many = input.paths;
-  if (Array.isArray(many)) {
-    return many.some(
-      (p) => typeof p === "string" && isProtectedPath(cwd, p) && existsSync(resolve(cwd, p)),
-    );
-  }
-  return false;
-}
 
 /**
  * Detects if a shell command is attempting to delete, truncate, or overwrite

@@ -7,7 +7,7 @@ import { generateKeyPairSync, sign, verify, createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getWorkspaceContext } from "../core/workspace.ts";
-import { type Component, Container, Text } from "@oh-my-pi/pi-tui";
+import { type Component } from "@oh-my-pi/pi-tui";
 import { createTuiCard, type CardSpec, type SemanticCardIntent } from "../core/card.ts";
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
 import {
@@ -16,8 +16,6 @@ import {
   boxLine,
   colorize,
   dim,
-  displayWidth,
-  italic,
   makeBottomBorder,
   makeDivider,
   makeTopBorder,

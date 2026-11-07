@@ -18,7 +18,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
 import { listReferences, listUnmanagedReferences } from "../core/locators.ts";
-import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { createTuiCard, type CardSpec } from "../core/card.ts";
 

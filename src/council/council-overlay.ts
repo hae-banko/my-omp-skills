@@ -220,7 +220,6 @@ export class CouncilOverlay implements CouncilOverlayComponent {
     borderColor: string,
     emptyMessage: string,
   ): string[] {
-    const inner = Math.max(20, this.width - 2);
     const usableHeight = Math.max(4, this.height - HEADER_HEIGHT - FOOTER_HEIGHT - 1);
     const out: string[] = [makeTopBorder(borderColor)];
     out.push(boxLine(`  ${title}`, borderColor));

@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.81.0] - 2026-11-07
+
+Support for the Tern terminal, the herdr tools stop costing context outside herdr, and about 1,600 lines of TypeScript that nothing called are deleted.
+
+### Added
+
+- **`using-tern` skill.** Drives Tern from bash with the `tern` CLI: run a dev server or long build in a session of its own, read its output, detect completion with an exit-status marker, open a file for the user, clean up. Every recipe was run against Tern 0.9.2 from WSL, and the skill lists what fails there (`wait --until prompt|exit`, `-- COMMAND` on new blocks).
+
+### Changed
+
+- **herdr tools register only inside herdr.** `herdr_layout`, `herdr_pane` and `herdr_agent` were registered in every session and refused to run outside a herdr pane, so their descriptions took context for nothing. They are now registered only when `HERDR_ENV=1` and `HERDR_PANE_ID` are set; a regression test covers both cases.
+- `LICENSE` carries the MIT copyright notices of the adapted pstack, cursor-team-kit and ponytail code, alongside mattpocock/skills.
+- `/ask-me` lists the `statechart` and `figure-it-out` playbooks, the hidden `principles` and `unslop` references, and `using-tern`.
+- **`noUnusedLocals` is on.** `npm run typecheck` now fails on unused imports and locals.
+
+### Removed
+
+Code with no runtime caller: only its own tests used it.
+
+- **IAP protocol code.** `src/protocol/iap.ts`, `src/protocol/iap-hub.ts`, `src/features/subagent-contract.ts` and their test suite. The `omp-iap/v1` envelope contract stays a prompt-level convention in `commands/research/WEB-SEARCH-AGENT.md` and `/research-deep`.
+- **TypeScript report generator.** `src/research/research-report.ts` duplicated `commands/research-report/generate_report.py`, which `/research-report` runs.
+- **Unused research DAG parts.** Envelope ingestion and synthesis, upstream-evidence helpers, epistemic hashes, priority scores and the `running`/`blocked`/`failed` node states nothing could reach. `buildResearchDag` keeps what the dashboard reads: status, depth, cycles, critical path.
+- **Skill graduation helpers** in `src/features/routines.ts` (`isSkillProceduralCandidate`, `scaffoldLocalExtension`, `validateExtensionSyntax`, `graduateSkillToExtension`), the string renderer `renderTiltCard` (the card component replaced it), and small unused exports: `completeStrings`, `createSubcommandCompleter`, `isVagueInput`, `setClarifyDebugEnabled`, `resolveAdrDir`, `listAdrFiles`, `clearKnowledgeRootCache`, `AGUI_MAPPING`, `OKABE_ITO`, `CONTRAST`, `ToolCallEventResult`, plus unused imports across 20 files.
+- `docs/state-machines.md` drops the IAP machine and describes the research DAG as the three states the code produces.
+
 ## [0.80.0] - 2026-11-07
 
 The rest of pstack's skills are absorbed as hidden references, so they add nothing to the per-turn skill list: playbooks link a principle at the step where it applies, and the agent reads that one file.

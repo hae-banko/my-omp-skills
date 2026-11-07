@@ -53,7 +53,6 @@ import {
   parseRecentCount,
   parseDebateFrontmatter,
   renderCouncilHistoryCard,
-  runCouncilRecentCommand,
 } from "../src/council/council-history.ts";
 import {
   createTempFixture,

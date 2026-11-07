@@ -1,6 +1,6 @@
 // Knowledge Base, Policy Guard, and Injector Test Suite
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   __setStatusFnForTests,
@@ -11,17 +11,12 @@ import {
   resetSession as resetKbGuardSession,
 } from "../src/knowledge/kb-guard-status.ts";
 import {
-  formatIndexSection,
-  installKbIndexInjector,
   SECTION_MARKER,
 } from "../src/knowledge/kb-index-injector.ts";
 import {
-  getPitfallCount,
   getRecordCount,
-  recordIngest,
-  resetSession as resetKbIngestSession,
 } from "../src/knowledge/kb-ingest-status.ts";
-import { findKnowledgeRoot, findRelevantKnowledge, readKnowledge } from "../src/knowledge/knowledge.ts";
+import { findRelevantKnowledge, readKnowledge } from "../src/knowledge/knowledge.ts";
 import { findFrontierTicket } from "../src/core/locators.ts";
 import { isDestructiveBashAgainstProtected } from "../src/knowledge/policy.ts";
 import { runRecentCommand } from "../src/features/recent-command.ts";

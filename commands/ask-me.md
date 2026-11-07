@@ -49,16 +49,18 @@ Most model-invoked skills are **routers**: one `SKILL.md` that picks exactly one
 
 - **`review`** — report-only: two-axis code review, blast radius of a change, adversarial review that keeps only findings a run proves, over-engineering review of a diff or the whole repo, ponytail debt ledger.
 - **`investigate`** — diagnose a bug or performance regression, explain how code works, recover why it is shaped that way.
-- **`verify`** — prove behaviour beyond tests: a project-local skill that drives the real app, formal verification (model checking) of races and invariants and its upkeep, vetting a benchmark claim.
-- **`design`** — module interfaces and the deep-module vocabulary, the domain model (`CONTEXT.md`, ADRs), throwaway prototypes, agentic control loops.
+- **`verify`** — prove behaviour beyond tests: a project-local skill that drives the real app, formal verification (model checking) of races and invariants and its upkeep, a statechart that shows a bug as a path through states, vetting a benchmark claim.
+- **`design`** — module interfaces and the deep-module vocabulary, the domain model (`CONTEXT.md`, ADRs), throwaway prototypes, agentic control loops, and `figure-it-out` for a large change no other workflow fits.
 - **`improve-skills`** — make the skills themselves better: author one, evaluate a change blind against a baseline, reflect on a session, turn repeated corrections into enforced checks, mine past sessions for durable preferences.
 
 ## Vocabulary underneath
 
-Two references that run *beneath* the other skills — each the single source of truth for its vocabulary. Reach for them directly when the **words**, not the process, are the problem; or let the skills above pull them in.
+Four references that run *beneath* the other skills — each the single source of truth for its vocabulary. Reach for them directly when the **words**, not the process, are the problem; or let the skills above pull them in.
 
 - **`design`** → domain-model playbook — sharpen the project's *domain* language: challenge a fuzzy term, resolve an overloaded word ("account" doing three jobs), record a hard-to-reverse decision as an ADR. It's the active discipline `/grill-with-docs` drives to keep `CONTEXT.md` a clean glossary.
 - **`design`** → interface playbook — the deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) for designing a module's *shape*: a lot of behaviour behind a small interface at a clean seam. `tdd` and `/improve-codebase-architecture` both speak it.
+- **`principles`** (hidden) — 24 engineering principles, one file each (fix root causes, prove it works, minimize reader load, ...). Playbooks link the one that applies; ask for one by name when you want it.
+- **`unslop`** (hidden) — the writing standard for replies, docs, commits and PR text.
 
 ## Crossing sessions
 
@@ -74,6 +76,7 @@ Off the main flow entirely.
 - **`research`** — delegate reading legwork to a **background agent**: it investigates a question against **primary sources**, then leaves a cited Markdown file in the repo. Keep working while it reads. The file it produces is something to take *into* the main flow at `/grill-with-docs` — research feeds the thinking, it doesn't replace it.
 - **`/teach`** — learn a concept over multiple sessions, using the current directory as a stateful workspace.
 - **`using-git-worktrees`** — set up an isolated git worktree for feature work (`.worktrees/` convention, clean baseline). Runs only when the user asks — never auto-trigger.
+- **`using-tern`** — when the session runs in the Tern terminal: put a dev server or long build in its own Tern session, read its output, open a file for you to look at.
 - **`/writing-great-skills`** — reference for writing and editing skills well (the `improve-skills` author playbook).
 
 ## Deep research

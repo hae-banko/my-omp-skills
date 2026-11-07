@@ -36,21 +36,6 @@ export const CLARIFY_PROMPT = `
 ${CLARIFY_GUIDELINES}
 `;
 
-const VAGUE_PATTERNS = [
-  /^(\s*please\s*)?(fix|do|help|make|change|update|check|optimize|refactor|clean)(\s+it|\s+this|\s+that|\s+the\s+code|\s+everything|\s+stuff|\s+better|\s+it\s+better)?\s*\??$/i,
-  /^(what|how|why)\??$/i,
-  /^(please\s+)?(help|fix|do|go|start)$/i,
-];
-
-export function isVagueInput(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return true;
-  if (trimmed.startsWith("/")) return false;
-  if (trimmed.length === 1) return true;
-  if (/^[?.!…:;,\-\_\*\#\$\@\%\^\&\(\)]+$/.test(trimmed)) return true;
-  return VAGUE_PATTERNS.some((pattern) => pattern.test(trimmed));
-}
-
 export function shouldBypassClarify(text: string): boolean {
   return /^~+/.test(text.trimStart());
 }
@@ -78,10 +63,6 @@ export function setClarifyEnabled(val: boolean): void {
 
 export function isClarifyDebugEnabled(): boolean {
   return debugEnabled;
-}
-
-export function setClarifyDebugEnabled(val: boolean): void {
-  debugEnabled = val;
 }
 
 export function toggleClarifyState(args?: string, ctx?: CommandContext): boolean {

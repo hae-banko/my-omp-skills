@@ -3,7 +3,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { findRepoRoot, getWorkspaceContext, type KnowledgePaths, type RoutinesPaths, type WorkspaceContext } from "./workspace.ts";
+import { findRepoRoot, getWorkspaceContext, type WorkspaceContext } from "./workspace.ts";
 
 export { findRepoRoot, getWorkspaceContext, type WorkspaceContext };
 
@@ -498,32 +498,6 @@ export function findFrontierTicket(root?: string | null): FrontierTicket | null 
   }
 
   return null;
-}
-
-export interface AdrDirLocator {
-  dir: string;
-  relDir: string;
-  isNew: boolean;
-}
-
-export function resolveAdrDir(root?: string | null): AdrDirLocator {
-  const safeRoot = typeof root === "string" && root ? root : process.cwd();
-  const ws = getWorkspaceContext(safeRoot);
-  ws.ensureAdrDir();
-  return { dir: ws.adr.root, relDir: ws.adr.relDir, isNew: !ws.adr.isLegacy };
-}
-
-export function listAdrFiles(root?: string | null): string[] {
-  const safeRoot = typeof root === "string" && root ? root : process.cwd();
-  const { dir } = resolveAdrDir(safeRoot);
-  if (!existsSync(dir)) return [];
-  try {
-    return readdirSync(dir)
-      .filter((name) => name.endsWith(".md") && !name.startsWith("."))
-      .sort();
-  } catch {
-    return [];
-  }
 }
 
 export interface KnowledgeDirs {

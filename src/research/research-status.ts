@@ -33,18 +33,6 @@ export function isPipelineStatus(s: unknown): s is PipelineStatus {
   return typeof s === "string" && (PIPELINE_STATUSES as readonly string[]).includes(s);
 }
 
-/** AG-UI run lifecycle mapping (used by docs, help card and diagnostics). */
-export const AGUI_MAPPING: Record<PipelineStatus, string> = {
-  OUTLINE: "not started (pre-run)",
-  RUNNING: "RUN_STARTED — wave loop active",
-  CONVERGED: "RUN_FINISHED — all items resolved",
-  REPORT_READY: "RUN_FINISHED + report.md generated",
-  PAUSED: "interrupt — user stop, resumable",
-  CANCELLED: "interrupt — aborted",
-  ERROR: "RunError — recoverable",
-  STALE: "derived — RUNNING data past freshness",
-};
-
 export interface StatusFacts {
   hasReport?: boolean;
   completedItems?: number;

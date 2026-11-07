@@ -18,8 +18,8 @@ herdr CLI:
 
 ## Activation and policy
 
-- The tools activate only inside a herdr pane (`HERDR_ENV=1`, `HERDR_PANE_ID`
-  set). Outside herdr they return a gate message — use the CLI directly there.
+- The tools are registered only inside a herdr pane (`HERDR_ENV=1`, `HERDR_PANE_ID`
+  set). Outside herdr they are absent — use the CLI directly there.
 - **Opt-in**: do not use these tools unless the user mentions herdr or asks
   to inspect/control herdr. Normal work and delegation stay local.
 - Default topology: the caller's own tab and working directory; focus stays

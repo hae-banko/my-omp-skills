@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createTempFixture, fail, type TestContext } from "./test-utils.ts";
 import { findRepoRoot, getWorkspaceContext, clearWorkspaceCache, setHomedirForTesting } from "../src/core/workspace.ts";
 import { findRoutinesRepoRoot, clearRoutinesRepoRootCache, installRoutinesTool } from "../src/features/routines.ts";
-import { findFrontierTicket, listReferences, listUnmanagedReferences } from "../src/core/locators.ts";
+import { findFrontierTicket, listUnmanagedReferences } from "../src/core/locators.ts";
 import { runReferenceCommand } from "../src/features/references.ts";
 import { parseRecentCount } from "../src/features/recent-command.ts";
 import { setHerdrRunnerForTesting, installHerdrTools } from "../src/features/herdr-tools.ts";
@@ -335,6 +335,10 @@ export async function runToolsSuite(ctx: TestContext): Promise<void> {
     }
   }
 
+  // herdr tools: absent outside herdr; inside it, D51/D52 and TOOLSPROTO-11.
+  const prevHerdrEnv = process.env.HERDR_ENV;
+  const prevHerdrPane = process.env.HERDR_PANE_ID;
+
   // D51 & D52: herdr agent settlement & CLI argument compliance
   {
     const recordedCalls: Array<{ args: string[]; timeout?: number }> = [];
@@ -357,16 +361,22 @@ export async function runToolsSuite(ctx: TestContext): Promise<void> {
       return { ok: true };
     });
 
+    // Outside herdr (plain terminal, Tern) the tools must not be registered:
+    // they would only cost context in every session's tool list.
+    delete process.env.HERDR_ENV;
+    delete process.env.HERDR_PANE_ID;
+    installHerdrTools(ctx.pi);
+    if (ctx.tools.some((t) => t.name.startsWith("herdr_"))) {
+      fail("herdr tools registered outside a herdr pane");
+    }
+
+    process.env.HERDR_ENV = "1";
+    process.env.HERDR_PANE_ID = "pane_1";
     installHerdrTools(ctx.pi);
     const agentTool = ctx.tools.find((t) => t.name === "herdr_agent");
     if (!agentTool) {
-      fail("herdr_agent tool not registered");
+      fail("herdr_agent tool not registered inside herdr");
     } else {
-      const prevEnv = process.env.HERDR_ENV;
-      const prevPane = process.env.HERDR_PANE_ID;
-      process.env.HERDR_ENV = "1";
-      process.env.HERDR_PANE_ID = "pane_1";
-
       // Test prompt action
       recordedCalls.length = 0;
       await agentTool.execute(
@@ -442,14 +452,11 @@ export async function runToolsSuite(ctx: TestContext): Promise<void> {
         fail(`D51/D52: prompt timeout should report timeout in content, got: ${timeoutRes.content[0].text}`);
       }
 
-      // Reset
-      process.env.HERDR_ENV = prevEnv;
-      process.env.HERDR_PANE_ID = prevPane;
       setHerdrRunnerForTesting(null);
     }
   }
 
-  // TOOLSPROTO-11: herdr_pane wait_output pattern matching
+  // TOOLSPROTO-11: herdr_pane wait_output pattern matching (still inside herdr)
   {
     let readCount = 0;
     setHerdrRunnerForTesting(async (args) => {
@@ -461,12 +468,9 @@ export async function runToolsSuite(ctx: TestContext): Promise<void> {
     });
 
     const paneTool = ctx.tools.find((t) => t.name === "herdr_pane");
-    if (paneTool) {
-      const prevEnv = process.env.HERDR_ENV;
-      const prevPane = process.env.HERDR_PANE_ID;
-      process.env.HERDR_ENV = "1";
-      process.env.HERDR_PANE_ID = "pane_1";
-
+    if (!paneTool) {
+      fail("TOOLSPROTO-11: herdr_pane tool not registered inside herdr");
+    } else {
       // Empty match should not immediately match empty/any text
       const emptyRes = await paneTool.execute(
         "call-empty-match",
@@ -491,11 +495,13 @@ export async function runToolsSuite(ctx: TestContext): Promise<void> {
         fail(`TOOLSPROTO-11: wait_output should match literal [Server] listening, got: ${bracketRes.content[0].text}`);
       }
 
-      process.env.HERDR_ENV = prevEnv;
-      process.env.HERDR_PANE_ID = prevPane;
       setHerdrRunnerForTesting(null);
     }
   }
+  if (prevHerdrEnv === undefined) delete process.env.HERDR_ENV;
+  else process.env.HERDR_ENV = prevHerdrEnv;
+  if (prevHerdrPane === undefined) delete process.env.HERDR_PANE_ID;
+  else process.env.HERDR_PANE_ID = prevHerdrPane;
 
   // TOOLSPROTO-12: References - Repo Name Collision & Custom Directory Name Support
   {

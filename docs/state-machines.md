@@ -36,7 +36,6 @@ Kinds: **explicit** = a named state field or enum drives behavior; **implicit** 
 | HerdrWaitOutputLoop | explicit | §2 | per-call |
 | HerdrAgentSettlement | implicit | §2 | per-call |
 | RecentCommandBypass | implicit | §2 | per-call |
-| IAPPerformativeDAG | explicit (Reachability Analysis) | §2 | `src/protocol/iap.ts:224-275`, `src/protocol/iap-hub.ts:27-51` |
 | Policy Guard (`policy.ts`) | implicit | §3 | process-shared module + on-disk |
 | Ingest Counter & Status Widget (`kb-ingest-status.ts`) | implicit | §3 | per-binding closure + process-shared per-session map `sessionIngestStates` |
 | Guardrail Block Counter & Detail Ring (`kb-guard-status.ts`) | implicit | §3 | per-binding closure + process-shared per-session map `sessionGuardStates` |
@@ -242,12 +241,6 @@ Kinds: **explicit** = a named state field or enum drives behavior; **implicit** 
 **Invariants:**
 - `I1`: `parseRecentCount` clamps non-positive or invalid counts to `DEFAULT_LIMIT` (`src/features/recent-command.ts:44`).
 
-
-### IAPPerformativeDAG — explicit (Reachability Analysis)
-**Where:** `src/protocol/iap.ts:224-275`, `src/protocol/iap-hub.ts:27-51`
-- **Reachability at Runtime:** UNREACHABLE.
-- **Evidence:** `resolveEnvelopePayload`, `serializeEnvelopeForHub`, and `extractEnvelopesFromHubInbox` are defined in `src/protocol/` but never imported or invoked by any slash command, event handler, tool execution, or runtime DAG loop. Only test files (`tests/protocol.test.ts`) reference them. The active research DAG engine in `src/research/research-dag.ts` only consumes synthetic envelopes from completed file artifacts via `synthesizeCompletedEnvelope`.
-- Per assignment contract: recorded as unreachable rather than speculating refactors.
 
 ## 3. Knowledge base, append-only guard & telemetry
 
@@ -508,7 +501,7 @@ Real `omp` runs invoked the registered `knowledge_read` tool from a nested worki
 | `RUNNING` | Interrupt signal | Partial results | `PAUSED` | Halts wave loop, sets status `PAUSED` | `commands/research-deep/command.md:95-99` |
 | `PAUSED` | `/research-deep` | Prior results | `RUNNING` | Resumes wave loop | `commands/research-deep/command.md:29-34` |
 | `RUNNING` | All items done | `completed >= total` | `CONVERGED` | Sets status `CONVERGED` | `commands/research-deep/command.md:74` |
-| `CONVERGED` | `/research-report` | Results valid | `REPORT_READY` | Writes report.md, summary.md, sets status `REPORT_READY` | `src/research/research-report.ts:32-205` |
+| `CONVERGED` | `/research-report` | Results valid | `REPORT_READY` | Writes report.md, summary.md, sets status `REPORT_READY` | `commands/research-report/generate_report.py` (run by `commands/research-report/command.md:26-30`) |
 | Any active | `archiveResearchProject` | `slugArg.trim().length > 0` & exists | `ARCHIVED` | Moves to `.archive/<slug>`, preserves prior status | `src/research/research-store.ts:806-840` |
 | `ARCHIVED` | `unarchiveResearchProject` | `slugArg.trim().length > 0` & archive exists | File-derived | Moves to active, derives status from artifacts | `src/research/research-store.ts:851-935` |
 | Any | `removeResearchProject` | `slugArg.trim().length > 0` & exists | `DELETED` | Removes directory recursively | `src/research/research-store.ts:941-975` |
@@ -537,29 +530,27 @@ Real `omp` runs invoked the registered `knowledge_read` tool from a nested worki
 
 
 ### Research DAG Node State — explicit/implicit
-**Where:** `src/research/research-dag.ts:26-55, 89-141, 175-385`; scope = per-call DAG data structure
+**Where:** `src/research/research-dag.ts:21-38, 51-104, 108-210`; scope = per-call DAG data structure (`buildResearchDag`, read by the research dashboard in `research-store.ts`)
 **States:**
 | State | Encoding | Meaning |
 | :--- | :--- | :--- |
-| `pending` | `node.status = "pending"` | Has uncompleted upstream dependencies or unresolved missing dependencies |
-| `ready` | `node.status = "ready"` | Root node or all upstream dependencies completed; eligible for wave dispatch |
-| `running` | `node.status = "running"` | Assigned to active search agent |
+| `pending` | `node.status = "pending"` | Has an uncompleted upstream dependency, or names a dependency missing from the outline |
+| `ready` | `node.status = "ready"` | Root node or every upstream dependency completed; eligible for the next wave |
 | `completed` | `node.status = "completed"` | Exact, parseable non-empty result JSON exists on disk |
-| `blocked` | `node.status = "blocked"` | Suspended awaiting external prerequisite |
-| `failed` | `node.status = "failed"` | Execution failure |
+
+The node state is derived from disk on every call; nothing mutates a node after `buildResearchDag` returns. Running, blocked and failed items exist only inside the `/research-deep` workflow, never in this structure.
 
 **Invariants:**
-- I1: `findItemResultFile` matches only exact slugs (`fClean === idSlug || fClean === nameSlug`) or numbered prefixes (`^\d+_` + exact slug), rejecting loose substrings. (`src/research/research-dag.ts:125-128`)
-- I2: Result files must be valid non-empty parseable JSON (`isValidResultJsonFile`); 0-byte or corrupted JSON is rejected and does not mark a node completed. (`src/research/research-dag.ts:89-100, 115, 118, 132`)
-- I3: Dangling / missing dependencies are recorded in `missingDependencies` and do not participate in Kahn's algorithm in-degrees, preventing non-cyclic DAGs from setting `hasCycles: true` or suppressing epistemic hash computation. (`src/research/research-dag.ts:206-233, 275-305`)
+- I1: `findItemResultFile` matches only exact slugs (`fClean === idSlug || fClean === nameSlug`) or numbered prefixes (`^\d+_` + exact slug), rejecting loose substrings. (`src/research/research-dag.ts:86-90`)
+- I2: Result files must be valid non-empty parseable JSON (`isValidResultJsonFile`); 0-byte or corrupted JSON is rejected and does not mark a node completed. (`src/research/research-dag.ts:51-67`)
+- I3: Dangling dependencies are collected in a local `missing` set and do not take part in Kahn's in-degrees, so a non-cyclic DAG never reports `hasCycles: true`; a node with a missing dependency stays `pending`. (`src/research/research-dag.ts:129-147, 195-201`)
 
 **Transitions:**
 | From | Trigger | Guard | To | Effect | Code |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Initial | `buildResearchDag` | Exact valid JSON exists | `completed` | Marks node completed, assigns `resultFile` | `src/research/research-dag.ts:173, 181` |
-| Initial | `buildResearchDag` | No result, 0 deps, 0 missing | `ready` | Eligible for wave 1 dispatch | `src/research/research-dag.ts:356-357` |
-| Initial | `buildResearchDag` | Has missing or uncompleted deps | `pending` | Suspended until deps met | `src/research/research-dag.ts:358-364` |
-| `pending` / `running` | `ingestIapEnvelope` | Envelope COMPLETED | `completed` | Unblocks child nodes whose deps are now met | `src/research/research-dag.ts:500-520` |
+| Initial | `buildResearchDag` | Exact valid JSON exists | `completed` | Marks node completed, assigns `resultFile` | `src/research/research-dag.ts:122` |
+| Initial | `buildResearchDag` | No result, every dep completed (or none), none missing | `ready` | Eligible for the next wave | `src/research/research-dag.ts:198-200` |
+| Initial | `buildResearchDag` | Has missing or uncompleted deps | `pending` | Waits until deps complete | `src/research/research-dag.ts:198-200` |
 
 
 ### YAML Outline & Fields Mini-Parsers — implicit
@@ -1669,6 +1660,5 @@ An independent review of the combined diff raised eight findings. Each was check
 
 | Finding | Disposition | Evidence |
 |---|---|---|
-| IAP performative DAG (envelope payload resolution, hub serialization, inbox extraction) admits invalid performative sequences | **Unreachable** | `src/protocol/iap.ts` / `iap-hub.ts` helpers have no production caller; research waves exchange on-disk JSON results only |
 | KB index section duplicated across turns (X-KNOWLEDGE-10) | **Unreachable** | The runtime rebuilds the system prompt every turn before `before_agent_start` (`agent-session.ts:5832`); a turn never carries the previous turn's section |
 | Council overlay `s` / `Enter` actions discarded | **Not a defect** | Removed deliberately in 0.76.2; the stale doc claims were the defect (D22) |

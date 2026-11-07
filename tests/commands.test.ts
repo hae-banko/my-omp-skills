@@ -1,12 +1,8 @@
 // Commands and Session Bootstrap Test Suite
 
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import {
-  completeStrings,
-  createSubcommandCompleter,
-  filterCompletions,
-} from "../src/core/completions.ts";
+import { filterCompletions } from "../src/core/completions.ts";
 import {
   findBrokenSkillReferences,
   scanAndValidateMarkdownDir,
@@ -17,7 +13,6 @@ import {
   createInteractiveCommandContext,
   EXPECTED_COMMANDS,
   fail,
-  type RegisteredCommand,
   type TestContext,
 } from "./test-utils.ts";
 export async function runCommandsSuite(ctx: TestContext): Promise<void> {
@@ -178,21 +173,6 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   const filtered = filterCompletions(testOpts, "sc");
   if (filtered.length !== 1 || filtered[0].value !== "scan") {
     fail(`filterCompletions: expected scan, got: ${JSON.stringify(filtered)}`);
-  }
-
-  const strOpts = completeStrings(["apple", "banana", "apricot"], "ap");
-  if (strOpts.length !== 2) {
-    fail(`completeStrings: expected 2 matches, got: ${JSON.stringify(strOpts)}`);
-  }
-
-  const subCompleter = createSubcommandCompleter(testOpts, (sub, rest) => {
-    if (sub === "run") return completeStrings(["script-a", "script-b"], rest);
-    return null;
-  });
-
-  const subRes = subCompleter("run sc");
-  if (!subRes || subRes.length !== 2) {
-    fail(`createSubcommandCompleter: expected 2 script options`);
   }
 
   // 7. Markdown Frontmatter Linting & Syntax Validation

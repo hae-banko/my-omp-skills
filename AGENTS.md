@@ -24,17 +24,15 @@ authoring contract.
 - `src/` — **TypeScript extension engine** organized by domain:
   - `src/core/` — `workspace.ts` (unified context), `completions.ts`, `markdown-lint.ts`, `locators.ts`, `bootstrap.ts`, `api.ts`.
   - `src/knowledge/` — `knowledge.ts`, `knowledge-tool.ts`, `kb-index.ts` (SQLite FTS5 search index), `policy.ts`, `kb-guard-status.ts`, `kb-index-injector.ts`.
-  - `src/research/` — `research-dag.ts` (dependency engine), `research-report.ts` (zero-dep TS report generator), `research-store.ts`, `research-renderer.ts`, `research-format.ts`.
-  - `src/protocol/` — `iap.ts` (`OMP-IAP/v1` envelopes, performatives, pointer offloading), `iap-hub.ts` (message bus adapter).
-  - `src/features/` — `timeline.ts`, `tilt.ts` (14-tier swear jar), `references.ts`, `recent-command.ts`, `clarify.ts`, `hindsight.ts`, `herdr-tools.ts`, `routines.ts`, `subagent-contract.ts`.
+  - `src/research/` — `research-dag.ts` (outline dependency graph), `research-store.ts`, `research-renderer.ts`, `research-format.ts`.
+  - `src/features/` — `timeline.ts`, `tilt.ts` (14-tier swear jar), `references.ts`, `recent-command.ts`, `clarify.ts`, `hindsight.ts`, `herdr-tools.ts`, `routines.ts`.
   - `src/council/` — `council.ts` (deliberation engine, Star Chamber partitioner, domain presets, Ed25519 signer), `council-overlay.ts` (interactive TUI modal inspector).
 - `tests/` — **domain-grouped test suites** aggregated by `scripts/selftest.ts` (`npm test`):
   - `test-utils.ts` — mock ExtensionApi harness and failure collectors.
   - `commands.test.ts` — command registrations, companion disclosures, frontmatter linter, skill cross-references (`findBrokenSkillReferences`).
   - `knowledge.test.ts` — policy guards, `knowledge_read`, `/record --recent` rendering.
-  - `research.test.ts` — DAG resolution, Kahn's cycle detection, report generator.
+  - `research.test.ts` — DAG readiness, Kahn's cycle detection, dangling dependencies, project lifecycle, overlay.
   - `features.test.ts` — timeline, tilt meter, clarify, hindsight, herdr output, routines.
-  - `protocol.test.ts` — OMP-IAP/v1 envelopes, hash integrity, reactive DAG ingestion.
   - `tools.test.ts` — references, workspace roots, routines, triage, herdr argv.
   - `kb-index.test.ts` — search index: random interleavings checked against the freshness invariants (`docs/state-machines.md` §3), ranking, removals.
 
@@ -69,14 +67,11 @@ All directory paths (`knowledge`, `routines`, `scratch`, `adr`, `audits`, `refer
 Commands that merely inspect local state, format cards, or toggle features (`/timeline`, `/reference`, `/tilt`, `/record --recent`, `/pitfall --recent`, `/clarify debug`) run entirely in local TypeScript handlers. They bypass the LLM workflow body, avoiding token burn and turn latency.
 
 ### 3. Inter-Agent Communication Protocol (OMP-IAP/v1)
-Subagents communicating over `hub` or asynchronous file blackboards use `src/protocol/iap.ts`:
-- Typed performatives: `INFORM`, `QUERY`, `PROPOSE`, `BLOCKED`, `COMPLETED`, `FAILED`.
-- Envelopes with payloads $>2\text{ KB}$ automatically offload to pointer envelopes with cryptographic SHA-256 digests (`computeSha256`).
-- Reactive DAG engine (`src/research/research-dag.ts`) consumes incoming `COMPLETED` envelopes to unblock downstream child tasks.
+A prompt-level contract, not code: `commands/research/WEB-SEARCH-AGENT.md` tells research subagents to end with an `omp-iap/v1` envelope (`COMPLETED`, `BLOCKED`, `FAILED`) and to send `INFORM` over omp's `hub`; `/research-deep` reads them. Performatives: `INFORM`, `QUERY`, `PROPOSE`, `BLOCKED`, `COMPLETED`, `FAILED`.
 
-### 4. Zero-Dependency Research Engine
-- Outline dependencies: `depends_on: [parent_item]` in `outline.yaml` resolved via Kahn's algorithm cycle detection and topological frontier selection.
-- Research report generation (`src/research/research-report.ts`): compiles `results/*.json`, `fields.yaml`, and `outline.yaml` directly in pure TypeScript with zero host Python dependencies.
+### 4. Research Engine
+- Outline dependencies: `depends_on: [parent_item]` in `outline.yaml`; `buildResearchDag` (`src/research/research-dag.ts`) detects cycles and dangling dependencies with Kahn's algorithm and marks an item ready once every upstream result file exists.
+- Report generation: `commands/research-report/generate_report.py` (Python 3) compiles `results/*.json`, `fields.yaml` and `outline.yaml` into `report.md` and `summary.md`.
 
 ### 5. Markdown Frontmatter Integrity
 All markdown files across `commands/` and `skills/` are validated on every `npm test` via `src/core/markdown-lint.ts`. Checks verify unclosed frontmatter delimiters, duplicate keys, quote balances, and boolean scalar types.
