@@ -14,7 +14,7 @@ import { runKbIndexSuite } from "../tests/kb-index.test.ts";
 async function main(): Promise<void> {
   const ctx = createTestContext();
 
-  console.log("Running my-omp-skills test suites...\n");
+  console.log("Running omp-fieldkit test suites...\n");
 
   // 1. Commands & Session Bootstrap Suite
   await runCommandsSuite(ctx);

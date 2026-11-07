@@ -140,7 +140,7 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
       fail("bootstrap: compaction summary not preserved at index 0");
     }
     const bootText = textOfMessage(injected[1]);
-    if (!bootText.includes("my-omp-skills:available-commands")) {
+    if (!bootText.includes("omp-fieldkit:available-commands")) {
       fail("bootstrap: injected message missing marker");
     }
     if (!bootText.includes("/record") || !bootText.includes("/pitfall")) {

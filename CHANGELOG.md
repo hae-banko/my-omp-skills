@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.82.0] - 2026-11-07
+
+The package is renamed from `my-omp-skills` to `omp-fieldkit`: it is no longer only a skills collection. Behaviour is unchanged.
+
+### Changed
+
+- **Repository and package name.** The repository is `hae-banko/omp-fieldkit` and the package `name` is `omp-fieldkit`, so the plugin installs under `~/.omp/plugins/node_modules/omp-fieldkit/`. GitHub redirects the old repository and clone URLs, so earlier tags and releases keep working.
+- **Upgrading from `my-omp-skills`.** Install the new name, uninstall the old one so the two do not register the same commands, then restart `omp`:
+  `omp plugin install "git+https://github.com/hae-banko/omp-fieldkit.git#v0.82.0"` and `omp plugin uninstall my-omp-skills`.
+- `/plugin-issue` files issues on `hae-banko/omp-fieldkit` and reads the version from the new install path.
+- The session bootstrap marker is `omp-fieldkit:available-commands` and the hindsight nudge tag is `omp-fieldkit:hindsight`. A session resumed from before the upgrade gets the command list once more.
+- The research card message types keep their ids (`my-omp-research-help`, `my-omp-research-error`), so research cards in earlier sessions still render.
+
 ## [0.81.0] - 2026-11-07
 
 Support for the Tern terminal, the herdr tools stop costing context outside herdr, and about 1,600 lines of TypeScript that nothing called are deleted.

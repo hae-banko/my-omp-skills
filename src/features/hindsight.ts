@@ -144,7 +144,7 @@ export function setHindsightEnabled(next: boolean): void {
 }
 
 function buildNudge(): string {
-  return `<my-omp-skills:hindsight>
+  return `<omp-fieldkit:hindsight>
 
 One more look before this turn settles — ${config.name}.
 

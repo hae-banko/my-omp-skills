@@ -1,4 +1,4 @@
-// my-omp-skills — extension entry point.
+// omp-fieldkit — extension entry point.
 //
 // Registers every slash command in this package. Workflow bodies are plain
 // markdown under ../commands (editable without touching code); companion
@@ -1276,7 +1276,7 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "plugin-issue",
-    description: "Report a bug or missing feature in this plugin as a GitHub issue on hae-banko/my-omp-skills. Auto-posts after a duplicate check.",
+    description: "Report a bug or missing feature in this plugin as a GitHub issue on hae-banko/omp-fieldkit. Auto-posts after a duplicate check.",
     bodyPath: "commands/plugin-issue/command.md",
   },
   {

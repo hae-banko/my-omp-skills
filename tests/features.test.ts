@@ -100,7 +100,7 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
 
   const sampleTiltPayload = {
     local: {
-      project: "my-omp-skills",
+      project: "omp-fieldkit",
       project_strikes: 2,
       defcon: 3,
       session_strikes: 2,
@@ -113,7 +113,7 @@ export async function runFeaturesSuite(ctx: TestContext): Promise<void> {
       lifetime_strikes: 10,
       lifetime_swear_jar: 150.0,
       breakdown: { f_bombs: 10, rage_words: 15, wtfs: 5, caps_rage: 2 },
-      repo_leaderboard: { "my-omp-skills": 15.5, "linux-kernel": 120.0 },
+      repo_leaderboard: { "omp-fieldkit": 15.5, "linux-kernel": 120.0 },
     },
   };
   const tiltBox = createTiltCard(sampleTiltPayload);

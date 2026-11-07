@@ -12,7 +12,7 @@
 
 import { asEventContext, type ContextEvent, type ContextEventResult, type ExtensionApi } from "./api.ts";
 
-const BOOTSTRAP_MARKER = "my-omp-skills:available-commands";
+const BOOTSTRAP_MARKER = "omp-fieldkit:available-commands";
 
 export interface BootstrapCommand {
   name: string;
@@ -52,7 +52,7 @@ function buildBootstrap(commands: BootstrapCommand[]): string {
   const lines = commands.map((c) => `- /${c.name} — ${c.description}`);
   return `<${BOOTSTRAP_MARKER}>
 
-You have my-omp-skills installed. The commands below are user-invoked slash commands — you have no tool for them. Suggest the right one when the user's situation fits it; when the user invokes one, follow its workflow body. The model-invoked skills in this package are listed separately in your system prompt.
+You have omp-fieldkit installed. The commands below are user-invoked slash commands — you have no tool for them. Suggest the right one when the user's situation fits it; when the user invokes one, follow its workflow body. The model-invoked skills in this package are listed separately in your system prompt.
 
 ${lines.join("\n")}
 

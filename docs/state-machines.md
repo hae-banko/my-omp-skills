@@ -1,4 +1,4 @@
-# State machines — my-omp-skills
+# State machines — omp-fieldkit
 
 Every explicit and implicit state machine in the extension: what state it holds, where that state lives, the invariants the code relies on, and the transitions that move it. The last section lists invalid states and transitions the code can actually reach — through retries, overlapping events, and concurrent sessions — with their evidence and fix status.
 

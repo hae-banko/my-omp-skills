@@ -58,7 +58,7 @@ const tiltPayload: TiltCardPayload = {
 };
 
 const sampleTimelineContent = [
-  "TIMELINE DIGEST — my-omp-skills (5 events)",
+  "TIMELINE DIGEST — omp-fieldkit (5 events)",
   "2026-08-26 · [git] feat: unified native TUI card architecture (v0.75.0)",
   "2026-08-26 · [record] 2026-08-26_tui_card_architecture.md",
   "2026-08-25 · [git] feat(council): natural keyword CLI syntax",

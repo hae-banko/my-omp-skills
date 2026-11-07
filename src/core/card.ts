@@ -1,6 +1,6 @@
 // Unified Native TUI Card Engine (SPEC-003 / ADR-0007).
 //
-// Bridges custom message renderers across my-omp-skills onto Oh My Pi's native
+// Bridges custom message renderers across omp-fieldkit onto Oh My Pi's native
 // `@oh-my-pi/pi-tui` Box architecture, with dynamic theme-aware background
 // tinting, semantic intent tokens, and responsive full-width viewports.
 

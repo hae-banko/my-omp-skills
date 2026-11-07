@@ -1,4 +1,4 @@
-# my-omp-skills — repo conventions
+# omp-fieldkit — repo conventions
 
 Personal omp extension package: **slash commands** (user-invoked) and **skills**
 (model-invoked), adapted from [mattpocock/skills](https://github.com/mattpocock/skills)

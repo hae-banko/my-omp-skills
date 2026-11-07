@@ -92,7 +92,7 @@ Requires Python + `pyyaml` (for the JSON validator). Projects live in `.omp/know
 
 ## Plugin feedback
 
-- **`/plugin-issue`** — found a bug or want a feature in this package? Auto-posts a GitHub issue to `hae-banko/my-omp-skills` (after a duplicate check), labeled `bug` or `enhancement`. Later, run `/omp-setup` + `/triage` inside the plugin repo to process the backlog.
+- **`/plugin-issue`** — found a bug or want a feature in this package? Auto-posts a GitHub issue to `hae-banko/omp-fieldkit` (after a duplicate check), labeled `bug` or `enhancement`. Later, run `/omp-setup` + `/triage` inside the plugin repo to process the backlog.
 
 ## Knowledge base
 
