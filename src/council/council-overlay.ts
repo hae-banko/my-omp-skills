@@ -2,12 +2,10 @@
 //
 // Tabs:
 //   [1] Verdict & Consensus    — Consensus Invariants, Majority, Divergences, Summary
-//   [2] Persona A              — stance / recommendation / invariants / caveats / confidence
-//   [3] Persona B
-//   [4] Persona C
+//   [2..N+1] Persona tabs      — stance / recommendation / invariants / caveats / confidence
 //
 // Keyboard navigation (modeled after research-overlay.ts):
-//   1-4 / Tab / Shift+Tab      switch tabs
+//   1-9 / Tab / Shift+Tab      switch tabs
 //   j / k or Up / Down         scroll the active tab
 //   s                          returns { action: "save" } to the caller (dispatch not wired yet)
 //   Enter                      returns { action: "implement" } to the caller (dispatch not wired yet)
@@ -36,7 +34,7 @@ import {
 } from "../research/research-format.ts";
 import type { CouncilOpinion, CouncilVerdict } from "./council.ts";
 
-export type CouncilOverlayTab = "verdict" | "persona-0" | "persona-1" | "persona-2";
+export type CouncilOverlayTab = "verdict" | `persona-${number}`;
 
 export interface CouncilOverlayState {
   activeTab: CouncilOverlayTab;
@@ -59,21 +57,12 @@ export interface CouncilOverlayComponent {
 
 export type CouncilOverlayDone = (result: CouncilOverlayAction) => void;
 
-const TABS: CouncilOverlayTab[] = ["verdict", "persona-0", "persona-1", "persona-2"];
-
-const TAB_KEY_INDEX: Record<string, CouncilOverlayTab> = {
-  "1": "verdict",
-  "2": "persona-0",
-  "3": "persona-1",
-  "4": "persona-2",
-};
-
-const TAB_LABELS: Record<CouncilOverlayTab, string> = {
-  verdict: "Verdict & Consensus",
-  "persona-0": "Persona A",
-  "persona-1": "Persona B",
-  "persona-2": "Persona C",
-};
+function defaultPersonaLabel(index: number): string {
+  if (index < 26) {
+    return `Persona ${String.fromCharCode(65 + index)}`;
+  }
+  return `Persona ${index + 1}`;
+}
 
 const DEFAULT_WIDTH = 84;
 const DEFAULT_HEIGHT = 26;
@@ -93,19 +82,13 @@ function rowsToContainer(lines: string[]): Container {
   return container;
 }
 
-function nextTab(tab: CouncilOverlayTab, delta: number): CouncilOverlayTab {
-  const idx = TABS.indexOf(tab);
-  const next = (idx + delta + TABS.length) % TABS.length;
-  return TABS[next] ?? "verdict";
-}
-
 export class CouncilOverlay implements CouncilOverlayComponent {
   private verdict: CouncilVerdict;
   private state: CouncilOverlayState;
   private width: number;
   private height: number;
   private onDone?: CouncilOverlayDone;
-
+  private done = false;
   constructor(verdict: CouncilVerdict, onDone?: CouncilOverlayDone, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
     this.verdict = verdict;
     this.onDone = onDone;
@@ -113,7 +96,7 @@ export class CouncilOverlay implements CouncilOverlayComponent {
     this.height = Math.max(14, height);
     this.state = {
       activeTab: "verdict",
-      scrollOffsets: { verdict: 0, "persona-0": 0, "persona-1": 0, "persona-2": 0 },
+      scrollOffsets: { verdict: 0, ...Object.fromEntries((verdict.opinions ?? []).map((_, i) => [`persona-${i}`, 0])) },
     };
   }
 
@@ -126,6 +109,65 @@ export class CouncilOverlay implements CouncilOverlayComponent {
 
   setVerdict(verdict: CouncilVerdict): void {
     this.verdict = verdict;
+    const tabs = this.getTabs();
+    if (!tabs.includes(this.state.activeTab)) {
+      this.state.activeTab = "verdict";
+    }
+    const newOffsets: Record<CouncilOverlayTab, number> = { verdict: 0 };
+    for (const tab of tabs) {
+      const max = this.maxScrollForTab(tab);
+      const current = this.state.scrollOffsets[tab] ?? 0;
+      newOffsets[tab] = clampInt(current, 0, max);
+    }
+    this.state.scrollOffsets = newOffsets;
+  }
+
+  private getTabs(): CouncilOverlayTab[] {
+    const opinions = this.verdict.opinions ?? [];
+    const tabs: CouncilOverlayTab[] = ["verdict"];
+    for (let i = 0; i < opinions.length; i++) {
+      tabs.push(`persona-${i}`);
+    }
+    return tabs;
+  }
+
+  private personaIndexFromTab(tab: CouncilOverlayTab): number {
+    const match = tab.match(/^persona-(\d+)$/);
+    return match ? parseInt(match[1]!, 10) : -1;
+  }
+
+  /** Tab-bar label. Persona names appear in the tab body, not the bar, so the bar's width depends only on the persona count. */
+  private getTabLabel(tab: CouncilOverlayTab): string {
+    if (tab === "verdict") return "Verdict & Consensus";
+    const idx = this.personaIndexFromTab(tab);
+    return idx >= 0 ? defaultPersonaLabel(idx) : tab;
+  }
+
+  private nextTab(delta: number): CouncilOverlayTab {
+    const tabs = this.getTabs();
+    if (tabs.length === 0) return "verdict";
+    const idx = tabs.indexOf(this.state.activeTab);
+    const current = idx >= 0 ? idx : 0;
+    const next = (current + delta + tabs.length) % tabs.length;
+    return tabs[next] ?? "verdict";
+  }
+
+  private maxScrollForTab(tab: CouncilOverlayTab): number {
+    if (tab === "verdict") {
+      return Math.max(
+        0,
+        (this.verdict.consensusInvariants?.length ?? 0) +
+          (this.verdict.majorityRecommendations?.length ?? 0) +
+          (this.verdict.criticalDivergences?.length ?? 0) +
+          8,
+      );
+    }
+    const idx = this.personaIndexFromTab(tab);
+    if (idx >= 0) {
+      const op = this.verdict.opinions?.[idx];
+      return Math.max(0, (op?.keyInvariants?.length ?? 0) + (op?.caveats?.length ?? 0) + 4);
+    }
+    return 0;
   }
 
   invalidate(): void {
@@ -140,13 +182,16 @@ export class CouncilOverlay implements CouncilOverlayComponent {
     const topicText = this.verdict.topic || "(no topic)";
     const topicLine = `  🎯 ${bold("Topic:")} ${truncateToWidth(topicText, inner - 12)}`;
 
-    const tabSegments = TABS.map((t, i) => {
+    const tabs = this.getTabs();
+    const tabSegments = tabs.map((t, i) => {
       const isActive = t === this.state.activeTab;
       const marker = isActive ? colorize("●", BORDER_COLORS.cyan) : colorize("○", BORDER_COLORS.dim);
-      const label = isActive ? bold(TAB_LABELS[t]) : TAB_LABELS[t];
-      return `${marker} [${i + 1}] ${label}`;
+      const rawLabel = this.getTabLabel(t);
+      const label = isActive ? bold(rawLabel) : rawLabel;
+      const keyHint = i < 9 ? `[${i + 1}] ` : "";
+      return `${marker} ${keyHint}${label}`;
     });
-    const tabLine = `  ${tabSegments.join("   ")}`;
+    const tabLine = truncateToWidth(`  ${tabSegments.join("   ")}`, inner);
 
     return [
       makeTopBorder(borderColor),
@@ -248,8 +293,8 @@ export class CouncilOverlay implements CouncilOverlayComponent {
     const opinion: CouncilOpinion | undefined = v.opinions[index];
     const inner = Math.max(20, this.width - 2);
     const borderColor = BORDER_COLORS.blue;
-    const tabKey = TABS[index + 1] ?? "persona-0";
-    const personaLabel = opinion ? opinion.personaName : `Persona ${String.fromCharCode(65 + index)}`;
+    const tabKey: CouncilOverlayTab = `persona-${index}`;
+    const personaLabel = (opinion?.personaName?.trim()) || defaultPersonaLabel(index);
 
     const body: string[] = [];
     if (!opinion) {
@@ -290,16 +335,14 @@ export class CouncilOverlay implements CouncilOverlayComponent {
   }
 
   private renderBody(): string[] {
-    switch (this.state.activeTab) {
-      case "verdict":
-        return this.renderVerdict();
-      case "persona-0":
-        return this.renderPersona(0);
-      case "persona-1":
-        return this.renderPersona(1);
-      case "persona-2":
-        return this.renderPersona(2);
+    if (this.state.activeTab === "verdict") {
+      return this.renderVerdict();
     }
+    const idx = this.personaIndexFromTab(this.state.activeTab);
+    if (idx >= 0) {
+      return this.renderPersona(idx);
+    }
+    return this.renderVerdict();
   }
 
   render(width: number, height: number): Container {
@@ -319,35 +362,33 @@ export class CouncilOverlay implements CouncilOverlayComponent {
 
   private scrollActive(delta: number): void {
     const tab = this.state.activeTab;
-    let max = 0;
-    if (tab === "verdict") {
-      max = Math.max(0, this.verdict.consensusInvariants.length + this.verdict.majorityRecommendations.length + this.verdict.criticalDivergences.length + 8);
-    } else {
-      const idx = TABS.indexOf(tab) - 1;
-      const op = this.verdict.opinions[idx];
-      max = Math.max(0, (op?.keyInvariants.length ?? 0) + (op?.caveats.length ?? 0) + 4);
-    }
-    const next = clampInt(this.state.scrollOffsets[tab] + delta, 0, max);
+    const max = this.maxScrollForTab(tab);
+    const next = clampInt((this.state.scrollOffsets[tab] ?? 0) + delta, 0, max);
     this.state.scrollOffsets[tab] = next;
   }
 
   handleInput(key: string): CouncilOverlayAction | undefined {
+    if (this.done) return undefined;
     if (key === "q" || key === "\x1b" || key === "\x1b\x1b" || key === "\x03") {
+      this.done = true;
       const action: CouncilOverlayAction = { action: "dismiss" };
       this.onDone?.(action);
       return action;
     }
-    const tabKey = TAB_KEY_INDEX[key];
-    if (tabKey) {
-      this.state.activeTab = tabKey;
-      return undefined;
+    const tabs = this.getTabs();
+    if (/^[1-9]$/.test(key)) {
+      const idx = parseInt(key, 10) - 1;
+      if (idx < Math.min(9, tabs.length)) {
+        this.state.activeTab = tabs[idx]!;
+        return undefined;
+      }
     }
     if (key === "\t") {
-      this.state.activeTab = nextTab(this.state.activeTab, 1);
+      this.state.activeTab = this.nextTab(1);
       return undefined;
     }
     if (key === "\x1b[Z" || key === "BTab") {
-      this.state.activeTab = nextTab(this.state.activeTab, -1);
+      this.state.activeTab = this.nextTab(-1);
       return undefined;
     }
     if (key === "j" || key === "\x1b[B" || key === "down") {
@@ -359,11 +400,13 @@ export class CouncilOverlay implements CouncilOverlayComponent {
       return undefined;
     }
     if (key === "s") {
+      this.done = true;
       const action: CouncilOverlayAction = { action: "save", topic: this.verdict.topic };
       this.onDone?.(action);
       return action;
     }
     if (key === "\r") {
+      this.done = true;
       const invariants = [...this.verdict.consensusInvariants];
       const action: CouncilOverlayAction = {
         action: "implement",

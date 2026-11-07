@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { Container } from "@oh-my-pi/pi-tui";
 import type { ExtensionApi, ToolResult } from "../core/api.ts";
@@ -7,6 +8,9 @@ import { toolResultCard } from "../research/research-format.ts";
 
 const UNDERSCORE_RE = /_/g;
 const repoRootCache = new Map<string, string>();
+export function clearRoutinesRepoRootCache(): void {
+  repoRootCache.clear();
+}
 export interface RoutineParameter {
   name: string;
   default?: string;
@@ -205,7 +209,9 @@ export function graduateSkillToExtension(options: GraduateSkillOptions): {
 
 export function findRoutinesRepoRoot(startDir: string = process.cwd()): string {
   const cached = repoRootCache.get(startDir);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined && existsSync(join(cached, "scripts", "routines", "manifest.json"))) {
+    return cached;
+  }
   let dir = startDir;
   for (;;) {
     const manifestPath = join(dir, "scripts", "routines", "manifest.json");
@@ -218,20 +224,20 @@ export function findRoutinesRepoRoot(startDir: string = process.cwd()): string {
     dir = parent;
   }
   // Fallback: search for root marker (.git, .omp, .scratch, package.json)
+  // Don't cache fallback so a manifest created later is picked up
   dir = startDir;
   for (;;) {
+    const hasOmp = existsSync(join(dir, ".omp")) && dir !== homedir();
     if (
       existsSync(join(dir, ".git")) ||
-      existsSync(join(dir, ".omp")) ||
+      hasOmp ||
       existsSync(join(dir, ".scratch")) ||
       existsSync(join(dir, "package.json"))
     ) {
-      repoRootCache.set(startDir, dir);
       return dir;
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      repoRootCache.set(startDir, startDir);
       return startDir;
     }
     dir = parent;
@@ -309,8 +315,20 @@ export function installRoutinesTool(pi: ExtensionApi): void {
                   (typeof r.name === "string" && r.name.toLowerCase() === params.routineId.toLowerCase())),
             );
           }
-        } catch {
-          // Ignore manifest parse errors
+        } catch (err) {
+          const msg = `Error: Corrupt routines manifest at ${manifestPath}: ${err instanceof Error ? err.message : String(err)} (manifest parse error)`;
+          return {
+            content: [{ type: "text", text: msg }],
+            details: {
+              routineId: params.routineId,
+              name: params.routineId,
+              exitCode: 1,
+              stdout: "",
+              stderr: msg,
+              success: false,
+              error: msg,
+            },
+          };
         }
       }
 
@@ -403,6 +421,7 @@ export function installRoutinesTool(pi: ExtensionApi): void {
       for (const [k, v] of Object.entries(effectiveArgs)) {
         env[k] = v;
         env[k.toUpperCase()] = v;
+        env[k.toUpperCase().replace(/[^A-Z0-9]/g, "_")] = v;
         if (k.startsWith("-")) {
           cliFlags.push(k, v);
         } else if (k.length === 1) {
@@ -437,7 +456,11 @@ export function installRoutinesTool(pi: ExtensionApi): void {
             const outputLines: string[] = [];
             if (stdout) outputLines.push(stdout);
             if (stderr) outputLines.push(`Stderr:\n${stderr}`);
-            if (error && !stdout && !stderr) outputLines.push(`Execution error: ${error.message}`);
+            if (error) {
+              outputLines.push(`Execution error: ${error.message}`);
+            } else if (exitCode !== 0) {
+              outputLines.push(`Routine failed with exit code ${exitCode}`);
+            }
             const text = outputLines.join("\n\n") || `Routine completed with exit code ${exitCode}`;
 
             resolve({

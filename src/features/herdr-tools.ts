@@ -55,7 +55,17 @@ export function parseHerdrOutput(stdout: string): { ok: boolean; value: unknown 
   return { ok: true, value: stdout.length > 0 ? stdout : null };
 }
 
+type HerdrRunner = (args: string[], signal?: AbortSignal, timeoutMs?: number) => Promise<unknown>;
+let testHerdrRunner: HerdrRunner | null = null;
+
+export function setHerdrRunnerForTesting(runner: HerdrRunner | null): void {
+  testHerdrRunner = runner;
+}
+
 function runHerdr(args: string[], signal?: AbortSignal, timeoutMs = 30000): Promise<unknown> {
+  if (testHerdrRunner) {
+    return testHerdrRunner(args, signal, timeoutMs);
+  }
   const { promise, resolve, reject } = Promise.withResolvers<unknown>();
   execFile("herdr", args, { timeout: timeoutMs, signal }, (error, stdout, stderr) => {
     if (error) {
@@ -274,16 +284,16 @@ export function installHerdrTools(pi: ExtensionApi): void {
       let result: unknown;
       if (action === "wait_output") {
         const match = String(p.match ?? "");
+        if (!match) {
+          return {
+            content: [{ type: "text", text: "herdr_pane wait_output requires a non-empty match string" }],
+            details: { action, summary: "missing match pattern" },
+          };
+        }
         const timeout = Number(p.timeout ?? 30000);
         const deadline = Date.now() + timeout;
         let matched = false;
         let lastText = "";
-        let regex: RegExp | null = null;
-        try {
-          regex = new RegExp(match);
-        } catch {
-          regex = null;
-        }
         for (;;) {
           const read = await runHerdr(
             ["pane", "read", pane, "--source", "recent", "--lines", "400"],
@@ -297,7 +307,7 @@ export function installHerdrTools(pi: ExtensionApi): void {
                     (read as Record<string, unknown>)?.text ??
                     JSON.stringify(read),
                 );
-          const hit = regex ? regex.test(lastText) : lastText.includes(match);
+          const hit = lastText.includes(match);
           if (hit) {
             matched = true;
             break;
@@ -409,21 +419,41 @@ export function installHerdrTools(pi: ExtensionApi): void {
           break;
         }
         case "prompt": {
-          await runHerdr(["agent", "send", target, String(p.prompt ?? "")], signal);
           try {
-            await runHerdr(["agent", "wait", target, "--status", "blocked", "--timeout", String(timeout)], signal);
-          } catch {
-            // Not blocked — the agent settled another way (idle/done/working).
+            result = await runHerdr(
+              [
+                "agent",
+                "prompt",
+                target,
+                String(p.prompt ?? ""),
+                "--wait",
+                "--until",
+                "idle",
+                "--until",
+                "done",
+                "--until",
+                "blocked",
+                "--timeout",
+                String(timeout),
+              ],
+              signal,
+              timeout + 5000,
+            );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("timeout") || msg.includes("agent_prompt_stalled")) {
+              result = `timeout waiting for agent ${target} to settle (${timeout}ms)`;
+            } else {
+              throw err;
+            }
           }
-          const state = await runHerdr(["agent", "get", target], signal);
-          const status = (state as Record<string, unknown>)?.agent_status ?? "unknown";
-          result = `prompt delivered to ${target}; agent state: ${String(status)}`;
           break;
         }
         case "wait":
           result = await runHerdr(
-            ["agent", "wait", target, "--status", String(p.status ?? "idle"), "--timeout", String(timeout)],
+            ["agent", "wait", target, "--until", String(p.status ?? "idle"), "--timeout", String(timeout)],
             signal,
+            timeout + 5000,
           );
           break;
         case "read": {
@@ -435,7 +465,7 @@ export function installHerdrTools(pi: ExtensionApi): void {
           break;
         }
         case "send":
-          result = await runHerdr(["agent", "send", target, String(p.text ?? "")], signal);
+          result = await runHerdr(["agent", "prompt", target, String(p.text ?? "")], signal);
           break;
         case "focus":
           result = await runHerdr(["agent", "focus", target], signal);

@@ -6,7 +6,14 @@
 
 import { Type } from "@sinclair/typebox";
 import { Container, Text } from "@earendil-works/pi-tui";
-import type { CommandContext, ExtensionApi, ToolResult } from "../core/api.ts";
+import {
+  asBeforeAgentStartEvent,
+  asEventContext,
+  type BeforeAgentStartEventResult,
+  type CommandContext,
+  type ExtensionApi,
+  type ToolResult,
+} from "../core/api.ts";
 import { findKnowledgeRoot, findRelevantKnowledge } from "../knowledge/knowledge.ts";
 import { toolResultCard } from "../research/research-format.ts";
 
@@ -55,8 +62,10 @@ export function stripClarifyBypassPrefix(text: string): string {
 
 let enabled = false;
 let debugEnabled = false;
-let bypassNextTurn = false;
-
+// Stripped texts of `~`-prefixed prompts awaiting their before_agent_start.
+// Bounded: an aborted `~prompt` can only ever exempt a later identical prompt.
+const pendingBypasses = new Set<string>();
+const MAX_PENDING_BYPASSES = 16;
 const CLARIFY_DEBUG_CUSTOM_TYPE = "clarify-debug";
 
 export function isClarifyEnabled(): boolean {
@@ -112,12 +121,6 @@ export function toggleClarifyState(args?: string, ctx?: CommandContext): boolean
 }
 
 export function installClarify(pi: ExtensionApi): void {
-  pi.registerCommand("clarify", {
-    description: "Toggle prompt clarification (/clarify [on|off|debug|status])",
-    handler: (args: string, ctx: CommandContext) => {
-      toggleClarifyState(args, ctx);
-    },
-  });
 
   pi.registerMessageRenderer(CLARIFY_DEBUG_CUSTOM_TYPE, (message: unknown) => {
     let contentStr = "";
@@ -154,8 +157,15 @@ export function installClarify(pi: ExtensionApi): void {
     }
 
     if (shouldBypassClarify(text)) {
-      bypassNextTurn = true;
       const trimmed = stripClarifyBypassPrefix(text);
+      // Slash commands never reach before_agent_start with their own text.
+      if (!trimmed.startsWith("/")) {
+        pendingBypasses.add(trimmed);
+        if (pendingBypasses.size > MAX_PENDING_BYPASSES) {
+          const oldest = pendingBypasses.values().next().value;
+          if (oldest !== undefined) pendingBypasses.delete(oldest);
+        }
+      }
       if (event && typeof event === "object" && "text" in event) {
         const inputEvent = event as { text: unknown };
         if (typeof inputEvent.text === "string") inputEvent.text = trimmed;
@@ -166,68 +176,53 @@ export function installClarify(pi: ExtensionApi): void {
     return { text, action: "continue" };
   });
 
-  pi.on("before_agent_start", (event: unknown, ctx?: unknown) => {
-    if (!event || typeof event !== "object") return;
-    const evt = event as {
-      prompt?: string;
-      promptText?: string;
-      systemPrompt?: string;
-      systemPromptOptions?: { selectedTools?: string[] };
-    };
-    let updatedPrompt = evt.systemPrompt ?? "";
-    const selectedTools = evt.systemPromptOptions?.selectedTools;
-    if (!Array.isArray(selectedTools) || selectedTools.includes("clarify_prompt")) {
-      if (enabled && !bypassNextTurn) {
-        if (
-          !updatedPrompt.includes(CLARIFY_GUIDELINES) &&
-          !updatedPrompt.includes("## Prompt Clarification Active")
-        ) {
-          updatedPrompt += CLARIFY_PROMPT;
-        }
-      }
+  pi.on("before_agent_start", (event: unknown, ctx?: unknown): BeforeAgentStartEventResult | undefined => {
+    const evt = asBeforeAgentStartEvent(event);
+    if (!evt) return;
+    const promptText = evt.prompt;
+    const isBypassed = pendingBypasses.delete(promptText);
+    // New blocks go to the tail; the runtime's blocks are never rewritten (AGENTS.md §8).
+    const appended: string[] = [];
+    const clarifyActive = enabled && !isBypassed;
+    if (clarifyActive && !evt.systemPrompt.some((block) => block.includes(CLARIFY_GUIDELINES))) {
+      appended.push(CLARIFY_PROMPT.trim());
     }
 
-    const promptText = evt.prompt ?? evt.promptText ?? "";
     // Zero-turn pitfall / record auto-surfacing
-    const cwd =
-      ctx && typeof ctx === "object" && "cwd" in ctx && typeof ctx.cwd === "string"
-        ? ctx.cwd
-        : process.cwd();
-    if (promptText) {
+    const cwd = asEventContext(ctx).cwd ?? process.cwd();
+    if (promptText && !evt.systemPrompt.some((block) => block.includes("<relevant-knowledge>"))) {
       const root = findKnowledgeRoot(cwd) ?? cwd;
       const matches = findRelevantKnowledge(root, promptText);
-      if (matches.length > 0 && !updatedPrompt.includes("<relevant-knowledge>")) {
+      if (matches.length > 0) {
         const lines = matches.map(
           (m) => `- [${m.kind.toUpperCase()}] ${m.title} (${m.path}) — ${m.snippet}`,
         );
-        updatedPrompt +=
-          `\n<relevant-knowledge>\nThe following repository knowledge matches terms in your prompt:\n${lines.join("\n")}\n</relevant-knowledge>`;
+        appended.push(
+          `<relevant-knowledge>\nThe following repository knowledge matches terms in your prompt:\n${lines.join("\n")}\n</relevant-knowledge>`,
+        );
       }
     }
-    evt.systemPrompt = updatedPrompt;
 
-    if (debugEnabled && enabled && !bypassNextTurn) {
-      const content = [
-        "- System Prompt Injection: ACTIVE",
-        `- Prompt Text: ${promptText}`,
-        "- Injected Guidelines: Present",
-      ].join("\n");
-      return {
-        systemPrompt: updatedPrompt,
-        message: {
-          customType: CLARIFY_DEBUG_CUSTOM_TYPE,
-          content,
-          display: true,
-          attribution: "user",
-        },
-      };
-    }
-    return { systemPrompt: updatedPrompt };
+    const debugMessage =
+      debugEnabled && clarifyActive
+        ? {
+            customType: CLARIFY_DEBUG_CUSTOM_TYPE,
+            content: [
+              "- System Prompt Injection: ACTIVE",
+              `- Prompt Text: ${promptText}`,
+              "- Injected Guidelines: Present",
+            ].join("\n"),
+            display: true,
+            attribution: "user" as const,
+          }
+        : undefined;
+    if (appended.length === 0 && !debugMessage) return;
+    return {
+      ...(appended.length > 0 ? { systemPrompt: [...evt.systemPrompt, ...appended] } : {}),
+      ...(debugMessage ? { message: debugMessage } : {}),
+    };
   });
 
-  pi.on("agent_end", () => {
-    bypassNextTurn = false;
-  });
 
   pi.registerTool({
     name: "clarify_prompt",

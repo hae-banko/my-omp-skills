@@ -228,6 +228,11 @@ export class ResearchOverlay implements ResearchOverlayComponent {
   setActiveSlug(slug: string): void {
     const idx = findActiveIndex(this.state.projects, slug);
     this.state.activeProjectIndex = idx;
+    for (const tab of TABS) {
+      this.state.scrollOffsets[tab] = 0;
+    }
+    this.state.selectedItemIndex = 0;
+    this.cache.clear();
   }
 
   invalidate(): void {
@@ -588,7 +593,7 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     const data = this.currentData();
     if (!data) return undefined;
     const next = data.dashboard.next_step_command ?? data.dashboard.recommended_next_step;
-    if (typeof next === "string" && next.trim().length > 0) return next;
+    if (typeof next === "string" && next.trim().startsWith("/")) return next.trim();
     const slug = this.currentProject()?.slug;
     if (!slug) return undefined;
     const status = (data.dashboard.status ?? "").toUpperCase();
@@ -608,6 +613,11 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     }
 
     if (this.state.showProjectPicker) {
+      if (key === "q" || key === "\x03") {
+        const action: ResearchOverlayAction = { action: "dismiss" };
+        this.onDone?.({ action: "dismiss" });
+        return action;
+      }
       if (key === "p" || key === "\x1b") {
         this.state.showProjectPicker = false;
       } else if (key === "[") {
@@ -680,7 +690,7 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     }
     if (key === "\r") {
       const cmd = this.runCommandForActive();
-      if (!cmd) return undefined;
+      if (!cmd || !cmd.startsWith("/")) return undefined;
       const action: ResearchOverlayAction = { action: "run", command: cmd };
       this.onDone?.(action);
       return action;
@@ -692,7 +702,9 @@ export class ResearchOverlay implements ResearchOverlayComponent {
     const n = this.state.projects.length;
     if (n === 0) return;
     this.state.activeProjectIndex = (this.state.activeProjectIndex + delta + n) % n;
-    this.state.scrollOffsets[this.state.activeTab] = 0;
+    for (const tab of TABS) {
+      this.state.scrollOffsets[tab] = 0;
+    }
     this.state.selectedItemIndex = 0;
     this.cache.clear();
   }

@@ -1,20 +1,16 @@
-// Session-start bootstrap: makes the model aware of this package's commands
-// without the user having to type /help. The pattern (session_start →
-// context → session_compact → agent_end, dedup guard, insert after leading
-// compaction summaries) is adapted from the superpowers extension, which has
-// shipped it in production. The body is injected once per session as a
-// user-role message; it is cleared on agent_end and re-armed on compaction.
+// Session bootstrap: makes the model aware of this package's commands without
+// the user having to type /help.
 //
-// Subagent guard (issue #7): `installBootstrap` tracks whether ANY prior
-// `agent_end` has fired during this extension module's lifetime. A
-// `session_start` (or `session_compact`) that arrives after the main session
-// has already ended is almost certainly a subagent (or a follow-on) — the
-// main session already received its bootstrap, so we MUST NOT re-arm
-// injection. Without this guard, the bootstrap block was being injected into
-// every subagent's transcript, wasting tokens and noise the subagent never
-// acts on.
+// Invariant: The runtime context event is ephemeral and per-request (Fact R6).
+// To maintain prompt awareness across turns, /new, and compactions while
+// preserving KV-cache prefix stability (AGENTS.md §8), bootstrap commands are
+// injected on every `context` event of an interactive session (`ctx.hasUI !== false`),
+// positioned at a stable location immediately following any leading compaction
+// summaries. Subagents (`hasUI === false`) never receive bootstrap commands.
+// The injection is idempotent: if the marker is already present in messages,
+// it is not injected again.
 
-import type { ContextEvent, ContextEventResult, ExtensionApi } from "./api.ts";
+import { asEventContext, type ContextEvent, type ContextEventResult, type ExtensionApi } from "./api.ts";
 
 const BOOTSTRAP_MARKER = "my-omp-skills:available-commands";
 
@@ -23,62 +19,29 @@ export interface BootstrapCommand {
   description: string;
 }
 
-// Module-scoped: tracks whether any agent_end has fired during this
-// extension's process lifetime. Read by session_start and session_compact to
-// decide whether re-arming injection is safe (main session) or a leak
-// (subagent).
-let hasSeenAgentEnd = false;
-
-/**
- * Test seam — zeroes the module-scoped bootstrap state so the selftest can
- * isolate scenarios (first-session / subagent / post-compact) without
- * bleeding flags across runs. Not exported for production callers.
- */
-export function __resetBootstrapForTests(): void {
-  hasSeenAgentEnd = false;
-}
-
 export function installBootstrap(pi: ExtensionApi, commands: BootstrapCommand[]): void {
-  let injectBootstrap = true;
+  pi.on("context", (event, rawCtx) => {
+    const ctx = asEventContext(rawCtx);
+    // Only inject for interactive UI sessions; task subagents (hasUI === false)
+    // must never receive slash command bootstrap.
+    if (ctx.hasUI === false) return;
 
-  pi.on("session_start", () => {
-    // If a prior session has already ended in this extension lifetime, this
-    // session_start is almost certainly a subagent (or follow-on), and the
-    // main session already received its bootstrap. Skip re-arming to prevent
-    // the bootstrap from leaking into the subagent transcript.
-    if (hasSeenAgentEnd) return;
-    injectBootstrap = true;
-  });
-  pi.on("session_compact", () => {
-    // Compaction re-arms for the main session (the summary that just landed
-    // in the tail clears the bootstrap). After an agent_end, any compaction
-    // is subagent-shaped and must NOT re-arm — the main session already
-    // received its bootstrap before it ended.
-    if (hasSeenAgentEnd) return;
-    injectBootstrap = true;
-  });
-  pi.on("agent_end", () => {
-    injectBootstrap = false;
-    hasSeenAgentEnd = true;
-  });
+    // The runtime context event carries `messages` per the documented event contract.
+    const eventPayload = event as ContextEvent;
+    if (!eventPayload || !Array.isArray(eventPayload.messages)) return;
 
-  pi.on("context", (event) => {
-    if (!injectBootstrap) return;
-    // The runtime context event carries `messages` per the documented event
-    // contract (omp://extensions.md); the API shim types it as unknown.
-    const ctx = event as ContextEvent;
-    if (ctx.messages.some(messageContainsBootstrap)) return;
+    if (eventPayload.messages.some(messageContainsBootstrap)) return;
 
-    const insertAt = firstNonCompactionSummaryIndex(ctx.messages);
+    const insertAt = firstNonCompactionSummaryIndex(eventPayload.messages);
     const result: ContextEventResult = {
       messages: [
-        ...ctx.messages.slice(0, insertAt),
+        ...eventPayload.messages.slice(0, insertAt),
         {
           role: "user",
           content: [{ type: "text", text: buildBootstrap(commands) }],
-          timestamp: Date.now(),
+          timestamp: 0,
         },
-        ...ctx.messages.slice(insertAt),
+        ...eventPayload.messages.slice(insertAt),
       ],
     };
     return result;

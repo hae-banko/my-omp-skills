@@ -44,6 +44,7 @@ export interface DebateFrontmatter {
   timestamp: string;
   snapshot_id?: string;
   signature_ed25519?: string;
+  public_key_ed25519?: string;
   consensus_invariants: string[];
 }
 
@@ -77,7 +78,7 @@ interface FrontmatterKV {
 export function isRecentArgs(rawArgs: string): boolean {
   const trimmed = rawArgs.trim();
   if (trimmed.length === 0) return false;
-  return /^(?:--?recent(?:\s+\d+)?)\s*$/.test(trimmed);
+  return /^(?:(?:--?)?(?:recent|history))(?:\s+\d+)?\s*$/i.test(trimmed);
 }
 
 /**
@@ -87,7 +88,7 @@ export function isRecentArgs(rawArgs: string): boolean {
  * `recent` prefixes so the call site stays uniform.
  */
 export function parseRecentCount(rawArgs: string): number {
-  const match = rawArgs.trim().match(/^(?:--?recent)\s+(\d+)$/);
+  const match = rawArgs.trim().match(/^(?:(?:--?)?(?:recent|history))\s+(\d+)$/i);
   if (!match) return DEFAULT_RECENT_LIMIT;
   const n = parseInt(match[1], 10);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_RECENT_LIMIT;
@@ -142,10 +143,10 @@ export function parseDebateFrontmatter(content: string): DebateFrontmatter {
   };
 
   // Extract the leading frontmatter block delimited by `---`.
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return result;
   const block = match[1] ?? "";
-  const lines = block.split("\n");
+  const lines = block.split(/\r?\n/);
 
   let currentList: string | null = null;
 
@@ -178,6 +179,9 @@ export function parseDebateFrontmatter(content: string): DebateFrontmatter {
           break;
         case "signature_ed25519":
           result.signature_ed25519 = unquote(value);
+          break;
+        case "public_key_ed25519":
+          result.public_key_ed25519 = unquote(value).replace(/\\n/g, "\n");
           break;
         case "consensus_invariants":
           // `consensus_invariants:` alone — start a list block.
@@ -279,7 +283,9 @@ export function renderCouncilHistoryCard(records: DebateRecord[], limit: number)
       // topic aggressively so the metadata tail always renders.
       const meta = ` · ${council} · ${invariants} invariants · ${signed}`;
       const metaWidth = displayWidth(meta);
-      const topicBudget = Math.max(0, inner - 2 /* leading " " + date prefix */ - 4 /* "[YYYY-MM-DD]" */ - 1 /* space */ - metaWidth - 1 /* trailing space */);
+      const prefix = ` [${date}] `;
+      const prefixWidth = displayWidth(prefix);
+      const topicBudget = Math.max(0, inner - prefixWidth - metaWidth);
       const truncatedTopic = truncateToWidth(topic, topicBudget);
       const row = ` [${date}] ${truncatedTopic}${meta}`;
       lines.push(boxLine(row, borderColor));

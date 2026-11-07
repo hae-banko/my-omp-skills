@@ -28,6 +28,7 @@ import type {
   CouncilOverlayComponent,
 } from "./council-overlay.ts";
 import { createCouncilOverlay } from "./council-overlay.ts";
+import { runCouncilRecentCommand } from "./council-history.ts";
 
 export type CouncilMode = "quick" | "deep" | "raw";
 
@@ -384,7 +385,9 @@ export function loadCouncilConfig(rootDir?: string): CouncilConfig {
     const raw = readFileSync(configPath, "utf8");
     const lines = raw.split("\n");
     let currentCouncil = "";
+    let councilIndent = -1;
     let currentPersona: Partial<CouncilPersona> | null = null;
+    let inToolsList = false;
     let explicitDefaultCouncil: string | undefined;
     let explicitDefaultMode: CouncilMode = "quick";
     let timeoutSeconds = 30;
@@ -423,56 +426,100 @@ export function loadCouncilConfig(rootDir?: string): CouncilConfig {
         continue;
       }
 
-      // 3. Council declaration: either top-level `my-council:` or indented `  my-council:`
-      const councilMatch = line.match(/^(?:[ \t]{2})?([a-z0-9_-]+):\s*$/i);
-      if (councilMatch && !/^(?:tools|personas|items|config)$/i.test(councilMatch[1])) {
-        if (currentCouncil && currentPersona && currentPersona.id) {
-          pushPersona(councils, currentCouncil, currentPersona);
+      // 3. Council declaration: top-level `my-council:` or indented at any consistent indentation
+      const councilMatch = line.match(/^([ \t]*)([a-z0-9_-]+):\s*$/i);
+      if (
+        councilMatch &&
+        !trimmed.startsWith("-") &&
+        !/^(?:councils|tools|personas|items|config|default|defaultcouncil|default_council|defaultmode|default_mode|mode|timeout|timeoutseconds|timeout_seconds)$/i.test(councilMatch[2])
+      ) {
+        const indent = councilMatch[1].length;
+        if (currentCouncil === "" || indent <= councilIndent) {
+          if (currentCouncil && currentPersona && (currentPersona.id || currentPersona.name)) {
+            pushPersona(councils, currentCouncil, currentPersona);
+          }
+          currentCouncil = councilMatch[2];
+          councilIndent = indent;
+          currentPersona = null;
+          inToolsList = false;
+          councils[currentCouncil] = [];
+          continue;
         }
-        currentCouncil = councilMatch[1];
-        currentPersona = null;
-        // Defining/overriding this council: reset slot so user participant list replaces defaults
-        councils[currentCouncil] = [];
-        continue;
       }
 
-      // 4. Persona declaration
-      if (currentCouncil && /^\s*-\s*id:\s*(.+)$/i.test(line)) {
-        if (currentPersona && currentPersona.id) {
+      // 4. Persona declaration: starting on a bullet line with any persona field
+      const bulletMatch = line.match(/^\s*-\s*([a-z0-9_-]+):\s*(.*)$/i);
+      if (
+        currentCouncil &&
+        bulletMatch &&
+        /^(?:id|name|role|systemPrompt|system_prompt|prompt|badgeColor|badge_color|color|tools)$/i.test(bulletMatch[1])
+      ) {
+        if (currentPersona && (currentPersona.id || currentPersona.name)) {
           pushPersona(councils, currentCouncil, currentPersona);
         }
         currentPersona = {
-          id: line.replace(/^\s*-\s*id:\s*/i, "").trim().replace(/^['"]|['"]$/g, ""),
+          id: "",
           name: "",
           role: "",
           systemPrompt: "",
           badgeColor: BORDER_COLORS.cyan,
           tools: [],
         };
-      } else if (currentPersona) {
-        if (/^\s*name:\s*(.+)$/i.test(line)) {
+        inToolsList = false;
+        const key = bulletMatch[1].toLowerCase();
+        const val = bulletMatch[2].trim().replace(/^['"]|['"]$/g, "");
+        if (key === "id") {
+          currentPersona.id = val;
+        } else if (key === "name") {
+          currentPersona.name = val;
+        } else if (key === "role") {
+          currentPersona.role = val;
+        } else if (key === "systemprompt" || key === "system_prompt" || key === "prompt") {
+          currentPersona.systemPrompt = val;
+        } else if (key === "badgecolor" || key === "badge_color" || key === "color") {
+          currentPersona.badgeColor = resolveBadgeColor(val);
+        } else if (key === "tools") {
+          inToolsList = true;
+        }
+        continue;
+      }
+
+      // 5. Subsequent persona attributes or tools
+      if (currentPersona) {
+        if (/^\s*id:\s*(.+)$/i.test(line)) {
+          inToolsList = false;
+          currentPersona.id = line.replace(/^\s*id:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
+        } else if (/^\s*name:\s*(.+)$/i.test(line)) {
+          inToolsList = false;
           currentPersona.name = line.replace(/^\s*name:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
         } else if (/^\s*role:\s*(.+)$/i.test(line)) {
+          inToolsList = false;
           currentPersona.role = line.replace(/^\s*role:\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
         } else if (/^\s*(?:systemPrompt|system_prompt|prompt):\s*(.+)$/i.test(line)) {
+          inToolsList = false;
           currentPersona.systemPrompt = line.replace(/^\s*(?:systemPrompt|system_prompt|prompt):\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
         } else if (/^\s*(?:badgeColor|badge_color|color):\s*(.+)$/i.test(line)) {
+          inToolsList = false;
           const rawCol = line.replace(/^\s*(?:badgeColor|badge_color|color):\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
           currentPersona.badgeColor = resolveBadgeColor(rawCol);
-        } else if (/^\s*-\s*(.+)$/i.test(line) && /^\s*tools:/i.test(line.replace(/-.*/, "")) === false) {
+        } else if (/^\s*tools:\s*$/i.test(line)) {
+          inToolsList = true;
+        } else if (inToolsList && /^\s*-\s*([^:]+)$/i.test(line)) {
           const tool = line.replace(/^\s*-\s*/i, "").trim().replace(/^['"]|['"]$/g, "");
           if (tool) currentPersona.tools = [...(currentPersona.tools ?? []), tool];
+        } else if (/^\s*[a-z0-9_-]+:/i.test(line)) {
+          inToolsList = false;
         }
       }
     }
 
-    if (currentCouncil && currentPersona && currentPersona.id) {
+    if (currentCouncil && currentPersona && (currentPersona.id || currentPersona.name)) {
       pushPersona(councils, currentCouncil, currentPersona);
     }
 
     const defaultCouncil = explicitDefaultCouncil && councils[explicitDefaultCouncil]
       ? explicitDefaultCouncil
-      : explicitDefaultCouncil || "default-triad";
+      : "default-triad";
 
     return {
       councils,
@@ -492,7 +539,7 @@ function pushPersona(
   persona: Partial<CouncilPersona>,
 ): void {
   const cleaned: CouncilPersona = {
-    id: persona.id ?? "",
+    id: persona.id || persona.name?.toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "persona",
     name: persona.name ?? "",
     role: persona.role ?? "",
     systemPrompt: persona.systemPrompt ?? "",
@@ -646,14 +693,17 @@ export function partitionCouncilOpinions(opinions: CouncilOpinion[], topic: stri
     };
   }
 
-  // 1. Collect all invariant statements across personas
-  const invariantCounts = new Map<string, { count: number; personas: string[] }>();
+  // 1. Collect all invariant statements across personas (deduplicating per persona)
+  const invariantCounts = new Map<string, { count: number; personas: Set<string> }>();
   for (const op of opinions) {
+    const seenForPersona = new Set<string>();
     for (const inv of op.keyInvariants) {
       const normalized = inv.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "");
-      const existing = invariantCounts.get(normalized) || { count: 0, personas: [] };
+      if (seenForPersona.has(normalized)) continue;
+      seenForPersona.add(normalized);
+      const existing = invariantCounts.get(normalized) || { count: 0, personas: new Set<string>() };
       existing.count += 1;
-      existing.personas.push(op.personaName);
+      existing.personas.add(op.personaName);
       invariantCounts.set(normalized, existing);
     }
   }
@@ -668,7 +718,7 @@ export function partitionCouncilOpinions(opinions: CouncilOpinion[], topic: stri
         if (entry.count >= total && !consensusInvariants.includes(inv)) {
           consensusInvariants.push(inv);
         } else if (entry.count >= Math.ceil(total * 0.6) && entry.count < total && !majorityRecommendations.includes(inv)) {
-          majorityRecommendations.push(`${inv} (supported by ${entry.personas.join(", ")})`);
+          majorityRecommendations.push(`${inv} (supported by ${Array.from(entry.personas).join(", ")})`);
         }
       }
     }
@@ -808,7 +858,14 @@ export function saveCouncilRecord(rootDir: string, verdict: CouncilVerdict): str
     .slice(0, 40) || "deliberation";
 
   const filename = `${dateStr}_${slug}.md`;
-  const targetPath = join(debatesDir, filename);
+  let targetPath = join(debatesDir, filename);
+  if (existsSync(targetPath)) {
+    let counter = 2;
+    while (existsSync(join(debatesDir, `${dateStr}_${slug}_${counter}.md`))) {
+      counter++;
+    }
+    targetPath = join(debatesDir, `${dateStr}_${slug}_${counter}.md`);
+  }
 
   const lines: string[] = [
     "---",
@@ -819,6 +876,7 @@ export function saveCouncilRecord(rootDir: string, verdict: CouncilVerdict): str
     `timestamp: "${verdict.timestamp}"`,
     ...(verdict.snapshotId ? [`snapshot_id: ${verdict.snapshotId}`] : []),
     ...(verdict.signature ? [`signature_ed25519: ${verdict.signature}`] : []),
+    ...(verdict.publicKey ? [`public_key_ed25519: "${verdict.publicKey.replace(/\r?\n/g, "\\n").replace(/"/g, '\\"')}"`] : []),
     "consensus_invariants:",
     ...verdict.consensusInvariants.map((c) => `  - "${c.replace(/"/g, '\\"')}"`),
     "---",
@@ -1131,39 +1189,64 @@ export function parseCouncilArgs(rawArgs: string, knownCouncilIds?: string[]): P
   let compact = false;
   let verbose = false;
   const topicParts: string[] = [];
+  let inLeadingKeywords = true;
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    if (tok === "--quick" || tok === "quick") { mode = "quick"; explicitMode = true; }
-    else if (tok === "--deep" || tok === "deep" || tok === "--debate" || tok === "debate") { mode = "deep"; explicitMode = true; }
-    else if (tok === "--raw" || tok === "raw") { mode = "raw"; explicitMode = true; }
-    else if (tok === "--save" || tok === "save" || tok === "--record" || tok === "record") save = true;
-    else if (tok === "--actionable" || tok === "actionable") actionable = true;
-    else if (tok === "--verbose" || tok === "verbose") verbose = true;
-    else if (tok === "--overlay" || tok === "overlay" || tok === "--modal" || tok === "modal") overlay = true;
-    else if (
-      tok === "--compact" || tok === "compact" ||
-      tok === "--terse" || tok === "terse" ||
-      tok === "--summary" || tok === "summary"
-    ) compact = true;
-    else if (
-      tok === "--council" || tok === "council" || tok === "--preset" || tok === "preset"
-    ) {
+    if (tok === "--quick") { mode = "quick"; explicitMode = true; }
+    else if (tok === "--deep" || tok === "--debate") { mode = "deep"; explicitMode = true; }
+    else if (tok === "--raw") { mode = "raw"; explicitMode = true; }
+    else if (tok === "--save" || tok === "--record") save = true;
+    else if (tok === "--actionable") actionable = true;
+    else if (tok === "--verbose") verbose = true;
+    else if (tok === "--overlay" || tok === "--modal") overlay = true;
+    else if (tok === "--compact" || tok === "--terse" || tok === "--summary") compact = true;
+    else if (tok === "--council" || tok === "--preset") {
       const next = tokens[i + 1];
       if (next) {
         councilName = resolveCouncilPreset(next);
         i += 1;
       }
-    } else if (tok in PRESET_FLAG_ALIASES) {
+    } else if (tok.startsWith("--") && tok in PRESET_FLAG_ALIASES) {
       councilName = PRESET_FLAG_ALIASES[tok];
-    } else if (!councilName && knownCouncilIds && knownCouncilIds.length > 0) {
-      const lower = tok.toLowerCase();
-      if (!(lower in COUNCIL_ARG_KEYWORDS)) {
-        const matched = knownCouncilIds.find((id) => id.toLowerCase() === lower);
-        if (matched) councilName = matched;
-        else topicParts.push(tok);
-      } else topicParts.push(tok);
-    } else topicParts.push(tok);
+    } else if (inLeadingKeywords) {
+      if (tok === "quick") { mode = "quick"; explicitMode = true; }
+      else if (tok === "deep" || tok === "debate") { mode = "deep"; explicitMode = true; }
+      else if (tok === "raw") { mode = "raw"; explicitMode = true; }
+      else if (tok === "save" || tok === "record") save = true;
+      else if (tok === "actionable") actionable = true;
+      else if (tok === "verbose") verbose = true;
+      else if (tok === "overlay" || tok === "modal") overlay = true;
+      else if (tok === "compact" || tok === "terse" || tok === "summary") compact = true;
+      else if (tok === "council" || tok === "preset") {
+        const next = tokens[i + 1];
+        if (next) {
+          councilName = resolveCouncilPreset(next);
+          i += 1;
+        }
+      } else if (tok in PRESET_FLAG_ALIASES) {
+        councilName = PRESET_FLAG_ALIASES[tok];
+      } else if (!councilName && knownCouncilIds && knownCouncilIds.length > 0) {
+        const lower = tok.toLowerCase();
+        if (!(lower in COUNCIL_ARG_KEYWORDS)) {
+          const matched = knownCouncilIds.find((id) => id.toLowerCase() === lower);
+          if (matched) {
+            councilName = matched;
+          } else {
+            inLeadingKeywords = false;
+            topicParts.push(tok);
+          }
+        } else {
+          inLeadingKeywords = false;
+          topicParts.push(tok);
+        }
+      } else {
+        inLeadingKeywords = false;
+        topicParts.push(tok);
+      }
+    } else {
+      topicParts.push(tok);
+    }
   }
 
   return { mode, explicitMode, councilName, save, actionable, overlay, compact, verbose, topic: topicParts.join(" ") };
@@ -1174,11 +1257,22 @@ export function parseCouncilArgs(rawArgs: string, knownCouncilIds?: string[]): P
  *  remainder, or `null` when the args describe a normal deliberation. */
 export function parseCouncilSubcommand(
   rawArgs: string,
-): { sub: "list" | "init" | "edit" | "config"; rest: string } | null {
+): { sub: "list" | "init" | "edit" | "config" | "recent" | "history"; rest: string } | null {
   const tokens = rawArgs.trim().split(/\s+/).filter(Boolean);
-  const head = tokens[0]?.toLowerCase();
-  if (head === "list" || head === "init" || head === "edit" || head === "config") {
-    return { sub: head, rest: tokens.slice(1).join(" ") };
+  const rawHead = tokens[0]?.toLowerCase();
+  const head = rawHead?.replace(/^--?/, "");
+  if (
+    head === "list" ||
+    head === "init" ||
+    head === "edit" ||
+    head === "config" ||
+    head === "recent" ||
+    head === "history"
+  ) {
+    return {
+      sub: head as "list" | "init" | "edit" | "config" | "recent" | "history",
+      rest: tokens.slice(1).join(" "),
+    };
   }
   return null;
 }
@@ -1205,7 +1299,7 @@ export async function runCouncilCommand(
   ctx: CommandContext,
   resources: { body: string; companionPaths: string[] },
 ): Promise<void> {
-  // Subcommand short-circuit: `/council list`, `/council init`, and `/council edit`
+  // Subcommand short-circuit: `/council list`, `/council init`, `/council edit`, `/council recent`
   const sub = parseCouncilSubcommand(rawArgs);
   if (sub) {
     if (sub.sub === "list") {
@@ -1218,6 +1312,10 @@ export async function runCouncilCommand(
     }
     if (sub.sub === "edit" || sub.sub === "config") {
       await runCouncilEditSubcommand(pi, root, ctx);
+      return;
+    }
+    if (sub.sub === "recent" || sub.sub === "history") {
+      await runCouncilRecentCommand({ rawArgs, root, pi, ctx });
       return;
     }
   }
@@ -1298,6 +1396,12 @@ export async function runCouncilCommand(
     `Council deliberating on "${truncateForStatus(topic)}"`,
   );
   ctx.ui?.notify?.(`Council deliberation started`, "info");
+  let cleared = false;
+  pi.on("agent_end", () => {
+    if (cleared) return;
+    cleared = true;
+    ctx.ui?.setStatus?.(COUNCIL_STATUS_KEY, undefined);
+  });
   const argText = rawArgs.trim();
   let text = resources.body;
   text = text.replace(/\$ARGUMENTS/g, argText || "");
@@ -1370,9 +1474,8 @@ export async function runCouncilCommand(
     void launchCouncilOverlay(pi, root, ctx, topic, councilName, mode);
   }
 
-  // 7. Clear the status widget; the executing agent will repopulate it on Stage transitions.
-  ctx.ui?.setStatus?.(COUNCIL_STATUS_KEY, undefined);
- }
+  // Deliberation turn handed to executing agent; status clears on agent_end
+}
 
 /** `/council list` — print every built-in + user-defined council. */
 function runCouncilListSubcommand(pi: ExtensionApi, root: string, ctx: CommandContext): void {

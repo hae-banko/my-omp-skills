@@ -55,8 +55,8 @@ export interface StatusFacts {
 
 /** Deterministic derivation for static file snapshots (no clock, no state). */
 export function derivePipelineStatus(facts: StatusFacts): PipelineStatus {
-  if (facts.explicit && isPipelineStatus(facts.explicit)) return facts.explicit;
   if (facts.hasReport) return "REPORT_READY";
+  if (facts.explicit && isPipelineStatus(facts.explicit)) return facts.explicit;
   const completed = facts.completedItems ?? 0;
   const total = facts.totalItems ?? 0;
   if (total > 0 && completed >= total) return "CONVERGED";

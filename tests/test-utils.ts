@@ -197,10 +197,14 @@ export function createTestContext(): TestContext {
             if (!res || typeof res !== "object") continue;
             const result = res as Record<string, unknown>;
             if ("systemPrompt" in result && result.systemPrompt !== undefined) {
-              chainedSystemPrompt = result.systemPrompt;
+              // Runtime parity (extensions/runner.ts emitBeforeAgentStart):
+              // systemPrompt is string[]; a returned string is wrapped, and the
+              // next handler sees the chained array.
+              const chained = typeof result.systemPrompt === "string" ? [result.systemPrompt] : result.systemPrompt;
+              chainedSystemPrompt = chained;
               hasSystemPrompt = true;
               if (evt && typeof evt === "object") {
-                (evt as Record<string, unknown>).systemPrompt = result.systemPrompt;
+                (evt as Record<string, unknown>).systemPrompt = chained;
               }
             }
             if ("message" in result && result.message !== undefined) {

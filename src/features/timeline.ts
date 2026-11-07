@@ -58,7 +58,8 @@ export function getGitEvents(root: string, limit: number): TimelineItem[] {
       if (!line) continue;
       const parts = line.split("|");
       if (parts.length < 4) continue;
-      const [date, hash, refs, subject] = parts;
+      const [date, hash, refs] = parts;
+      const subject = parts.slice(3).join("|");
       let badge: string | undefined;
       const tagMatch = refs.match(/tag:\s*([vV]?\d+\.\d+\.\d+[^\s,)]*)/);
       if (tagMatch) {

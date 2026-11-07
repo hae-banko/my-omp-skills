@@ -33,8 +33,7 @@ import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Container, Text } from "@oh-my-pi/pi-tui";
-import type { ExtensionApi } from "../core/api.ts";
-
+import { sessionIdOf, type ExtensionApi } from "../core/api.ts";
 /** A "substantial" pure-reasoning turn, in characters of thinking text. */
 const THINKING_MIN_CHARS = 400;
 
@@ -68,12 +67,11 @@ let config: HindsightConfig = DEFAULT_CONFIG;
 let enabled = false;
 
 /**
- * User-message count at the last nudge. A nudge is spent for the whole user
- * yield: internal turns (advisor cards, todo reminders, follow-up drains)
- * within the same yield never re-nudge, and only a NEW user message re-arms
- * the pass. `-1` = never nudged (fresh module).
+ * Last-nudged turn identity per session: Map<sessionId, userMessageIdentity>.
+ * A nudge is spent for the whole user yield: internal turns within the same
+ * yield carry the same user message identity, so they never re-nudge.
  */
-let nudgedUserMessageCount = -1;
+const nudgedTurnBySession = new Map<string, string>();
 
 let cachedPath: string | null = null;
 let cachedMtime: number | null = null;
@@ -160,31 +158,69 @@ interface SessionStopEvent {
   stop_hook_active?: unknown;
   last_assistant_message?: unknown;
   messages?: unknown;
+  session_id?: unknown;
 }
 
-/** Count of user-role messages in the turn transcript (yield boundary). */
-function countUserMessages(messages: unknown): number {
-  if (!Array.isArray(messages)) return -1;
-  let n = 0;
-  for (const m of messages) {
-    if (m && typeof m === "object" && (m as { role?: unknown }).role === "user") n += 1;
+/**
+ * Last user message and its identity. Runtime user messages carry a
+ * `timestamp`, unique per prompt even when two prompts have identical text;
+ * the transcript index is the fallback for timestamp-less payloads.
+ */
+function findLastUserMessage(messages: unknown): { index: number; id: string } | null {
+  if (!Array.isArray(messages)) return null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m: unknown = messages[i];
+    if (m && typeof m === "object" && "role" in m && m.role === "user") {
+      const id = "timestamp" in m && typeof m.timestamp === "number" ? `ts:${m.timestamp}` : `idx:${i}`;
+      return { index: i, id };
+    }
   }
-  return n;
+  return null;
+}
+
+export function didTurnDoRealWork(messages: unknown, lastAssistantMessage: unknown): boolean {
+  if (didRealWork(lastAssistantMessage)) return true;
+  if (!Array.isArray(messages)) return false;
+  const lastUser = findLastUserMessage(messages);
+  const startIndex = lastUser ? lastUser.index + 1 : 0;
+  for (let i = startIndex; i < messages.length; i++) {
+    const m = messages[i];
+    if (!m || typeof m !== "object") continue;
+    const obj = m as Record<string, unknown>;
+    const role = obj.role;
+    if (role === "tool" || role === "toolResult" || role === "tool_result") return true;
+    if (role === "assistant" && Array.isArray(obj.content)) {
+      for (const block of obj.content) {
+        if (!block || typeof block !== "object") continue;
+        const b = block as Record<string, unknown>;
+        const type = b.type;
+        if (type === "toolCall" || type === "tool_use" || type === "toolResult" || type === "tool_result") {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 export function installHindsight(pi: ExtensionApi): void {
   reloadHindsightConfig();
-  pi.on("session_stop", (event) => {
+  pi.on("session_stop", (event, rawCtx) => {
     if (!enabled) return;
+    reloadHindsightConfig();
     const stopEvent = event as SessionStopEvent;
     if (stopEvent.stop_hook_active === true) return; // already a continuation turn
-    if (!didRealWork(stopEvent.last_assistant_message)) return; // trivial turn
-    // Once per yield: one nudge per user message, never more until the user
-    // prompts again. Internal turns (advisors, reminders, drains) within the
-    // same yield carry the same user-message count, so they never re-nudge.
-    const userCount = countUserMessages(stopEvent.messages);
-    if (userCount >= 0 && userCount === nudgedUserMessageCount) return;
-    nudgedUserMessageCount = userCount;
+    if (!didTurnDoRealWork(stopEvent.messages, stopEvent.last_assistant_message)) return; // trivial turn
+
+    const sid = typeof stopEvent.session_id === "string" && stopEvent.session_id
+      ? stopEvent.session_id
+      : sessionIdOf(rawCtx) ?? "default";
+
+    const lastUser = findLastUserMessage(stopEvent.messages);
+    if (!lastUser) return;
+
+    if (nudgedTurnBySession.get(sid) === lastUser.id) return;
+    nudgedTurnBySession.set(sid, lastUser.id);
     return { continue: true, additionalContext: buildNudge() };
   });
   pi.registerMessageRenderer("hindsight", (message, _options, _theme) => {

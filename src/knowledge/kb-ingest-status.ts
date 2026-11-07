@@ -18,8 +18,9 @@
 // increment — they are revisions, not ingest.
 
 import { existsSync } from "node:fs";
-import { isAbsolute, normalize, resolve, sep } from "node:path";
-import type { ExtensionApi } from "../core/api.ts";
+import { isAbsolute, join, normalize, resolve, sep } from "node:path";
+import { asEventContext, sessionIdOf, type ExtensionApi } from "../core/api.ts";
+import { findKnowledgeRoot } from "./knowledge.ts";
 
 /** Unique key for `ui.setStatus`. Distinct from `kb-guardrail` so both widgets coexist. */
 export const STATUS_KEY = "kb-ingest";
@@ -27,9 +28,30 @@ export const STATUS_KEY = "kb-ingest";
 /** Kind of file ingested. */
 export type IngestKind = "record" | "pitfall";
 
-/** Module-scoped counters; reset per session. */
-let recordCount = 0;
-let pitfallCount = 0;
+interface SessionIngestState {
+  recordCount: number;
+  pitfallCount: number;
+  cwd: string | null;
+  ingestedPaths: Set<string>;
+}
+
+const sessionIngestStates = new Map<string, SessionIngestState>();
+let currentSessionId = "default";
+
+function getOrCreateState(sessionId?: string): SessionIngestState {
+  const id = sessionId ?? currentSessionId;
+  let state = sessionIngestStates.get(id);
+  if (!state) {
+    state = {
+      recordCount: 0,
+      pitfallCount: 0,
+      cwd: sessionRootCwd,
+      ingestedPaths: new Set<string>(),
+    };
+    sessionIngestStates.set(id, state);
+  }
+  return state;
+}
 
 /** Closure-captured cwd from the most recent session_start. `null` before then. */
 let sessionRootCwd: string | null = null;
@@ -40,32 +62,42 @@ let setStatusFn: ((key: string, text: string | undefined) => void) | undefined =
 
 /**
  * Record a single ingest event. Increments the matching counter and refreshes
- * the status-bar entry. Intended caller: `installKbIngestStatus` (one site,
- * the `tool_call` subscriber).
+ * the status-bar entry. Intended caller: `installKbIngestStatus` (the `tool_result` subscriber).
  */
-export function recordIngest(kind: IngestKind): void {
+export function recordIngest(
+  kind: IngestKind,
+  targetPath?: string,
+  sessionId?: string,
+): void {
+  const state = getOrCreateState(sessionId);
+  if (targetPath) {
+    if (state.ingestedPaths.has(targetPath)) return;
+    state.ingestedPaths.add(targetPath);
+  }
   if (kind === "record") {
-    recordCount += 1;
+    state.recordCount += 1;
   } else {
-    pitfallCount += 1;
+    state.pitfallCount += 1;
   }
   refreshStatus();
 }
 
 /** Zero both counters. Called on each `session_start`. */
-export function resetSession(): void {
-  recordCount = 0;
-  pitfallCount = 0;
+export function resetSession(sessionId?: string): void {
+  const state = getOrCreateState(sessionId);
+  state.recordCount = 0;
+  state.pitfallCount = 0;
+  state.ingestedPaths.clear();
 }
 
-/** Snapshot accessor for tests; not part of the public runtime surface. */
-export function getRecordCount(): number {
-  return recordCount;
+/** Records ingested by `sessionId` (default: current main session); read-only. */
+export function getRecordCount(sessionId?: string): number {
+  return sessionIngestStates.get(sessionId ?? currentSessionId)?.recordCount ?? 0;
 }
 
-/** Snapshot accessor for tests; not part of the public runtime surface. */
-export function getPitfallCount(): number {
-  return pitfallCount;
+/** Pitfalls ingested by `sessionId` (default: current main session); read-only. */
+export function getPitfallCount(sessionId?: string): number {
+  return sessionIngestStates.get(sessionId ?? currentSessionId)?.pitfallCount ?? 0;
 }
 
 /**
@@ -79,12 +111,18 @@ export function getPitfallCount(): number {
  * the widget is active on a quiet session, and the counters become the loud
  * state once the model starts appending.
  */
-export function formatStatusText(rootCwd: string | null): string | undefined {
+export function formatStatusText(
+  rootCwd: string | null,
+  sessionId?: string,
+): string | undefined {
   if (rootCwd === null) return undefined;
-  if (!existsSync(resolve(rootCwd, ".omp", "knowledge"))) return undefined;
-  const rNoun = recordCount === 1 ? "record" : "records";
-  const pNoun = pitfallCount === 1 ? "pitfall" : "pitfalls";
-  return `KB: ${recordCount} ${rNoun} · ${pitfallCount} ${pNoun}`;
+  const root = findKnowledgeRoot(rootCwd);
+  if (!root) return undefined;
+  if (!existsSync(join(root, ".omp", "knowledge"))) return undefined;
+  const state = getOrCreateState(sessionId);
+  const rNoun = state.recordCount === 1 ? "record" : "records";
+  const pNoun = state.pitfallCount === 1 ? "pitfall" : "pitfalls";
+  return `KB: ${state.recordCount} ${rNoun} · ${state.pitfallCount} ${pNoun}`;
 }
 
 /** Re-render the status bar entry from the current closure state. */
@@ -132,34 +170,78 @@ export function classifyIngestPath(
  *    overwrites of existing files do NOT increment; those are revisions.
  */
 export function installKbIngestStatus(pi: ExtensionApi): void {
-  pi.on("session_start", (event) => {
-    const cwd = readCwdFromEvent(event);
-    sessionRootCwd = cwd;
-    resetSession();
+  const syncUi = (ctx?: unknown) => {
+    const evCtx = asEventContext(ctx);
+    if (evCtx.hasUI !== false && typeof evCtx.ui?.setStatus === "function") {
+      setStatusFn = evCtx.ui.setStatus.bind(evCtx.ui);
+    }
+  };
+
+  pi.on("session_start", (event, ctx) => {
+    const evCtx = asEventContext(ctx);
+    const isSubagent = evCtx.hasUI === false;
+    const sessId = sessionIdOf(ctx) ?? (isSubagent ? "subagent" : "default");
+    if (!isSubagent) {
+      currentSessionId = sessId;
+      sessionRootCwd = readCwdFromEvent(event);
+      syncUi(ctx);
+      resetSession(sessId);
+      refreshStatus();
+    } else {
+      resetSession(sessId);
+    }
+  });
+
+  const handleSessionChange = (event: unknown, ctx?: unknown) => {
+    const evCtx = asEventContext(ctx);
+    if (evCtx.hasUI === false) return;
+    const sessId = sessionIdOf(ctx) ?? "default";
+    currentSessionId = sessId;
+    if (evCtx.cwd) sessionRootCwd = evCtx.cwd;
+    syncUi(ctx);
+    if (!sessionIngestStates.has(sessId)) {
+      sessionIngestStates.set(sessId, {
+        recordCount: 0,
+        pitfallCount: 0,
+        cwd: sessionRootCwd,
+        ingestedPaths: new Set<string>(),
+      });
+    }
+    refreshStatus();
+  };
+
+  pi.on("session_switch", handleSessionChange);
+  pi.on("session_branch", handleSessionChange);
+  pi.on("session_tree", handleSessionChange);
+
+  pi.on("agent_end", (_event, ctx) => {
+    syncUi(ctx);
     refreshStatus();
   });
-  pi.on("agent_end", () => {
-    refreshStatus();
+
+  // Task subagents are disposed after they finish; their dispose emits
+  // session_shutdown on their own binding. Release that session's entry so
+  // the process-shared map tracks only live sessions.
+  pi.on("session_shutdown", (_event, ctx) => {
+    const sessId = sessionIdOf(ctx);
+    if (sessId) sessionIngestStates.delete(sessId);
   });
-  pi.on("tool_call", (event) => {
+
+  pi.on("tool_result", (event, ctx) => {
     if (!event || typeof event !== "object") return;
-    if (!("toolName" in event) || !("input" in event)) return;
-    const toolName = event.toolName;
-    if (toolName !== "write") return;
-    const input = event.input;
-    if (!input || typeof input !== "object") return;
-    if (!("path" in input)) return;
+    const e = event as { toolName?: unknown; input?: unknown; isError?: unknown };
+    if (e.toolName !== "write" || e.isError) return;
+    const input = e.input;
+    if (!input || typeof input !== "object" || !("path" in input)) return;
     const inputPath = input.path;
     if (typeof inputPath !== "string") return;
-    const cwd = sessionRootCwd ?? process.cwd();
+    const cwd = asEventContext(ctx).cwd ?? sessionRootCwd ?? process.cwd();
     const kind = classifyIngestPath(cwd, inputPath);
     if (kind === null) return;
-    // Resolve the absolute path the write would create, then check
-    // existsSync BEFORE the write has run (tool_call fires pre-exec). An
-    // existing target means revision, not ingest — do not increment.
     const target = resolve(cwd, inputPath);
-    if (existsSync(target)) return;
-    recordIngest(kind);
+    if (!existsSync(target)) return;
+    const sessId = sessionIdOf(ctx);
+    recordIngest(kind, target, sessId);
   });
 }
 

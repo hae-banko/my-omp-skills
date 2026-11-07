@@ -7,12 +7,13 @@
 // 3. Renders ANSI bar charts for category intensity and the global repository rage leaderboard.
 // 4. Informs the harness defensive policy (e.g. locking autonomous git push under DEFCON 1-2).
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
-import type { CommandContext, ExtensionApi } from "../core/api.ts";
-import type { Component } from "@oh-my-pi/pi-tui";
+import { basename, dirname, join, resolve } from "node:path";
+import { sessionIdOf, type CommandContext, type ExtensionApi } from "../core/api.ts";
+import { findRepoRoot } from "../core/workspace.ts";
 import { createTuiCard, type CardSpec, type SemanticCardIntent } from "../core/card.ts";
+import type { Component } from "@oh-my-pi/pi-tui";
 import {
   BORDER_COLORS,
   bold,
@@ -400,87 +401,130 @@ function getLocalTiltPath(root: string): string {
   return join(root, ".omp", "tilt.json");
 }
 
+function atomicWriteJson(filePath: string, data: unknown): void {
+  const dir = dirname(filePath);
+  mkdirSync(dir, { recursive: true });
+  const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
+  writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf8");
+  renameSync(tmpPath, filePath);
+}
+
+function quarantineCorruptFile(filePath: string): void {
+  try {
+    const corruptPath = `${filePath}.corrupt.${Date.now()}`;
+    renameSync(filePath, corruptPath);
+  } catch {
+    // Ignore quarantine failures
+  }
+}
+
+// In-memory active session strikes tracked per session id
+const sessionStrikesBySession = new Map<string, number>();
+
+export function getActiveSessionStrikes(sessionId?: string): number {
+  if (!sessionId) return 0;
+  return sessionStrikesBySession.get(sessionId) ?? 0;
+}
+
+export function setActiveSessionStrikes(sessionId: string, count: number): void {
+  sessionStrikesBySession.set(sessionId, count);
+}
+
+export function clearActiveSessionStrikes(sessionId?: string): void {
+  if (sessionId) {
+    sessionStrikesBySession.delete(sessionId);
+  } else {
+    sessionStrikesBySession.clear();
+  }
+}
+
 export function readGlobalTilt(): GlobalTiltState {
   const path = getGlobalTiltPath();
+  const defaultState: GlobalTiltState = {
+    version: 1,
+    lifetime_strikes: 0,
+    lifetime_swear_jar: 0,
+    breakdown: { f_bombs: 0, rage_words: 0, wtfs: 0, caps_rage: 0 },
+    repo_leaderboard: {},
+  };
   if (!existsSync(path)) {
-    return {
-      version: 1,
-      lifetime_strikes: 0,
-      lifetime_swear_jar: 0,
-      breakdown: { f_bombs: 0, rage_words: 0, wtfs: 0, caps_rage: 0 },
-      repo_leaderboard: {},
-    };
+    return defaultState;
   }
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    return {
-      version: 1,
-      lifetime_strikes: 0,
-      lifetime_swear_jar: 0,
-      breakdown: { f_bombs: 0, rage_words: 0, wtfs: 0, caps_rage: 0 },
-      repo_leaderboard: {},
-    };
+    quarantineCorruptFile(path);
+    return defaultState;
   }
 }
 
 export function writeGlobalTilt(state: GlobalTiltState): void {
   const path = getGlobalTiltPath();
-  const dir = join(homedir(), ".omp");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path, JSON.stringify(state, null, 2), "utf8");
+  atomicWriteJson(path, state);
 }
 
-export function readLocalTilt(root: string): LocalTiltState {
+export function readLocalTilt(root: string, sessionId?: string): LocalTiltState {
   const path = getLocalTiltPath(root);
   const repoName = basename(root) || "workspace";
+  const strikes = getActiveSessionStrikes(sessionId);
+  const defcon = calculateDefcon(strikes);
+  const defaultState: LocalTiltState = {
+    project: repoName,
+    project_strikes: 0,
+    session_strikes: strikes,
+    swear_jar_total: 0,
+    defcon,
+    breakdown: { f_bombs: 0, rage_words: 0, wtfs: 0, caps_rage: 0 },
+  };
   if (!existsSync(path)) {
-    return {
-      project: repoName,
-      project_strikes: 0,
-      session_strikes: 0,
-      swear_jar_total: 0,
-      defcon: 5,
-      breakdown: { f_bombs: 0, rage_words: 0, wtfs: 0, caps_rage: 0 },
-    };
+    return defaultState;
   }
   try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as LocalTiltState;
     return {
-      project: repoName,
-      project_strikes: 0,
-      session_strikes: 0,
-      swear_jar_total: 0,
-      defcon: 5,
-      breakdown: { f_bombs: 0, rage_words: 0, wtfs: 0, caps_rage: 0 },
+      ...parsed,
+      session_strikes: strikes,
+      defcon,
     };
+  } catch {
+    quarantineCorruptFile(path);
+    return defaultState;
   }
 }
 
 export function writeLocalTilt(root: string, state: LocalTiltState): void {
   const path = getLocalTiltPath(root);
-  const dir = join(root, ".omp");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path, JSON.stringify(state, null, 2), "utf8");
+  atomicWriteJson(path, state);
 }
-
 /**
  * Record a user input incident into both local and global stores.
  */
-export function recordTiltIncident(prompt: string, root: string): { points: number; defcon: number } | null {
+export function recordTiltIncident(
+  prompt: string,
+  startDir: string,
+  sessionId?: string,
+): { points: number; defcon: number } | null {
   const { points, breakdown, matches } = scanPromptTilt(prompt);
   if (points <= 0) return null;
 
+  const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+  const root = override && override.trim() ? override.trim() : findRepoRoot(startDir);
   const repoName = basename(root) || "workspace";
-  const local = readLocalTilt(root);
+
+  // Update in-memory session strikes
+  const currentSessionStrikes = getActiveSessionStrikes(sessionId) + points;
+  if (sessionId) {
+    setActiveSessionStrikes(sessionId, currentSessionStrikes);
+  }
+
+  const local = readLocalTilt(root, sessionId);
   const global = readGlobalTilt();
 
   // Update Local
-  local.session_strikes += points;
+  local.session_strikes = currentSessionStrikes;
   local.project_strikes += points;
   local.swear_jar_total += points * SWEAR_JAR_FEE_PER_POINT;
-  local.defcon = calculateDefcon(local.session_strikes);
+  local.defcon = calculateDefcon(currentSessionStrikes);
   local.breakdown.f_bombs += breakdown.f_bombs;
   local.breakdown.rage_words += breakdown.rage_words;
   local.breakdown.wtfs += breakdown.wtfs;
@@ -743,8 +787,10 @@ export async function runTiltCommand(
 ): Promise<void> {
   const arg = args.trim().toLowerCase();
 
+  const sid = sessionIdOf(ctx);
   if (arg === "reset") {
-    const local = readLocalTilt(root);
+    clearActiveSessionStrikes(sid);
+    const local = readLocalTilt(root, sid);
     local.session_strikes = 0;
     local.defcon = 5;
     writeLocalTilt(root, local);
@@ -753,7 +799,8 @@ export async function runTiltCommand(
   }
 
   if (arg === "clear-all") {
-    const local = readLocalTilt(root);
+    clearActiveSessionStrikes(sid);
+    const local = readLocalTilt(root, sid);
     local.session_strikes = 0;
     local.project_strikes = 0;
     local.swear_jar_total = 0;
@@ -764,7 +811,7 @@ export async function runTiltCommand(
     return;
   }
 
-  const local = readLocalTilt(root);
+  const local = readLocalTilt(root, sid);
   const global = readGlobalTilt();
   const payload: TiltCardPayload = { local, global };
 
@@ -789,8 +836,10 @@ export function installTilt(pi: ExtensionApi): void {
     ) {
       payload = details as TiltCardPayload;
     } else {
+      const override = process.env.MY_OMP_SKILLS_TEST_ROOT;
+      const root = override && override.trim() ? override.trim() : findRepoRoot();
       payload = {
-        local: readLocalTilt(process.cwd()),
+        local: readLocalTilt(root),
         global: readGlobalTilt(),
       };
     }
@@ -799,7 +848,7 @@ export function installTilt(pi: ExtensionApi): void {
 
   // 2. Passively track input events for tilt
   if (typeof pi.on === "function") {
-    pi.on("input", (event: unknown) => {
+    pi.on("input", (event: unknown, rawCtx?: unknown) => {
       let text = "";
       if (event && typeof event === "object" && "text" in event && typeof event.text === "string") {
         text = event.text;
@@ -815,12 +864,18 @@ export function installTilt(pi: ExtensionApi): void {
 
       if (text) {
         try {
-          recordTiltIncident(text, process.cwd());
+          const sid = sessionIdOf(rawCtx);
+          recordTiltIncident(text, process.cwd(), sid);
         } catch {
           // Never fail the input hook
         }
       }
       return { text, action: "continue" };
+    });
+    // Release a disposed session's strike count (task subagents dispose on finish).
+    pi.on("session_shutdown", (_event: unknown, rawCtx?: unknown) => {
+      const sid = sessionIdOf(rawCtx);
+      if (sid) clearActiveSessionStrikes(sid);
     });
   }
 }
