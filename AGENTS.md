@@ -11,10 +11,13 @@ authoring contract.
   (`commands/<name>.md`, or `commands/<name>/command.md` when the command has
   companion reference files beside it). Reachable only by typing `/name` — never
   model-invoked.
-- `skills/` — **model-invoked** skills (`skills/<name>/SKILL.md`). Discovered from
-  the package by omp, listed in the system prompt, reachable on demand. A
-  user-invoked command may invoke a model-invoked skill, but never another
-  user-invoked command.
+- `skills/` — **model-invoked** skills. Discovered from the package by omp,
+  listed in the system prompt, reachable on demand. A family of related tasks is
+  one **router** (`skills/<router>/SKILL.md`) that picks exactly one **playbook**
+  (`skills/<router>/playbooks/<task>.md`), with companions in `references/` and
+  `scripts/`. A user-invoked command may invoke a model-invoked skill or one of
+  its playbooks (a command's `bodyPath` may be a playbook, so the procedure has
+  one source), but never another user-invoked command.
 - `src/` — **TypeScript extension engine** organized by domain:
   - `src/core/` — `workspace.ts` (unified context), `completions.ts`, `markdown-lint.ts`, `locators.ts`, `bootstrap.ts`, `api.ts`.
   - `src/knowledge/` — `knowledge.ts`, `knowledge-tool.ts`, `kb-index.ts` (SQLite FTS5 search index), `policy.ts`, `kb-guard-status.ts`, `kb-index-injector.ts`.
@@ -24,7 +27,7 @@ authoring contract.
   - `src/council/` — `council.ts` (deliberation engine, Star Chamber partitioner, domain presets, Ed25519 signer), `council-overlay.ts` (interactive TUI modal inspector).
 - `tests/` — **domain-grouped test suites** aggregated by `scripts/selftest.ts` (`npm test`):
   - `test-utils.ts` — mock ExtensionApi harness and failure collectors.
-  - `commands.test.ts` — command registrations, companion disclosures, frontmatter linter.
+  - `commands.test.ts` — command registrations, companion disclosures, frontmatter linter, skill cross-references (`findBrokenSkillReferences`).
   - `knowledge.test.ts` — policy guards, `knowledge_read`, `/record --recent` rendering.
   - `research.test.ts` — DAG resolution, Kahn's cycle detection, report generator.
   - `features.test.ts` — timeline, tilt meter, clarify, hindsight, herdr output, routines.
@@ -44,10 +47,15 @@ authoring contract.
 
 ## Adding a skill
 
-1. Write `skills/<name>/SKILL.md` with `name` + `description` frontmatter (description is required for discovery). Model-invoked = omit `disable-model-invocation`. Put companion files in the same directory — they resolve via `skill://<name>/<file>`.
-2. Add a one-line entry to the README reference table.
-3. Run `npm test` to verify frontmatter syntax via `src/core/markdown-lint.ts`.
-4. Bump `package.json` version and add a `CHANGELOG.md` entry.
+Read `skills/improve-skills/playbooks/author.md` first. In short:
+
+1. Prefer a playbook in an existing router over a new skill: each new `SKILL.md` adds a description to every session's context. A new router earns its place only with a distinct leading word and two or more playbooks.
+2. Router: `skills/<name>/SKILL.md` with `name` + `description` frontmatter (description is required for discovery and must name every task its playbooks cover). Model-invoked = omit `disable-model-invocation`. Body: a table routing each task to one playbook with its side effects explicit.
+3. Playbook: `playbooks/<task>.md`, no frontmatter, numbered steps with checkable completion criteria, ending in `## Reply`. A playbook never routes to a router; it may link one specific playbook by `skill://<router>/playbooks/<task>.md`.
+4. Add a one-line entry to the README reference table.
+5. Run `npm test`: it lints frontmatter and fails on any link, `skill://` URL or "`<name>` skill" mention that points at nothing, and on any playbook its router doesn't route to.
+6. Check routing changed for the better, not just the wording: `skills/improve-skills/playbooks/eval.md`.
+7. Bump `package.json` version and add a `CHANGELOG.md` entry.
 
 ## Architectural conventions
 
@@ -110,7 +118,7 @@ Every slash command and every handler in `src/**` MUST respect the user-facing U
 - `main` moves via reviewed PRs, never direct pushes.
 - A user-invoked command must never invoke another user-invoked command — delegate to model-invoked skills instead.
 - `commands/` and `skills/` are both promoted: everything in them ships.
-- `/omp-setup` must run once per target repo before tracker-dependent commands (`/to-spec`, `/to-tickets`, `/triage`, `/wayfinder`, `code-review`) work.
+- `/omp-setup` must run once per target repo before tracker-dependent commands (`/to-spec`, `/to-tickets`, `/triage`, `/wayfinder`, the `review` code-review playbook) work.
 - **A pushed tag is not a GitHub Release.** `.github/workflows/release.yml` turns a tag into a Release by extracting that version's notes from `CHANGELOG.md`, so every release needs a heading in one of two accepted styles: `## [X.Y.Z] - <date>` or `## vX.Y.Z — <title>` (the extractor stops at the next `## ` heading). A tag whose `package.json` version or CHANGELOG heading is missing fails the run and publishes nothing — retry without moving the tag via `gh workflow run release.yml -f tag=vX.Y.Z`.
 
 ## Attribution

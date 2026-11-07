@@ -1614,8 +1614,8 @@ const COMMANDS: CommandSpec[] = [
   {
     name: "writing-great-skills",
     description: "Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable.",
-    bodyPath: "commands/writing-great-skills/command.md",
-    companions: ["commands/writing-great-skills/GLOSSARY.md"],
+    bodyPath: "skills/improve-skills/playbooks/author.md",
+    companions: ["skills/improve-skills/references/GLOSSARY.md"],
   },
   {
     name: "clarify",
@@ -1718,17 +1718,17 @@ const COMMANDS: CommandSpec[] = [
   {
     name: "ponytail-review",
     description: "Review diffs exclusively for over-engineering, unneeded abstractions, and complexity.",
-    bodyPath: "commands/ponytail-review.md",
+    bodyPath: "skills/review/playbooks/overengineering-diff.md",
   },
   {
     name: "ponytail-debt",
     description: "Scan codebase for ponytail shortcut comments and compile a debt ledger.",
-    bodyPath: "commands/ponytail-debt.md",
+    bodyPath: "skills/review/playbooks/ponytail-debt.md",
   },
   {
     name: "ponytail-audit",
     description: "Whole-repo audit for over-engineering and dependencies replaceable by stdlib/native features.",
-    bodyPath: "commands/ponytail-audit.md",
+    bodyPath: "skills/review/playbooks/overengineering-audit.md",
   },
   {
     name: "council",

@@ -3,7 +3,7 @@
 // unclosed blocks, duplicate keys, unescaped quotes, and syntax errors.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 export interface MarkdownLintError {
   file: string;
@@ -123,4 +123,62 @@ export function scanAndValidateMarkdownDir(dir: string): MarkdownLintError[] {
   }
 
   return failures;
+}
+
+const FENCE_RE = /^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\S\n]*$/gm;
+const LINK_RE = /\[[^\]\n]*\]\(([^)\s]+)\)/g;
+const SKILL_URL_RE = /skill:\/\/([a-z0-9][a-z0-9-]*)((?:\/[A-Za-z0-9._-]+)*)/g;
+const SKILL_MENTION_RE = /`([a-z][a-z0-9-]*)` skill\b/g;
+
+/**
+ * Cross-reference check for the shipped markdown under `<root>/commands` and
+ * `<root>/skills`. A skill rename or a moved playbook leaves prose that sends
+ * the agent to something that no longer exists; this reports every:
+ * - relative markdown link whose target is missing,
+ * - `skill://<name>/<path>` whose skill or file is missing,
+ * - "`<name>` skill" mention of a skill that doesn't exist (outside
+ *   `references/`, whose worked examples cite other repos' skills),
+ * - playbook (`skills/<router>/playbooks/*.md`) its router SKILL.md never links.
+ * Fenced code blocks and `<placeholder>` link targets are skipped: they are
+ * templates, not references.
+ */
+export function findBrokenSkillReferences(root: string): string[] {
+  const skillsDir = join(root, "skills");
+  const skills = new Set(
+    existsSync(skillsDir)
+      ? readdirSync(skillsDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory() && existsSync(join(skillsDir, e.name, "SKILL.md")))
+          .map((e) => e.name)
+      : [],
+  );
+  const problems: string[] = [];
+  const files = [...collectMarkdownFiles(join(root, "commands")), ...collectMarkdownFiles(skillsDir)].sort();
+  for (const file of files) {
+    const where = relative(root, file);
+    const text = readFileSync(file, "utf8").replace(FENCE_RE, "");
+    for (const [, target] of text.matchAll(LINK_RE)) {
+      if (/^[a-z][a-z0-9+.-]*:|^#|^\/|</i.test(target)) continue;
+      const path = target.split("#")[0];
+      if (path && !existsSync(join(dirname(file), path))) problems.push(`${where}: link target ${target} does not exist`);
+    }
+    for (const [url, name, sub] of text.matchAll(SKILL_URL_RE)) {
+      if (!skills.has(name)) problems.push(`${where}: ${url} names no skill in skills/`);
+      else if (sub && !existsSync(join(skillsDir, name, sub))) problems.push(`${where}: ${url} does not exist`);
+    }
+    if (where.split("/").includes("references")) continue;
+    for (const [, name] of text.matchAll(SKILL_MENTION_RE)) {
+      if (!skills.has(name)) problems.push(`${where}: mentions the ${name} skill, which does not exist`);
+    }
+  }
+  for (const name of [...skills].sort()) {
+    const playbooks = join(skillsDir, name, "playbooks");
+    if (!existsSync(playbooks)) continue;
+    const router = readFileSync(join(skillsDir, name, "SKILL.md"), "utf8");
+    for (const entry of readdirSync(playbooks).sort()) {
+      if (entry.endsWith(".md") && !router.includes(`playbooks/${entry}`)) {
+        problems.push(`skills/${name}/SKILL.md: does not route to playbooks/${entry}`);
+      }
+    }
+  }
+  return problems;
 }

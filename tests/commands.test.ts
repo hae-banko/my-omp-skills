@@ -8,6 +8,7 @@ import {
   filterCompletions,
 } from "../src/core/completions.ts";
 import {
+  findBrokenSkillReferences,
   scanAndValidateMarkdownDir,
   validateMarkdownFrontmatter,
 } from "../src/core/markdown-lint.ts";
@@ -219,6 +220,37 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   if (skillFailures.length > 0) {
     fail(`skills markdown lint failures: ${JSON.stringify(skillFailures, null, 2)}`);
   }
+
+  // 7b. Cross-references: a renamed skill or moved playbook must not leave a
+  // command or skill pointing at nothing.
+  const refFixture = createTempFixture("skill-refs-");
+  try {
+    const d = refFixture.dir;
+    mkdirSync(join(d, "skills", "hub", "playbooks"), { recursive: true });
+    mkdirSync(join(d, "commands"), { recursive: true });
+    writeFileSync(join(d, "skills", "hub", "SKILL.md"), "---\nname: hub\n---\n[playbooks/a.md](playbooks/a.md)\n");
+    writeFileSync(join(d, "skills", "hub", "playbooks", "a.md"), "# A\n```\n[x](template.md) `gone` skill\n```\n");
+    writeFileSync(join(d, "skills", "hub", "playbooks", "orphan.md"), "# Orphan\n");
+    writeFileSync(
+      join(d, "commands", "c.md"),
+      "Use the `hub` skill, then the `gone` skill.\nRead skill://hub/playbooks/a.md and skill://hub/playbooks/b.md and skill://gone.\n[ok](../skills/hub/SKILL.md) [bad](missing.md) [tpl](./<name>.md)\n",
+    );
+    const got = findBrokenSkillReferences(d);
+    const want = [
+      "commands/c.md: link target missing.md does not exist",
+      "commands/c.md: skill://hub/playbooks/b.md does not exist",
+      "commands/c.md: skill://gone names no skill in skills/",
+      "commands/c.md: mentions the gone skill, which does not exist",
+      "skills/hub/SKILL.md: does not route to playbooks/orphan.md",
+    ];
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      fail(`findBrokenSkillReferences: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
+    }
+  } finally {
+    refFixture.cleanup();
+  }
+  const brokenRefs = findBrokenSkillReferences(".");
+  if (brokenRefs.length > 0) fail(`broken skill references:\n${brokenRefs.join("\n")}`);
 
   // 8. /council subcommand routing + completions
   const councilSpec = registered["council"];

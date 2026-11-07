@@ -9,13 +9,13 @@ The route most work travels. You have an idea and want it built.
 1. **`/grill-with-docs`** — sharpen the idea by interview. Start here when you **have a codebase**: it's stateful, retaining what it learns in `CONTEXT.md` and ADRs. (No codebase? Use `/grill-me` — see Standalone. Both run the same `grilling` loop; `grill-with-docs` is the one that leaves a paper trail.)
 2. **Branch — can you settle every question in conversation?** If a question needs a runnable answer (state, business logic, a UI you have to see), detour through a prototype, bridged by **`/omp-handoff`** in both directions (see Crossing sessions):
    - **`/omp-handoff`** out, then open a fresh session against that file,
-   - **`prototype`** to answer the question with throwaway code,
+   - **`design`** (prototype playbook) to answer the question with throwaway code,
    - **`/omp-handoff`** back what you learned, and reference it from the original idea thread.
 3. **Branch — is this a multi-session build?**
    - **Yes** → **`/to-spec`** (turn the thread into a spec), then **`/to-tickets`** to split it into tracer-bullet tickets, each declaring its **blocking edges**. On a local tracker that's one file per ticket under `.omp/scratch/<feature>/issues/` (or legacy `.scratch/<feature>/issues/`), worked blockers-first by hand; on a real tracker the edges become native blocking links, so any ticket whose blockers are done can be grabbed — kick off **`/implement`** per ticket, **clearing context between each one**.
    - **No** → **`/implement`** right here, in the same context window.
 
-   Either way, **`/implement`** builds each issue by driving **`tdd`** internally — one red-green slice at a time — then closes out by running **`code-review`**, a two-axis review (Standards + Spec) of the diff, before committing. Reach for **`tdd`** on its own when you just want to build a concrete behaviour test-first without a full spec, and **`code-review`** on its own whenever you want to review a branch or PR against a fixed point.
+   Either way, **`/implement`** builds each issue by driving **`tdd`** internally — one red-green slice at a time — then closes out with **`review`**'s code-review playbook, a two-axis review (Standards + Spec) of the diff, before committing. Reach for **`tdd`** on its own when you just want to build a concrete behaviour test-first without a full spec, and **`review`** on its own whenever you want to review a branch or PR against a fixed point.
 
 ### Context hygiene
 
@@ -31,7 +31,7 @@ A starting situation that generates work, then merges onto the main flow.
 
   Triage is only for issues **you didn't create** — bug reports, incoming feature requests, anything that arrives raw. Tickets that `/to-tickets` produced are already agent-ready, so **don't triage them**.
 
-- **Something's broken** → **`diagnosing-bugs`**. For the hard ones: the bug that resists a first glance, the intermittent flake, the regression that crept in between two known-good states. It refuses to theorise until it has a **tight feedback loop** — one command that already goes red on *this* bug — then fixes with a regression test. Its post-mortem hands off to **`/improve-codebase-architecture`** when the real finding is that there's no good seam to lock the bug down.
+- **Something's broken** → **`investigate`** (diagnose playbook). For the hard ones: the bug that resists a first glance, the intermittent flake, the regression that crept in between two known-good states. It refuses to theorise until it has a **tight feedback loop** — one command that already goes red on *this* bug — then fixes with a regression test. Its post-mortem hands off to **`/improve-codebase-architecture`** when the real finding is that there's no good seam to lock the bug down. The same skill answers **how** code works and **why** it is shaped that way.
 
 - **A huge, foggy effort — a greenfield project or a huge feature build, too big for one session** → **`/wayfinder`**, the most cognitively demanding flow here. When the way from here to the destination isn't visible yet, it charts a **shared map** of **decision tickets** on the issue tracker and resolves them one at a time — producing **decisions, not deliverables** — until the fog is pushed back and the way is clear. Where **`/grill-with-docs`** sharpens an idea you can hold in one session, wayfinder is for the idea you can't — and it's slower and denser, so save it for exactly that, never a well-scoped feature.
 
@@ -41,14 +41,24 @@ A starting situation that generates work, then merges onto the main flow.
 
 Not feature work — upkeep.
 
-- **`/improve-codebase-architecture`** — run whenever you have a spare moment to keep the codebase good for agents to operate in. It surfaces **deepening opportunities**; picking one _generates an idea_ you can take into the main flow at `/grill-with-docs`. It's the survey that finds the candidates; **`codebase-design`** (below) is the bench you design the chosen one on.
+- **`/improve-codebase-architecture`** — run whenever you have a spare moment to keep the codebase good for agents to operate in. It surfaces **deepening opportunities**; picking one _generates an idea_ you can take into the main flow at `/grill-with-docs`. It's the survey that finds the candidates; **`design`**'s interface playbook (below) is the bench you design the chosen one on.
+
+## Skill families
+
+Most model-invoked skills are **routers**: one `SKILL.md` that picks exactly one **playbook** for the task, so only that procedure enters the context. Name the task; the agent picks the playbook.
+
+- **`review`** — report-only: two-axis code review, blast radius of a change, adversarial review that keeps only findings a run proves, over-engineering review of a diff or the whole repo, ponytail debt ledger.
+- **`investigate`** — diagnose a bug or performance regression, explain how code works, recover why it is shaped that way.
+- **`verify`** — prove behaviour beyond tests: a project-local skill that drives the real app, formal verification (model checking) of races and invariants and its upkeep, vetting a benchmark claim.
+- **`design`** — module interfaces and the deep-module vocabulary, the domain model (`CONTEXT.md`, ADRs), throwaway prototypes, agentic control loops.
+- **`improve-skills`** — make the skills themselves better: author one, evaluate a change blind against a baseline, reflect on a session, turn repeated corrections into enforced checks, mine past sessions for durable preferences.
 
 ## Vocabulary underneath
 
-Two model-invoked references that run *beneath* the other skills — each the single source of truth for its vocabulary. Reach for them directly when the **words**, not the process, are the problem; or let the skills above pull them in.
+Two references that run *beneath* the other skills — each the single source of truth for its vocabulary. Reach for them directly when the **words**, not the process, are the problem; or let the skills above pull them in.
 
-- **`domain-modeling`** — sharpen the project's *domain* language: challenge a fuzzy term, resolve an overloaded word ("account" doing three jobs), record a hard-to-reverse decision as an ADR. It's the active discipline `/grill-with-docs` drives to keep `CONTEXT.md` a clean glossary.
-- **`codebase-design`** — the deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) for designing a module's *shape*: a lot of behaviour behind a small interface at a clean seam. `tdd` and `/improve-codebase-architecture` both speak it.
+- **`design`** → domain-model playbook — sharpen the project's *domain* language: challenge a fuzzy term, resolve an overloaded word ("account" doing three jobs), record a hard-to-reverse decision as an ADR. It's the active discipline `/grill-with-docs` drives to keep `CONTEXT.md` a clean glossary.
+- **`design`** → interface playbook — the deep-module vocabulary (module, interface, depth, seam, adapter, leverage, locality) for designing a module's *shape*: a lot of behaviour behind a small interface at a clean seam. `tdd` and `/improve-codebase-architecture` both speak it.
 
 ## Crossing sessions
 
@@ -60,11 +70,11 @@ Two model-invoked references that run *beneath* the other skills — each the si
 Off the main flow entirely.
 
 - **`/grill-me`** — the same relentless interview as `/grill-with-docs`, but for when you have **no codebase**. Stateless: it saves nothing locally, builds no `CONTEXT.md`. Reach for it to sharpen any plan or design that doesn't live in a repo.
-- **`prototype`** — a small, throwaway program that answers one design question: does this state model feel right, or what should this UI look like. Throwaway from day one — keep the answer, delete the code. It's the detour in step 2 of the main flow, but reach for it any time a design question is hard to settle on paper.
+- **`design`** → prototype playbook — a small, throwaway program that answers one design question: does this state model feel right, or what should this UI look like. Throwaway from day one — keep the answer, delete the code. It's the detour in step 2 of the main flow, but reach for it any time a design question is hard to settle on paper.
 - **`research`** — delegate reading legwork to a **background agent**: it investigates a question against **primary sources**, then leaves a cited Markdown file in the repo. Keep working while it reads. The file it produces is something to take *into* the main flow at `/grill-with-docs` — research feeds the thinking, it doesn't replace it.
 - **`/teach`** — learn a concept over multiple sessions, using the current directory as a stateful workspace.
 - **`using-git-worktrees`** — set up an isolated git worktree for feature work (`.worktrees/` convention, clean baseline). Runs only when the user asks — never auto-trigger.
-- **`/writing-great-skills`** — reference for writing and editing skills well.
+- **`/writing-great-skills`** — reference for writing and editing skills well (the `improve-skills` author playbook).
 
 ## Deep research
 
