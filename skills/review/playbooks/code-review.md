@@ -1,6 +1,6 @@
 # Code Review
 
-Use when reviewing changes since a commit, branch, tag, or merge-base along two independent axes: Standards and Spec.
+Use when reviewing changes since a commit, branch, tag, or merge-base along two independent axes: Standards and Spec. Judge readability by what a reader must hold in mind ([skill://principles/minimize-reader-load.md](../../principles/minimize-reader-load.md)).
 
 Scope is what the user named (a commit, branch, tag, or range). If unspecified, ask the user for the fixed point.
 

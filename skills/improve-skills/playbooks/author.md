@@ -43,6 +43,8 @@ A demanding completion criterion drives thorough **legwork** — the digging the
 
 ### Pruning and Leading Words
 
+For the prose itself (AI tells, filler, passive voice, mannered phrasing), apply the writing standard in [skill://unslop/SKILL.md](../../unslop/SKILL.md).
+
 - **Single source of truth**: keep each meaning in one authoritative place so behavioural changes require only a single edit.
 - **Relevance**: check that every line bears directly on what the skill does.
 - **Hunt no-ops**: run the no-op test on each sentence in isolation. If an instruction says what the model already does by default, delete it.

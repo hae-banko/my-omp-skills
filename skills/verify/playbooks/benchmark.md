@@ -1,6 +1,6 @@
 # Benchmark checklist
 
-Use when measuring performance, benchmarking alternatives, or validating a speedup or regression claim before reporting.
+Use when measuring performance, benchmarking alternatives, or validating a speedup or regression claim before reporting. Every reported number carries its run count, range and limiter ([skill://principles/explain-the-number.md](../../principles/explain-the-number.md)).
 
 ## 1. Define the claim and decision boundary
 

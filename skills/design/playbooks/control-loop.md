@@ -12,7 +12,7 @@ Use when designing or building an agentic control loop (sensor, controller, actu
    Interview the user to define the control loop components grounded in repo capabilities:
    - **Set point**: The target property to drive (invariant, threshold, or reduction metric) and file scope.
    - **Sensor**: Tool, query, or script measuring the current gap to the set point repeatably.
-   - **Controller**: Logic choosing the next small, reviewable increment. Ensure idempotence per [skill://design/references/principles.md](../references/principles.md): derive steps from current state rather than prior intentions so re-execution converges cleanly.
+   - **Controller**: Logic choosing the next small, reviewable increment. Ensure idempotence per [skill://principles/make-operations-idempotent.md](../../principles/make-operations-idempotent.md): derive steps from current state rather than prior intentions so re-execution converges cleanly.
    - **Actuator**: Coding agent (CLI runner and credentials selected from [skill://design/references/control-loop/agent-runner-templates.md](../references/control-loop/agent-runner-templates.md)), golden codebase patterns to mirror, and required validation commands.
    - **Disturbances & Dampener**: Name external disturbances (teammates, dependencies, generated code) and offer an optional dampener (a PR regression check preventing metric degradation).
    *Completion criterion*: Written loop specification agreed with the user defining set point, sensor, controller, actuator, and dampener strategy.
@@ -22,7 +22,7 @@ Use when designing or building an agentic control loop (sensor, controller, actu
    *Completion criterion*: Repo-local skill written with frontmatter name matching directory slug and checkable procedural steps.
 
 4. **Make each component runnable locally**:
-   Before wiring into CI, implement sensor and controller scripts as version-controlled commands in the project's script location. Enforce separation of shared state per [skill://design/references/principles.md](../references/principles.md) so parallel runs or workers do not write to shared mutable files. Test each piece locally:
+   Before wiring into CI, implement sensor and controller scripts as version-controlled commands in the project's script location. Separate shared state per [skill://principles/separate-before-serializing-shared-state.md](../../principles/separate-before-serializing-shared-state.md) so parallel runs or workers do not write to shared mutable files. Test each piece locally:
    - Run the sensor standalone and verify repeatable output.
    - Run the controller on sensor output to confirm selection of a single low-risk increment.
    - Run the actuator headless CLI locally on a selected target and verify validation checks pass.

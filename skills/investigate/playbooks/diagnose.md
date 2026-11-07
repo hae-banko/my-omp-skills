@@ -71,11 +71,11 @@ Test hypotheses by changing one variable at a time.
 
 Apply the fix at the origin and prove it with tests.
 
-1. **Attack the Premise**:
+1. **Attack the Premise** ([skill://principles/attack-the-premise.md](../../principles/attack-the-premise.md)):
    - If two or more attempted fixes that share a premise fail the feedback loop, STOP.
    - Do not attempt a third variation of the same idea. Write down the shared premise as a single explicit sentence.
    - Test that premise directly using an observable check or isolated probe before designing another fix.
-2. **Eliminate the fault, do not compensate**:
+2. **Eliminate the fault, do not compensate** ([skill://principles/fix-root-causes.md](../../principles/fix-root-causes.md)):
    - Fix the code that produces the invalid condition rather than adding compensatory cleanup or masking logic downstream.
    - If a proposed fix requires a multi-sentence comment to justify why an invalid state is tolerated, the fix is wrong. Fix the underlying state transition.
 3. **Write a regression test**:

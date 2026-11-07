@@ -19,7 +19,7 @@ Not this playbook: a multi-session map of open decisions is `/wayfinder`; splitt
    - Decompose into atomic units that each land and verify on their own. Put the riskiest unknown first; build scaffolding and verification before features.
    - Build the verification harness before changing anything, capturing a baseline from the current state so every check reads "old value vs new value".
    - For an irreversible design decision, design it twice ([playbooks/interface.md](interface.md)) or ask for a `council`. Skip this for mechanical work whose shape is already settled.
-   - Fan out only across real seams, never onto shared files ([skill://design/references/principles.md](../references/principles.md) §4). Give each worker a disjoint file set; a separate worktree only if the user asks for one (`using-git-worktrees`). Run at most a few workers at once.
+   - Fan out only across real seams, never onto shared files ([skill://principles/separate-before-serializing-shared-state.md](../../principles/separate-before-serializing-shared-state.md)). Give each worker a disjoint file set; a separate worktree only if the user asks for one (`using-git-worktrees`). Run at most a few workers at once.
    - Write the phase list down. That list is what the user reviews.
    *Completion criterion:* A written phase list, each phase with its unit of work, its check, and its order.
 

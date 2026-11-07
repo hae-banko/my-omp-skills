@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.80.0] - 2026-11-07
+
+The rest of pstack's skills are absorbed as hidden references, so they add nothing to the per-turn skill list: playbooks link a principle at the step where it applies, and the agent reads that one file.
+
+### Added
+
+- **`principles` skill (hidden).** 24 engineering principles, one file each, merged from pstack's principle skills and the rules our playbooks already stated (fix root causes, attack the premise, prove it works, minimize reader load, explain the number, subtract before you add, and 18 more). `design`, `investigate/diagnose`, `investigate/how`, `review` code-review and overengineering playbooks, `verify/benchmark` and `improve-skills/correct` link the principle at the matching step.
+- **`verify` statechart playbook.** Turns a TLC counterexample into numbered domain steps and a Mermaid statechart, then replays the path against the real code; `formal` hands off to it.
+- **`unslop` skill (hidden).** Writing standard for replies, docs, commits and PR text: plain words, no AI tells.
+
+### Removed
+
+- `skills/design/references/principles.md`; its six principles now live in `principles` with the other eighteen.
+
 ## [0.79.0] - 2026-11-07
 
 Model-invoked skills are reorganized into routers and playbooks: 19 skills become 15, five of them routers over 24 playbooks. A router's description and table list every task the family covers; the agent reads one playbook for the task at hand. Skill descriptions loaded every turn shrink from 5,338 to 4,962 bytes while covering 12 more tasks.

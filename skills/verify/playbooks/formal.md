@@ -52,6 +52,8 @@ When the verifier uncovers an invariant violation or bug:
 3. Confirm whether the real code allows the sequence. If the real code allows it, a genuine product bug is proven; if the real code prevents it, the formal model made an invalid assumption (drift).
 4. Keep the regression test in the repository's standard test suite.
 
+To show the violation to a human as a chart plus the shortest bug path, follow [skill://verify/playbooks/statechart.md](statechart.md).
+
 Completion criterion: Any counterexample is converted into a plain step list and instantiated as an executable regression test in the codebase.
 
 ## 6. Record verification doc

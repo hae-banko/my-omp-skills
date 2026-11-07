@@ -1,6 +1,6 @@
 # How It Works
 
-Use when explaining subsystem architecture, tracing runtime execution flow, or answering "how does X work" with concrete file:line evidence.
+Use when explaining subsystem architecture, tracing runtime execution flow, or answering "how does X work" with concrete file:line evidence. Read the real code path before any summary of it ([skill://principles/experience-first.md](../../principles/experience-first.md)).
 
 This playbook is strictly read-only. Do not edit files, run destructive commands, or modify environment state.
 

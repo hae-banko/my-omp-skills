@@ -2,7 +2,7 @@
 
 Use when eliminating recurring corrections or repeated agent mistakes ("/correct", recurring corrections, repeated mistakes).
 
-Change the repository so future agents cannot repeat the mistake. Assume every contributor is an agent that inspects only the files it opened, copies the nearest example, and takes the shortest path that compiles. Design the codebase so a change that looks right locally is right globally.
+Change the repository so future agents cannot repeat the mistake ([skill://principles/encode-lessons-in-structure.md](../../principles/encode-lessons-in-structure.md)). Assume every contributor is an agent that inspects only the files it opened, copies the nearest example, and takes the shortest path that compiles. Design the codebase so a change that looks right locally is right globally.
 
 ## The Enforcement Hierarchy
 

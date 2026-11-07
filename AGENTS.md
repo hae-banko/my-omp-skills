@@ -17,7 +17,10 @@ authoring contract.
   (`skills/<router>/playbooks/<task>.md`), with companions in `references/` and
   `scripts/`. A user-invoked command may invoke a model-invoked skill or one of
   its playbooks (a command's `bodyPath` may be a playbook, so the procedure has
-  one source), but never another user-invoked command.
+  one source), but never another user-invoked command. A **hidden reference**
+  skill (`disable-model-invocation: true`, e.g. `principles`, `unslop`) is not
+  listed in the prompt and costs no context; playbooks link its files by
+  `skill://` URL at the step where they apply.
 - `src/` — **TypeScript extension engine** organized by domain:
   - `src/core/` — `workspace.ts` (unified context), `completions.ts`, `markdown-lint.ts`, `locators.ts`, `bootstrap.ts`, `api.ts`.
   - `src/knowledge/` — `knowledge.ts`, `knowledge-tool.ts`, `kb-index.ts` (SQLite FTS5 search index), `policy.ts`, `kb-guard-status.ts`, `kb-index-injector.ts`.

@@ -1,6 +1,6 @@
 # Overengineering Diff Review
 
-Use when reviewing diffs, staged changes, branches, or pull requests exclusively for unnecessary complexity, dead flexibility, and code to eliminate.
+Use when reviewing diffs, staged changes, branches, or pull requests exclusively for unnecessary complexity, dead flexibility, and code to eliminate. The cut comes before the addition ([skill://principles/subtract-before-you-add.md](../../principles/subtract-before-you-add.md)).
 
 Scope is what the user named (unstaged changes, staged diff, commit range, branch, or PR; `/ponytail-review` passes it under `## User's arguments`). If unspecified, review the working tree diff against `HEAD`.
 

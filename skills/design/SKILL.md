@@ -23,4 +23,4 @@ Architectural design, interface deepening, domain modeling, interactive prototyp
 
 ## Shared Principles
 
-All playbooks follow the core architectural principles in [skill://design/references/principles.md](references/principles.md) (boundary discipline, type system discipline, domain modeling, separate before serializing shared state, idempotence, and exhausting the design space) and use the authoritative deep-module vocabulary in [skill://design/references/GLOSSARY.md](references/GLOSSARY.md).
+All playbooks follow the engineering principles in the hidden `principles` skill ([skill://principles/SKILL.md](../principles/SKILL.md)); each playbook links the specific principle at the step where it applies. Use the authoritative deep-module vocabulary in [skill://design/references/GLOSSARY.md](references/GLOSSARY.md).

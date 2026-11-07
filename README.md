@@ -1,12 +1,12 @@
 # my-omp-skills
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.79.0-8A2BE2" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.80.0-8A2BE2" alt="version" />
   <img src="https://img.shields.io/badge/platform-oh--my--pi-4B8BBE" alt="platform" />
   <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>
 
-An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **15 model-invoked skills** (5 of them routers over 24 playbooks), multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **17 model-invoked skills** (5 of them routers over 25 playbooks, 2 of them hidden references that playbooks link to), multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
@@ -15,13 +15,13 @@ An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`o
 Install directly into `omp` via the public repository URL:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.79.0"
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.80.0"
 ```
 
 Or via SSH:
 
 ```bash
-omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.79.0"
+omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.80.0"
 ```
 
 > **Note**: After installing or upgrading, exit and restart `omp`. Commands, skills, and tools load at session startup.
@@ -31,7 +31,7 @@ omp plugin install "git@github.com:hae-banko/my-omp-skills.git#v0.79.0"
 Git-sourced plugins are not covered by `omp plugin upgrade` (that verb only handles `name@marketplace` plugins and rejects a git URL with `Invalid plugin ID`). To move to a newer release, re-install with `--force`:
 
 ```bash
-omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.79.0" --force
+omp plugin install "git+https://github.com/hae-banko/my-omp-skills.git#v0.80.0" --force
 ```
 
 `--force` re-resolves the ref and replaces the existing install cleanly (no uninstall needed). Confirm the version that actually landed, then restart `omp`:
@@ -153,7 +153,7 @@ By default, `/omp-setup` initializes a local markdown issue tracker under `.omp/
 
 ---
 
-## Model-Invoked Skills (15 Skills)
+## Model-Invoked Skills (17 Skills)
 
 Omp automatically loads model-invoked skills when conversation or codebase context matches the skill condition. A **router** skill lists every task its family covers and reads exactly one **playbook** for the task at hand, so only that procedure enters the context.
 
@@ -163,7 +163,7 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 | --- | --- | --- |
 | `review` | `code-review` (Standards + Spec), `blast-radius`, `adversarial` (findings survive only with a run), `overengineering-diff`, `overengineering-audit`, `ponytail-debt` | Report only. |
 | `investigate` | `diagnose` (bugs, flakes, perf regressions), `how` (trace the real code path), `why` (recover design rationale from history) | `how`/`why` read-only; `diagnose` instruments and fixes. |
-| `verify` | `runtime-skill` (project-local skill that drives the real app) + `runtime-skill-maintain`, `formal` (model checking, mutant check, models kept local in `.omp/specs/`) + `formal-maintain`, `benchmark` (vet a perf claim) | Writes `.omp/skills/`, `.omp/specs/`, tests and docs as each playbook states. |
+| `verify` | `runtime-skill` (project-local skill that drives the real app) + `runtime-skill-maintain`, `formal` (model checking, mutant check, models kept local in `.omp/specs/`) + `formal-maintain`, `statechart` (turn a TLC counterexample into numbered steps and a Mermaid chart, then replay it against the code), `benchmark` (vet a perf claim) | Writes `.omp/skills/`, `.omp/specs/`, tests and docs as each playbook states. |
 | `design` | `interface` (deep modules, seams, design it twice), `domain-model` (`CONTEXT.md`, ADRs), `prototype` (throwaway logic/UI), `control-loop` (agentic sensor/controller/actuator loops), `figure-it-out` (plan and run a large change with a decision log) | Proposals by default; `domain-model` writes docs; `prototype` writes throwaway code; `figure-it-out` edits per the agreed plan and asks before paid or long runs. |
 | `improve-skills` | `author` (house style, router/playbook layout), `eval` (old vs new skills in real `omp` runs, blinded judging), `reflect` (session → skill edits), `correct` (repeated mistakes → enforced checks), `from-sessions` (durable preferences from past sessions) | Skill edits only after approval. |
 
@@ -181,6 +181,15 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 | `show-me` | Visual explanations via sketches, call trees, file layouts, Mermaid, or HTML. | Explaining structure, control flow, UI hierarchy, or architecture. |
 | `ponytail` | Enforces the Ladder: YAGNI → reuse in codebase → stdlib → native platform → shortest diff. | Any coding, refactoring, fixing, or designing task. |
 | `council` | Autonomous multi-perspective deliberation on architectures, refactors, and trade-offs. | High-stakes architectural forks, breaking refactors, or second opinion requests. |
+
+### Hidden references
+
+Not listed in the system prompt, so they cost no context until a playbook links to one (`skill://<name>/...`) or you ask for it by name.
+
+| Skill | Contents |
+| --- | --- |
+| `principles` | 24 engineering principles, one file each (fix root causes, attack the premise, prove it works, minimize reader load, ...). Playbooks link the principle at the step where it applies. |
+| `unslop` | Writing standard for replies, docs, commit and PR text: plain words, no AI tells. |
 
 ---
 
@@ -203,4 +212,4 @@ Adapted from open-source extension suites (all MIT licensed):
 - [humanlayer/skills](https://github.com/humanlayer/humanlayer) — `show-me` skill and the `design` control-loop playbook.
 - [dkmnx/pi-clarify](https://github.com/dkmnx/pi-clarify) — Prompt clarification pattern.
 - [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) — Ponytail lazy senior dev skill and over-engineering audit/review suite.
-- [cursor/plugins](https://github.com/cursor/plugins) — `pstack` (Copyright (c) 2026 Lauren Tan) and `cursor-team-kit` (Copyright (c) 2026 Cursor) skills, adapted into the `review` (blast-radius, adversarial), `investigate` (how, why), `verify`, `design` principles and `improve-skills` (eval, reflect, correct, from-sessions) playbooks.
+- [cursor/plugins](https://github.com/cursor/plugins) — `pstack` (Copyright (c) 2026 Lauren Tan) and `cursor-team-kit` (Copyright (c) 2026 Cursor) skills, adapted into the `review` (blast-radius, adversarial), `investigate` (how, why), `verify` (statechart and others), `design` and `improve-skills` (eval, reflect, correct, from-sessions) playbooks, and the hidden `principles` and `unslop` skills.

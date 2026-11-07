@@ -1,6 +1,6 @@
 # Overengineering Repository Audit
 
-Use when auditing an entire codebase or repository for over-engineering, unneeded dependencies, and architectural bloat.
+Use when auditing an entire codebase or repository for over-engineering, unneeded dependencies, and architectural bloat. The cut comes before the addition ([skill://principles/subtract-before-you-add.md](../../principles/subtract-before-you-add.md)).
 
 Scope is what the user named (subsystem, module, or directory path; `/ponytail-audit` passes it under `## User's arguments`). If unspecified, audit the entire repository.
 
