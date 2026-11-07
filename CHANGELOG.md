@@ -2,13 +2,13 @@
 
 ## [0.79.0] - 2026-11-07
 
-Model-invoked skills are reorganized into routers and playbooks: 19 skills become 15, five of them routers over 23 playbooks. A router's description and table list every task the family covers; the agent reads one playbook for the task at hand. Skill descriptions loaded every turn shrink from 5,338 to 4,867 bytes while covering 11 more tasks.
+Model-invoked skills are reorganized into routers and playbooks: 19 skills become 15, five of them routers over 24 playbooks. A router's description and table list every task the family covers; the agent reads one playbook for the task at hand. Skill descriptions loaded every turn shrink from 5,338 to 4,962 bytes while covering 12 more tasks.
 
 ### Added
 - **`review` router.** `code-review`, `blast-radius`, `adversarial` (findings count only when a run proves them), `overengineering-diff`, `overengineering-audit`, `ponytail-debt`. All report-only.
 - **`investigate` router.** `diagnose` (was `diagnosing-bugs`), `how` (trace the real code path), `why` (design rationale from history, with evidence tiers).
 - **`verify` router.** `runtime-skill` + `runtime-skill-maintain` (project-local skill that drives the real app), `formal` + `formal-maintain` (model checking with a mutant check; models stay local under `.omp/specs/`, ignored via `.git/info/exclude`), `benchmark` (vet a performance claim).
-- **`design` router.** `interface` (was `codebase-design`), `domain-model` (was `domain-modeling`), `prototype`, `control-loop` (was `design-control-loop`), plus shared design principles.
+- **`design` router.** `interface` (was `codebase-design`), `domain-model` (was `domain-modeling`), `prototype`, `control-loop` (was `design-control-loop`), `figure-it-out` (frame a large change as a falsifiable predicate with a spend ceiling, run each unit as an experiment, keep a TSV decision log), plus shared design principles.
 - **`improve-skills` router.** `author` (was `/writing-great-skills`), `eval` (old vs new skills in real `omp -p` runs from separate project directories, with a routing observer), `reflect`, `correct`, `from-sessions`.
 - **Skill reference lint (`findBrokenSkillReferences`).** `npm test` fails on a broken relative link or `skill://` URL, a mention of a skill that doesn't exist, or a playbook its router never links.
 - New playbooks adapted from [cursor/plugins](https://github.com/cursor/plugins) `pstack` and `cursor-team-kit` (MIT), rewritten for omp tools and this repo's conventions.

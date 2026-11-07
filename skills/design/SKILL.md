@@ -1,11 +1,11 @@
 ---
 name: design
-description: "Design before or while building. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, or make code more testable or AI-navigable; pin down domain terminology or a ubiquitous language, or record an architectural decision (ADR); build a throwaway prototype to sanity-check whether a state model or logic feels right, or explore a UI; or design an agentic control loop (sensor, controller, actuator, scheduled workflow)."
+description: "Design before or while building. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, or make code more testable or AI-navigable; pin down domain terminology or a ubiquitous language, or record an architectural decision (ADR); build a throwaway prototype to sanity-check whether a state model or logic feels right, or explore a UI; design an agentic control loop (sensor, controller, actuator, scheduled workflow); or says 'figure it out' about a large migration or multi-part change that no other workflow fits."
 ---
 
 # Design
 
-Architectural design, interface deepening, domain modeling, interactive prototyping, and agentic control loops.
+Architectural design, interface deepening, domain modeling, interactive prototyping, agentic control loops, and workflows for large changes.
 
 | The user wants… | Playbook | Side effects |
 | :--- | :--- | :--- |
@@ -13,6 +13,7 @@ Architectural design, interface deepening, domain modeling, interactive prototyp
 | Pin down domain terminology, ubiquitous language, context boundaries, or record architectural decisions (ADRs) | [playbooks/domain-model.md](playbooks/domain-model.md) | Writes `CONTEXT.md` / `CONTEXT-MAP.md` and `.omp/adr/NNNN-*.md` |
 | Build a throwaway prototype to sanity-check state logic/transitions (terminal app) or explore UI variations (route switcher) | [playbooks/prototype.md](playbooks/prototype.md) | Writes throwaway prototype code or UI route |
 | Design and build an agentic control loop (sensor, controller, actuator skill, recurring CI workflow, memory file) | [playbooks/control-loop.md](playbooks/control-loop.md) | Writes scripts, repo-local skill, CI workflow YAML, and memory file |
+| Plan and run a large migration or multi-part change no narrower workflow fits ("figure it out"), with a hypothesis loop and a decision log | [playbooks/figure-it-out.md](playbooks/figure-it-out.md) | Edits code per the agreed plan; writes `.omp/scratch/<slug>/decisions.tsv`; asks before paid or long runs |
 
 ## Routing Rules
 

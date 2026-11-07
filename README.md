@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/commands-34-orange" alt="34 slash commands" />
 </p>
 
-An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **15 model-invoked skills** (5 of them routers over 23 playbooks), multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
+An extension package for the [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) AI coding agent harness. It provides **34 user-invoked slash commands**, **15 model-invoked skills** (5 of them routers over 24 playbooks), multi-agent research workflows, custom TUI card renderers, and an append-only repo-local knowledge base.
 
 ---
 
@@ -164,7 +164,7 @@ Omp automatically loads model-invoked skills when conversation or codebase conte
 | `review` | `code-review` (Standards + Spec), `blast-radius`, `adversarial` (findings survive only with a run), `overengineering-diff`, `overengineering-audit`, `ponytail-debt` | Report only. |
 | `investigate` | `diagnose` (bugs, flakes, perf regressions), `how` (trace the real code path), `why` (recover design rationale from history) | `how`/`why` read-only; `diagnose` instruments and fixes. |
 | `verify` | `runtime-skill` (project-local skill that drives the real app) + `runtime-skill-maintain`, `formal` (model checking, mutant check, models kept local in `.omp/specs/`) + `formal-maintain`, `benchmark` (vet a perf claim) | Writes `.omp/skills/`, `.omp/specs/`, tests and docs as each playbook states. |
-| `design` | `interface` (deep modules, seams, design it twice), `domain-model` (`CONTEXT.md`, ADRs), `prototype` (throwaway logic/UI), `control-loop` (agentic sensor/controller/actuator loops) | Proposals by default; `domain-model` writes docs; `prototype` writes throwaway code. |
+| `design` | `interface` (deep modules, seams, design it twice), `domain-model` (`CONTEXT.md`, ADRs), `prototype` (throwaway logic/UI), `control-loop` (agentic sensor/controller/actuator loops), `figure-it-out` (plan and run a large change with a decision log) | Proposals by default; `domain-model` writes docs; `prototype` writes throwaway code; `figure-it-out` edits per the agreed plan and asks before paid or long runs. |
 | `improve-skills` | `author` (house style, router/playbook layout), `eval` (old vs new skills in real `omp` runs, blinded judging), `reflect` (session → skill edits), `correct` (repeated mistakes → enforced checks), `from-sessions` (durable preferences from past sessions) | Skill edits only after approval. |
 
 ### Standalone
