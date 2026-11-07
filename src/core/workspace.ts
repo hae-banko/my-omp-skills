@@ -2,6 +2,7 @@
 // Unifies scattered path joins and filesystem walks across knowledge base, routines, ADRs, and research.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 export interface KnowledgePaths {
@@ -40,24 +41,38 @@ export interface WorkspaceContext {
 }
 
 const workspaceCache = new Map<string, WorkspaceContext>();
+let testHomedir: string | null = null;
+
+export function setHomedirForTesting(dir: string | null): void {
+  testHomedir = dir;
+}
 
 export function findRepoRoot(startDir: string = process.cwd()): string {
-  let dir = resolve(startDir);
+  const start = resolve(startDir);
+  const home = testHomedir ?? homedir();
+  // Pass 1: strong markers (.git, .omp) take precedence anywhere up the tree.
+  // Exclude ~/.omp which is omp's global config directory, not a repo root.
+  let dir = start;
   for (;;) {
-    if (
-      existsSync(join(dir, ".git")) ||
-      existsSync(join(dir, ".omp")) ||
-      existsSync(join(dir, ".scratch")) ||
-      existsSync(join(dir, "scripts", "routines"))
-    ) {
+    const hasOmp = existsSync(join(dir, ".omp")) && dir !== home;
+    if (existsSync(join(dir, ".git")) || hasOmp) {
       return dir;
     }
     const parent = dirname(dir);
-    if (parent === dir) {
-      return resolve(startDir);
-    }
+    if (parent === dir) break;
     dir = parent;
   }
+  // Pass 2: weak markers (.scratch, scripts/routines)
+  dir = start;
+  for (;;) {
+    if (existsSync(join(dir, ".scratch")) || existsSync(join(dir, "scripts", "routines"))) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return start;
 }
 
 /**
@@ -162,7 +177,9 @@ export function getWorkspaceContext(startDir: string = process.cwd()): Workspace
     ensureAdrDir,
   };
 
-  workspaceCache.set(resolvedStart, ctx);
+  if (isRepo) {
+    workspaceCache.set(resolvedStart, ctx);
+  }
   return ctx;
 }
 

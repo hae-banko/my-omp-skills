@@ -41,7 +41,7 @@ herdr CLI:
 ## Working with panes (ordinary processes)
 
 - `pane run` submits a command atomically (with Enter); `pane read` reads the
-  terminal; `wait_output` polls `read` until a literal/regex match appears or
+  terminal; `wait_output` polls `read` until a literal substring match appears or
   the timeout passes. Good for builds, servers, and tests.
 - `pane close` never closes the pane running this session's agent.
 

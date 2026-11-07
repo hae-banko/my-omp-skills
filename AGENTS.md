@@ -79,7 +79,7 @@ Custom message renderers (`pi.registerMessageRenderer`) must calculate display w
 
 ### 8. KV Cache Prefix Stability & Token Economics Invariants
 To maintain maximum LLM performance, low turn latency, and high KV cache hit rates ($>90\%$):
-- **Prefix Stability**: Dynamic system prompt additions (like `<relevant-knowledge>`) MUST be appended strictly to the tail (`evt.systemPrompt = sysPrompt + ...`). Never prepend or mutate prefix text.
+- **Prefix Stability**: Dynamic system prompt additions (like `<relevant-knowledge>`) MUST be appended strictly to the tail as new blocks. `before_agent_start` carries `systemPrompt: string[]` (rebuilt by the runtime every turn); return `{ systemPrompt: [...event.systemPrompt, block] }`. Never rewrite, join, or string-concatenate the existing blocks.
 - **Deterministic Formats**: Use static, deterministic formats (e.g. `YYYY-MM-DD` mtime dates, deterministic list sorting) rather than volatile timestamps like `Date.now()`.
 ### 9. Command UX Invariant — No Think, No Echo, No `--` (ADR-0008)
 
@@ -95,7 +95,7 @@ Every slash command and every handler in `src/**` MUST respect the user-facing U
 7. **Zero Cross-Turn Queue Leaks (Interaction Invariant).**
    - NEVER pass `{ deliverAs: "followUp" }` on receipt cards or display cards. `deliverAs: "followUp"` queues an extra agent turn after completion. Emit cards directly without options while idle.
    - NEVER pass `{ deliverAs: "nextTurn" }` for immediate commands. `deliverAs: "nextTurn"` buffers instructions into `#pendingNextTurnMessages`, polluting whatever prompt the user enters on turn $N+1$. Use `{ triggerTurn: true }` directly.
-   - `before_agent_start` handlers MUST return `{ systemPrompt: ... }` rather than mutating `event.systemPrompt` in place (the runtime runner ignores in-place mutations).
+   - `before_agent_start` handlers MUST return `{ systemPrompt: string[] }` rather than mutating `event.systemPrompt` in place (the runtime runner ignores in-place mutations). The payload's `systemPrompt` is an array of blocks — treating it as a string (`+=`, `.includes` on the array) silently comma-joins every block.
    - `input` event handlers MUST return `{ text: ... }` conforming to the active runtime chain contract.
 
 8. **Never document an operation the guards block; never advertise an unwired affordance.** Command bodies, skills, and rule files MUST prescribe only operations the runtime guards permit. In `.omp/knowledge/` and `.omp/audits/`: `edit` is blocked on `records/`, `pitfalls/`, `INDEX.md`, and on audit files lacking a `## Revision History` marker; `write` is blocked over any *existing* protected file; `cp`, `mv`, `rm`, and shell `>` against those paths are blocked. So `INDEX.md` gains lines by shell append (`printf '%s\n' "- <line>" >> .omp/knowledge/INDEX.md`), audit snapshots by `read` + `write` of a **new** file, and nothing else is offered as an option. The same rule governs the UI: a card, overlay, or doc MUST NOT advertise key actions no handler implements — the dead `⟨Enter: Run /implement⟩ ⟨s: Save Record⟩` council hints were removed for this reason. Correct or wire the affordance; never leave it lying.
@@ -103,6 +103,7 @@ Every slash command and every handler in `src/**` MUST respect the user-facing U
 ## Rules
 
 - Every user-visible change bumps `package.json` **and** adds a `CHANGELOG.md` entry.
+- A change that adds, removes, or re-keys a state variable, event handler, or on-disk lifecycle field updates the matching machine in `docs/state-machines.md` in the same commit.
 - `main` moves via reviewed PRs, never direct pushes.
 - A user-invoked command must never invoke another user-invoked command — delegate to model-invoked skills instead.
 - `commands/` and `skills/` are both promoted: everything in them ships.

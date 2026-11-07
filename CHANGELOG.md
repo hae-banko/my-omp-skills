@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.77.0] - 2026-11-07
+
+State-machine audit: every explicit and implicit state machine is now documented in `docs/state-machines.md` (states, invariants, transition tables, runtime model), with the 56 reachable invalid states/transitions it found, their evidence, and fix status. Issues: `.omp/scratch/state-machine-audit/`.
+
+### Fixed
+- **System prompt corruption (D53).** The runtime hands `before_agent_start` a `systemPrompt: string[]`. The KB index injector skipped non-strings, so the index never reached the model; clarify string-appended to the array, comma-joining every runtime block into one whenever clarify was on or a prompt matched a KB entry. Both now append tail blocks; verified against a real `omp` provider payload (1 joined block → runtime blocks intact + KB index + `<relevant-knowledge>`).
+- **Research lifecycle (D01–D05).** Bare `/research remove` deleted, and bare `/research archive` archived, the newest project — both now refuse without a slug. Unarchive derives status from files instead of forcing `CONVERGED`; an empty research root no longer renders a phantom `unknown` project; archive/remove clear the pinned `research` status line.
+- **Append-only guard (D06–D08).** `rm -rf .omp` / `.omp/knowledge`, `1>`/`N>` truncation, and `cp -t`/`mv -t` into protected directories are blocked; `>>` and `2>&1` still pass. Audit subtopics without their own version are revisable after the root report is revised; audit versions must strictly increase (the AUDIT-FORMAT `status: active # …` comment is accepted).
+- **Bootstrap command list (D09–D11).** `context` injections are per-request, but the list was disarmed after the first `agent_end`, never re-armed after compaction or `/new`, and every subagent started armed. It is now injected on every request of UI sessions (`ctx.hasUI`) at a stable position, and never into subagents.
+- **Research DAG and outline parsing (D12–D16).** Result files match the exact item (no `oauth.json` completing `auth`), unparseable results do not complete a node, dangling `depends_on` is reported as missing rather than a cycle, and multi-line `depends_on` / indented `name:` no longer swallow or drop sibling items.
+- **Hindsight (D17–D18).** The real-work gate scans the whole turn (the runtime only fires `session_stop` on a text-only final message, so the old gate never saw tool calls); once-per-prompt is keyed by session id + the user message's timestamp, so the first prompt after `/new` is no longer skipped. Config edits are picked up on the next settle.
+- **Council (D19–D27).** `/council recent|history [N]` lists records with zero agent turns instead of deliberating on the word "recent"; keywords are read only as a leading run, so topic prose stays intact; the deliberating status stays up until the council turn ends; config parsing is field-order and indentation independent, only `tools:` items become tools, and an unknown `default:` falls back to the default triad. Saved records keep the public key so signatures verify, same-day saves no longer overwrite each other, and CRLF records parse.
+- **Reference corpus (D23, D56).** A failed clone removes its partial directory; leftover non-git directories are listed as unmanaged and removable instead of trapping `add`/`update` in contradictory advice. `/reference add <url> [name]` takes an explicit directory name, and adding a different repository whose name is taken reports the existing origin instead of advising an `update` that would pull the other repository.
+- **KB telemetry (D28–D33).** Ingest and block counters are per session (a subagent's `session_start` no longer zeroes the main session; `/new` starts fresh), ingests count only writes that landed, the footer status line is actually wired, the root resolves from subdirectories, and `knowledge_read` no longer creates directories. Per-session counters (and tilt strikes) are released when a session — e.g. a finished task subagent — shuts down.
+- **Workspace roots (D34–D36).** Non-repo fallbacks are not cached; `.git`/`.omp` win over `.scratch`/`scripts/routines` anywhere up the tree (the user-level `~/.omp` is not a repo marker); routines pick up a manifest created later.
+- **Clarify `~` bypass (D37–D38).** Bound to the exact prompt that carried it — no longer leaks to a later prompt or gets cleared by an unrelated `agent_end`.
+- **Triage, frontier, audit card (D39–D42).** `ready-for-agent` counts as agent-ready, only `issues/*.md` count as tickets, blockers resolve within the same feature, and YAML comments are stripped from audit status.
+- **`/audit list` (D55).** Shows every audit report (newest first) instead of one card for a single audit.
+- **Routines (D43–D44).** Failures and timeouts are reported even when the script printed output; a corrupt manifest stops the run.
+- **Tilt (D45–D47).** Incidents land in the repo-root file `/tilt` reads, session strikes/DEFCON are per session, writes are atomic, and a corrupt file is quarantined instead of overwritten.
+- **Council overlay (D54).** One tab per persona of the verdict: personas 4+ of larger councils are reachable, smaller councils show no phantom `Persona C`, and replacing the verdict keeps a valid tab.
+- **Research overlay (D48–D50).** `Enter` dispatches only real slash commands, switching projects resets every tab's scroll, and `q`/Ctrl+C close the overlay with the picker open.
+- **herdr (D51–D52).** `herdr_agent prompt` uses herdr's submit-and-wait (`--wait --until idle|done|blocked`), so normal completion no longer waits out the timeout and a timeout is reported as one; `wait` uses `--until` and `send` maps to a subcommand herdr 0.8 has. `wait_output` matches a literal substring and rejects an empty match.
+
+### Changed
+- `AGENTS.md` §8/§9.7 restate the `before_agent_start` contract as `systemPrompt: string[]`; the test harness chains it the way the runtime does.
+- New `tests/tools.test.ts` suite (references, workspace, routines, triage, herdr argv).
+- `/reference add <url> [name]` grammar in `commands/reference.md`; council overlay docs (`commands/council.md`, `skills/council/SKILL.md`) describe one tab per persona and no longer advertise the undispatched `s`/`Enter` actions.
+
 ## [0.76.2] - 2026-09-26
 
 ### Fixed

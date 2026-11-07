@@ -49,6 +49,7 @@ export interface ResearchDag {
   leaves: string[];
   hasCycles: boolean;
   cycleNodes?: string[];
+  missingDependencies?: Record<string, string[]>;
   topoOrder: string[];
   maxDepth: number;
   criticalPathLength: number;
@@ -85,10 +86,23 @@ export function canonicalResultPath(resultsDir: string, itemId: string, itemName
   return join(resultsDir, `${slug}.json`);
 }
 
+function isValidResultJsonFile(filePath: string): boolean {
+  try {
+    const stat = statSync(filePath);
+    if (!stat.isFile() || stat.size === 0) return false;
+    const content = readFileSync(filePath, "utf8");
+    if (!content.trim()) return false;
+    JSON.parse(content);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * File-first lookup for an item's result JSON file.
  * 1. Checks direct deterministic paths (results/<slug>.json and results/<01>_<slug>.json).
- * 2. Scans results/ directory if legacy filename was used.
+ * 2. Scans results/ directory if exact or numbered prefix filename was used.
  */
 export function findItemResultFile(resultsDir: string, itemId: string, itemName: string): string | undefined {
   if (!existsSync(resultsDir) || !statSync(resultsDir).isDirectory()) return undefined;
@@ -98,25 +112,26 @@ export function findItemResultFile(resultsDir: string, itemId: string, itemName:
 
   // 1. Direct O(1) existence checks for canonical paths
   const exactIdPath = join(resultsDir, `${idSlug}.json`);
-  if (existsSync(exactIdPath)) return exactIdPath;
+  if (existsSync(exactIdPath) && isValidResultJsonFile(exactIdPath)) return exactIdPath;
 
   const exactNamePath = join(resultsDir, `${nameSlug}.json`);
-  if (existsSync(exactNamePath)) return exactNamePath;
+  if (existsSync(exactNamePath) && isValidResultJsonFile(exactNamePath)) return exactNamePath;
 
-  // 2. Scan directory for numbered or prefixed matches
+  // 2. Scan directory for numbered prefix matches (e.g. 01_auth.json)
   try {
     const files = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
     for (const f of files) {
       const fClean = f.toLowerCase().replace(/\.json$/, "").replace(/[^a-z0-9_]+/g, "_");
-      if (
-        fClean === idSlug ||
-        fClean.endsWith(`_${idSlug}`) ||
-        fClean.includes(idSlug) ||
-        fClean === nameSlug ||
-        fClean.endsWith(`_${nameSlug}`) ||
-        fClean.includes(nameSlug)
-      ) {
-        return join(resultsDir, f);
+      const isExact = fClean === idSlug || fClean === nameSlug;
+      const isNumbered =
+        /^\d+_.+$/.test(fClean) &&
+        (fClean.replace(/^\d+_/, "") === idSlug || fClean.replace(/^\d+_/, "") === nameSlug);
+
+      if (isExact || isNumbered) {
+        const fullPath = join(resultsDir, f);
+        if (isValidResultJsonFile(fullPath)) {
+          return fullPath;
+        }
       }
     }
   } catch {
@@ -188,6 +203,8 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
       priorityScore: 0,
     });
   });
+  const missingDependencies: Record<string, string[]> = {};
+
   // 2. Second pass: wire dependencies
   items.forEach((item, idx) => {
     const id = (item.id ? item.id.trim() : slugifyItemId(item.name, idx)).toLowerCase();
@@ -201,12 +218,20 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
       if (typeof dep !== "string") continue;
       const depKey = dep.trim().toLowerCase();
       const resolvedId = nameToId.get(depKey) ?? depKey;
-      if (resolvedId && resolvedId !== id && !node.dependsOn.includes(resolvedId)) {
-        node.dependsOn.push(resolvedId);
+      if (!resolvedId || resolvedId === id) continue;
+
+      if (nodes.has(resolvedId)) {
+        if (!node.dependsOn.includes(resolvedId)) {
+          node.dependsOn.push(resolvedId);
+        }
+      } else {
+        if (!missingDependencies[id]) missingDependencies[id] = [];
+        if (!missingDependencies[id].includes(resolvedId)) {
+          missingDependencies[id].push(resolvedId);
+        }
       }
     }
   });
-
   // 3. Compute upstream and downstream connections
   for (const [id, node] of nodes.entries()) {
     for (const depId of node.dependsOn) {
@@ -327,8 +352,11 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
   // 7. Update statuses based on dependency resolution
   for (const [id, node] of nodes.entries()) {
     if (node.status === "completed") continue;
-    if (node.dependsOn.length === 0) {
+    const hasMissing = missingDependencies[id] && missingDependencies[id].length > 0;
+    if (node.dependsOn.length === 0 && !hasMissing) {
       node.status = "ready";
+    } else if (hasMissing) {
+      node.status = "pending";
     } else {
       const allUpstreamCompleted = node.dependsOn.every((depId) => {
         const depNode = nodes.get(depId);
@@ -349,6 +377,7 @@ export function buildResearchDag(items: ResearchItemSpec[], resultsDir?: string)
     leaves,
     hasCycles,
     cycleNodes,
+    missingDependencies: Object.keys(missingDependencies).length > 0 ? missingDependencies : undefined,
     topoOrder,
     maxDepth,
     criticalPathLength,

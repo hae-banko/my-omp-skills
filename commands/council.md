@@ -59,7 +59,7 @@ Keywords combine naturally in any order:
 - `actionable`: Include explicit follow-up implementation command suggestions in the verdict card.
 - `verbose`: Show detailed multi-stage discussion and persona critique transcripts (by default, discussion is minimal and silent).
 - `compact` / `terse` / `summary`: Render a compact 4-line ANSI summary card instead of the full card.
-- `overlay` / `modal`: Open the interactive Council Verdict overlay (`[1] Verdict`, `[2/3/4] Persona A/B/C`) when the runtime has an interactive UI. Use `j/k` to scroll, `s` to save, `Enter` to run `/implement` with the consensus invariants, `Esc/q` to dismiss.
+- `overlay` / `modal`: Open the interactive Council Verdict overlay (`[1] Verdict`, `[2..N+1] Persona tabs`) when the runtime has an interactive UI. Use `j/k` to scroll, `Esc/q` to dismiss.
 - `software` *(Default)*: Use the default software triad (Minimalist / Architect / Security).
 - `ml`: Use the ML-research triad (Model Architect / Eval Critic / Inference Engineer).
 - `embedded` / `firmware`: Use the embedded triad (Realtime Auditor / Hardware Safety / Baremetal Pragmatist).
@@ -188,8 +188,8 @@ If the user passed `save` or `record`:
 ## Interactive Verdict Overlay (`overlay`)
 
 When `overlay` (alias `modal`) is passed and the runtime exposes `ctx.ui.custom`, launch the interactive Council Verdict overlay immediately so the user can read the verdict while the executing agent runs Stage 1. The overlay is modeled after `src/research/research-overlay.ts` and oh-my-pi TUI conventions.
-- **Tabs**: `[1] Verdict & Consensus` (consensus invariants / majority / divergences / summary), `[2] Persona A`, `[3] Persona B`, `[4] Persona C` (un-truncated stance, recommendation, key invariants, caveats, confidence).
-- **Keyboard**: `1-4` or `Tab`/`Shift+Tab` to switch tabs; `j`/`k` (or arrow keys) to scroll; `s` to save the record; `Enter` to dispatch `/implement` with the consensus invariants; `Esc` or `q` to close.
+- **Tabs**: `[1] Verdict & Consensus` (consensus invariants / majority / divergences / summary), followed by one tab per persona (`[2..N+1]`) with un-truncated stance, recommendation, key invariants, caveats, confidence.
+- **Keyboard**: Digit keys (`1..min(9, tabs)`) or `Tab`/`Shift+Tab` to switch tabs; `j`/`k` (or arrow keys) to scroll; `Esc` or `q` to close.
 
 The 76-column ANSI verdict card continues to render in standard chat output even when the overlay is used — the overlay is an additional, opt-in inspection surface.
 

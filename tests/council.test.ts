@@ -49,6 +49,13 @@ import {
 import { createCouncilOverlay } from "../src/council/council-overlay.ts";
 import { displayWidth } from "../src/research/research-format.ts";
 import {
+  isRecentArgs,
+  parseRecentCount,
+  parseDebateFrontmatter,
+  renderCouncilHistoryCard,
+  runCouncilRecentCommand,
+} from "../src/council/council-history.ts";
+import {
   createTempFixture,
   createInteractiveCommandContext,
   fail,
@@ -296,8 +303,8 @@ export async function runCouncilSuite(ctx: TestContext): Promise<void> {
     commandCtx,
     { body: "# Council workflow body for tests", companionPaths: [] },
   );
-  if (statusCalls.length < 2) {
-    fail(`runCouncilCommand: expected at least 2 setStatus calls (start+clear), got ${statusCalls.length}`);
+  if (statusCalls.length !== 1) {
+    fail(`runCouncilCommand: expected exactly 1 setStatus call (start only, not cleared synchronously), got ${statusCalls.length}`);
   }
   if (statusCalls[0].key !== COUNCIL_STATUS_KEY || !statusCalls[0].text?.includes("Council deliberating on")) {
     fail(`runCouncilCommand: first setStatus call wrong (must be clean, no sub-mode stamp): ${JSON.stringify(statusCalls[0])}`);
@@ -305,6 +312,11 @@ export async function runCouncilSuite(ctx: TestContext): Promise<void> {
   // ADR-0008 §4: status text must NOT leak sub-mode routing metadata.
   if (statusCalls[0].text && /QUICK|RAW|DEEP|EMBEDDED|ML-RESEARCH|SOFTWARE/.test(statusCalls[0].text)) {
     fail(`runCouncilCommand: status text leaks sub-mode stamp: ${JSON.stringify(statusCalls[0])}`);
+  }
+  // Simulate turn settlement (agent_end)
+  ctx.handlers.agent_end?.({});
+  if (statusCalls.length !== 2 || statusCalls[1].text !== undefined) {
+    fail(`runCouncilCommand: expected setStatus(COUNCIL_STATUS_KEY, undefined) on agent_end, got: ${JSON.stringify(statusCalls)}`);
   }
   const verdictMessages = ctx.customMessages.filter(
     (m) => (m as { customType?: string }).customType === COUNCIL_CUSTOM_TYPE,
@@ -779,7 +791,335 @@ export async function runCouncilSuite(ctx: TestContext): Promise<void> {
   const overlay6 = createCouncilOverlay(overlayVerdict);
   overlay6.setVerdict({ ...overlayVerdict, topic: "Refreshed topic" });
   if (overlay6.getState().activeTab !== "verdict") fail("setVerdict should not disturb tab");
+  // D19: /council recent [N] and history [N] subcommand routing & regex
+  if (!isRecentArgs("recent")) fail("D19: isRecentArgs('recent') should be true");
+  if (!isRecentArgs("recent 5")) fail("D19: isRecentArgs('recent 5') should be true");
+  if (!isRecentArgs("history")) fail("D19: isRecentArgs('history') should be true");
+  if (!isRecentArgs("history 3")) fail("D19: isRecentArgs('history 3') should be true");
+  if (!isRecentArgs("--recent")) fail("D19: isRecentArgs('--recent') should be true");
+  if (!isRecentArgs("--history 2")) fail("D19: isRecentArgs('--history 2') should be true");
+  if (parseRecentCount("recent 5") !== 5) fail("D19: parseRecentCount('recent 5') should be 5");
+  if (parseRecentCount("history 3") !== 3) fail("D19: parseRecentCount('history 3') should be 3");
+  const subRecent = parseCouncilSubcommand("recent 5");
+  if (!subRecent || subRecent.sub !== "recent" || subRecent.rest !== "5") {
+    fail(`D19: parseCouncilSubcommand('recent 5') failed: ${JSON.stringify(subRecent)}`);
+  }
+  const subHistory = parseCouncilSubcommand("history 3");
+  if (!subHistory || subHistory.sub !== "history" || subHistory.rest !== "3") {
+    fail(`D19: parseCouncilSubcommand('history 3') failed: ${JSON.stringify(subHistory)}`);
+  }
+  const recentMockCtx = createInteractiveCommandContext();
+  const recentCustomMessagesBefore = ctx.customMessages.length;
+  await runCouncilCommand(ctx.pi, process.cwd(), "recent 5", recentMockCtx, {
+    body: "# Council workflow",
+    companionPaths: [],
+  });
+  // Zero agent turns: no command:council sent
+  const councilTurnMessages = ctx.customMessages.slice(recentCustomMessagesBefore).filter(
+    (m) => (m as { customType?: string }).customType === "command:council",
+  );
+  if (councilTurnMessages.length > 0) {
+    fail("D19: /council recent 5 should not emit command:council agent turn");
+  }
+
+  // D20: Bare keywords only as leading run; topic prose intact
+  const preservedSave = parseCouncilArgs("Should we save the session state?");
+  if (preservedSave.save !== false) fail(`D20: 'save' in topic flipped flag: ${JSON.stringify(preservedSave)}`);
+  if (preservedSave.topic !== "Should we save the session state?") {
+    fail(`D20: topic mutilated: ${JSON.stringify(preservedSave.topic)}`);
+  }
+  const preservedDeep = parseCouncilArgs("How deep should our verification be?");
+  if (preservedDeep.explicitMode !== false || preservedDeep.mode !== "quick") {
+    fail(`D20: 'deep' in topic flipped mode: ${JSON.stringify(preservedDeep)}`);
+  }
+  if (preservedDeep.topic !== "How deep should our verification be?") {
+    fail(`D20: topic mutilated: ${JSON.stringify(preservedDeep.topic)}`);
+  }
+  const leadingKeywordPreservedTopic = parseCouncilArgs("quick Should we save the session state?");
+  if (leadingKeywordPreservedTopic.save !== false || leadingKeywordPreservedTopic.mode !== "quick") {
+    fail(`D20: leading keyword failure: ${JSON.stringify(leadingKeywordPreservedTopic)}`);
+  }
+  if (leadingKeywordPreservedTopic.topic !== "Should we save the session state?") {
+    fail(`D20: leading keyword topic mutilated: ${JSON.stringify(leadingKeywordPreservedTopic.topic)}`);
+  }
+  const flagAnywhere = parseCouncilArgs("Should we save the session state? --save");
+  if (flagAnywhere.save !== true || flagAnywhere.topic !== "Should we save the session state?") {
+    fail(`D20: --save anywhere failure: ${JSON.stringify(flagAnywhere)}`);
+  }
+
+  // D24: Persona order-independent (name: before id:)
+  const nameFirstFixture = createTempFixture("council-name-first-");
+  mkdirSync(join(nameFirstFixture.dir, ".omp"), { recursive: true });
+  writeFileSync(
+    join(nameFirstFixture.dir, ".omp", "council.yaml"),
+    `councils:
+  name-first-triad:
+    - name: "Alice"
+      id: "alice"
+      role: "Architect"
+    - name: "Bob"
+      id: "bob"
+      role: "Reviewer"
+`,
+  );
+  const nameFirstConfig = loadCouncilConfig(nameFirstFixture.dir);
+  const nameFirstPersonas = nameFirstConfig.councils["name-first-triad"];
+  if (!nameFirstPersonas || nameFirstPersonas.length !== 2) {
+    fail(`D24: expected 2 personas when name precedes id, got: ${JSON.stringify(nameFirstPersonas)}`);
+  } else {
+    if (nameFirstPersonas[0].id !== "alice" || nameFirstPersonas[0].name !== "Alice") {
+      fail(`D24: persona 0 mismatch: ${JSON.stringify(nameFirstPersonas[0])}`);
+    }
+    if (nameFirstPersonas[1].id !== "bob" || nameFirstPersonas[1].name !== "Bob") {
+      fail(`D24: persona 1 mismatch: ${JSON.stringify(nameFirstPersonas[1])}`);
+    }
+  }
+  nameFirstFixture.cleanup();
+
+  // D25: Councils indented 4 spaces under councils:
+  const fourSpaceFixture = createTempFixture("council-four-space-");
+  mkdirSync(join(fourSpaceFixture.dir, ".omp"), { recursive: true });
+  writeFileSync(
+    join(fourSpaceFixture.dir, ".omp", "council.yaml"),
+    `councils:
+    four-space-triad:
+        - id: "charlie"
+          name: "Charlie"
+          role: "Developer"
+`,
+  );
+  const fourSpaceConfig = loadCouncilConfig(fourSpaceFixture.dir);
+  const fourSpacePersonas = fourSpaceConfig.councils["four-space-triad"];
+  if (!fourSpacePersonas || fourSpacePersonas.length !== 1) {
+    fail(`D25: expected 1 persona in 4-space indented council, got: ${JSON.stringify(fourSpacePersonas)}`);
+  }
+  fourSpaceFixture.cleanup();
+
+  // D26: Only tools: list items become tools (no guideline leak)
+  const guidelineFixture = createTempFixture("council-guidelines-");
+  mkdirSync(join(guidelineFixture.dir, ".omp"), { recursive: true });
+  writeFileSync(
+    join(guidelineFixture.dir, ".omp", "council.yaml"),
+    `councils:
+  guideline-triad:
+    - id: "dana"
+      name: "Dana"
+      guidelines:
+        - never allocate in ISR
+        - verify return values
+      tools:
+        - web_search
+        - read
+`,
+  );
+  const guidelineConfig = loadCouncilConfig(guidelineFixture.dir);
+  const dana = guidelineConfig.councils["guideline-triad"]?.[0];
+  if (!dana) {
+    fail("D26: persona dana not found");
+  } else {
+    if (!dana.tools || dana.tools.length !== 2 || !dana.tools.includes("web_search") || !dana.tools.includes("read")) {
+      fail(`D26: expected only tools items, got: ${JSON.stringify(dana.tools)}`);
+    }
+    if (dana.tools?.some((t) => t.includes("ISR") || t.includes("return values"))) {
+      fail(`D26: guidelines leaked into tools: ${JSON.stringify(dana.tools)}`);
+    }
+  }
+  guidelineFixture.cleanup();
+
+  // D27: Unknown default: falls back to default-triad
+  const unknownDefaultFixture = createTempFixture("council-unknown-default-");
+  mkdirSync(join(unknownDefaultFixture.dir, ".omp"), { recursive: true });
+  writeFileSync(
+    join(unknownDefaultFixture.dir, ".omp", "council.yaml"),
+    `default: nonexistent-council-name
+`,
+  );
+  const unknownDefaultConfig = loadCouncilConfig(unknownDefaultFixture.dir);
+  if (unknownDefaultConfig.defaultCouncil !== "default-triad") {
+    fail(`D27: expected fallback to default-triad, got: ${unknownDefaultConfig.defaultCouncil}`);
+  }
+  unknownDefaultFixture.cleanup();
+
+  // X-COUNCIL-12: parseDebateFrontmatter tolerates CRLF line endings
+  const crlfFrontmatter = "---\r\ndebate_id: 2026-11-07_crlf-test\r\ntopic: \"CRLF test topic\"\r\ncouncil: default-triad\r\nmode: quick\r\ntimestamp: \"2026-11-07T00:00:00.000Z\"\r\nconsensus_invariants:\r\n  - \"Invariant A\"\r\n---\r\n\r\n# Body";
+  const parsedCrlf = parseDebateFrontmatter(crlfFrontmatter);
+  if (parsedCrlf.debate_id !== "2026-11-07_crlf-test" || parsedCrlf.topic !== "CRLF test topic") {
+    fail(`X-COUNCIL-12: CRLF frontmatter parsing failed: ${JSON.stringify(parsedCrlf)}`);
+  }
+  if (parsedCrlf.consensus_invariants.length !== 1 || parsedCrlf.consensus_invariants[0] !== "Invariant A") {
+    fail(`X-COUNCIL-12: CRLF invariants parsing failed: ${JSON.stringify(parsedCrlf.consensus_invariants)}`);
+  }
+
+  // X-COUNCIL-13: renderCouncilHistoryCard preserves metadata badges without truncation
+  const longTopicRecord = {
+    path: "/fake/path.md",
+    slug: "a-fairly-long-topic-for-deliberation-testing",
+    frontmatter: {
+      debate_id: "2026-11-07_test",
+      topic: "A fairly long topic for deliberation testing",
+      council: "default-triad",
+      mode: "quick",
+      timestamp: "2026-11-07T12:00:00.000Z",
+      signature_ed25519: "a1b2c3d4",
+      consensus_invariants: ["Inv 1", "Inv 2"],
+    },
+  };
+  const historyCard = renderCouncilHistoryCard([longTopicRecord], 5);
+  if (!historyCard.includes("🔏 signed")) {
+    fail(`X-COUNCIL-13: metadata badge truncated in history card: ${historyCard}`);
+  }
+
+  // X-COUNCIL-7: partitionCouncilOpinions deduplicates invariants per persona
+  const duplicateInvariantOpinions: CouncilOpinion[] = [
+    {
+      personaId: "p1",
+      personaName: "Persona 1",
+      stance: "Stance 1",
+      recommendation: "Rec 1",
+      keyInvariants: ["Use SQLite only", "Use SQLite only", "Use SQLite only"],
+      caveats: [],
+      confidence: 0.9,
+    },
+    {
+      personaId: "p2",
+      personaName: "Persona 2",
+      stance: "Stance 2",
+      recommendation: "Rec 2",
+      keyInvariants: ["Use Postgres"],
+      caveats: [],
+      confidence: 0.9,
+    },
+    {
+      personaId: "p3",
+      personaName: "Persona 3",
+      stance: "Stance 3",
+      recommendation: "Rec 3",
+      keyInvariants: ["Use MongoDB"],
+      caveats: [],
+      confidence: 0.9,
+    },
+  ];
+  const duplicatePartition = partitionCouncilOpinions(duplicateInvariantOpinions, "Database choice");
+  if (duplicatePartition.consensusInvariants.length > 0) {
+    fail(`X-COUNCIL-7: duplicate invariants from 1 persona promoted to consensus: ${JSON.stringify(duplicatePartition.consensusInvariants)}`);
+  }
+
+  // X-COUNCIL-8: CouncilOverlay ignores input after completion
+  const overlayDoneTest = createCouncilOverlay(overlayVerdict);
+  const firstDismiss = overlayDoneTest.handleInput("q");
+  if (!firstDismiss || firstDismiss.action !== "dismiss") fail("X-COUNCIL-8: first input should dismiss");
+  const secondInput = overlayDoneTest.handleInput("s");
+  if (secondInput !== undefined) fail(`X-COUNCIL-8: subsequent input after completion should be undefined, got: ${JSON.stringify(secondInput)}`);
+
+  // X-COUNCIL-11: saveCouncilRecord avoids date-slug collisions
+  const collisionFixture = createTempFixture("council-collision-");
+  const path1 = saveCouncilRecord(collisionFixture.dir, fullVerdict);
+  const path2 = saveCouncilRecord(collisionFixture.dir, fullVerdict);
+  if (path1 === path2) {
+    fail(`X-COUNCIL-11: duplicate saves should generate unique paths, got: ${path1}`);
+  }
+  if (!existsSync(path1) || !existsSync(path2)) {
+    fail("X-COUNCIL-11: both collision files must exist on disk");
+  }
+  collisionFixture.cleanup();
+
+  // X-COUNCIL-15: saveCouncilRecord persists public_key_ed25519
+  const signedFixture = createTempFixture("council-signed-");
+  const sig = signCouncilVerdict({ ...fullVerdict, consensusInvariants: ["Inv 1"] });
+  const signedVerdict: CouncilVerdict = {
+    ...fullVerdict,
+    signature: sig.signature,
+    publicKey: sig.publicKey,
+    consensusInvariants: ["Inv 1"],
+  };
+  const signedPath = saveCouncilRecord(signedFixture.dir, signedVerdict);
+  const signedContent = readFileSync(signedPath, "utf8");
+  const parsedSigned = parseDebateFrontmatter(signedContent);
+  if (!parsedSigned.public_key_ed25519) {
+    fail(`X-COUNCIL-15: public_key_ed25519 not parsed from saved record: ${signedContent.slice(0, 300)}`);
+  }
+  if (!signedVerdict.publicKey || !verifyCouncilSignature(signedVerdict, parsedSigned.public_key_ed25519 ?? "")) {
+    fail("X-COUNCIL-15: signature verification failed against parsed public key");
+  }
+  signedFixture.cleanup();
+
+  // COUNCIL-9: overlay dynamically derives tabs from verdict opinions (N-persona support, no phantom tabs)
+  const makeDynamicOpinion = (id: string, name: string): CouncilOpinion => ({
+    personaId: id,
+    personaName: name,
+    stance: `Stance of ${name}`,
+    recommendation: `Recommendation from ${name}`,
+    keyInvariants: [`Invariant of ${name}`],
+    caveats: [`Caveat of ${name}`],
+    confidence: 0.9,
+  });
+  const quintetDynamicVerdict: CouncilVerdict = {
+    topic: "Quintet deliberation topic",
+    councilName: "quintet",
+    mode: "quick",
+    opinions: [
+      makeDynamicOpinion("p1", "Persona One"),
+      makeDynamicOpinion("p2", "Persona Two"),
+      makeDynamicOpinion("p3", "Persona Three"),
+      makeDynamicOpinion("p4", "Persona Four"),
+      makeDynamicOpinion("p5", "Persona Five"),
+    ],
+    consensusInvariants: ["Quintet invariant 1"],
+    majorityRecommendations: [],
+    uniqueInsights: [],
+    criticalDivergences: [],
+    verdictSummary: "Quintet summary",
+    timestamp: "2026-11-07T00:00:00.000Z",
+  };
+  const duoDynamicVerdict: CouncilVerdict = {
+    topic: "Duo deliberation topic",
+    councilName: "duo",
+    mode: "quick",
+    opinions: [
+      makeDynamicOpinion("p1", "Duo First"),
+      makeDynamicOpinion("p2", "Duo Second"),
+    ],
+    consensusInvariants: ["Duo invariant 1"],
+    majorityRecommendations: [],
+    uniqueInsights: [],
+    criticalDivergences: [],
+    verdictSummary: "Duo summary",
+    timestamp: "2026-11-07T00:00:00.000Z",
+  };
+
+  // (a) a 5-opinion verdict exposes 6 tabs and key 6 (or cycling) reaches the fifth persona's content
+  const overlay5Dynamic = createCouncilOverlay(quintetDynamicVerdict);
+  overlay5Dynamic.handleInput("6");
+  if (overlay5Dynamic.getState().activeTab !== "persona-4") {
+    fail(`COUNCIL-9: key '6' on 5-opinion verdict should select persona-4, got: ${overlay5Dynamic.getState().activeTab}`);
+  }
+  const lines5Dynamic = overlay5Dynamic.renderLines(84, 26);
+  if (!lines5Dynamic.some((l) => l.includes("Persona Five") && (l.includes("Stance of Persona Five") || l.includes("Invariant of Persona Five")))) {
+    fail("COUNCIL-9: 5-opinion overlay must render fifth persona content when on persona-4 tab");
+  }
+
+  // (b) a 2-opinion verdict renders no third persona tab
+  const overlay2Dynamic = createCouncilOverlay(duoDynamicVerdict);
+  const lines2Dynamic = overlay2Dynamic.renderLines(84, 26);
+  if (lines2Dynamic.some((l) => l.includes("Persona C") || l.includes("[4] Persona") || l.includes("persona-2"))) {
+    fail("COUNCIL-9: 2-opinion overlay must not render phantom third persona tab");
+  }
+  overlay2Dynamic.handleInput("4");
+  if (overlay2Dynamic.getState().activeTab === "persona-2") {
+    fail("COUNCIL-9: key '4' on 2-opinion verdict should not select nonexistent persona-2");
+  }
+
+  // (c) setVerdict from 5 to 2 opinions while on the 5th persona tab lands on a valid tab
+  overlay5Dynamic.setVerdict(duoDynamicVerdict);
+  const tabAfterShrink = overlay5Dynamic.getState().activeTab;
+  if (tabAfterShrink !== "verdict" && tabAfterShrink !== "persona-0" && tabAfterShrink !== "persona-1") {
+    fail(`COUNCIL-9: setVerdict from 5 to 2 opinions must land on a valid tab, got: ${tabAfterShrink}`);
+  }
+  if (tabAfterShrink !== "verdict") {
+    fail(`COUNCIL-9: setVerdict should fall back to verdict when active persona no longer exists, got: ${tabAfterShrink}`);
+  }
 }
+
 
 /** Test seam that re-creates a TestContext-shaped object WITHOUT re-invoking
  *  the extension's default export (which would double-register renderers). */

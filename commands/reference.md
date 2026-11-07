@@ -5,7 +5,7 @@ turn is spent, and cloning happens only when you type it.
 
 | Subcommand | Semantics |
 | --- | --- |
-| `add <url>` | Clone `<url>` into `.omp/references/<name>` (name derived from the URL). Fails if the name is already installed — use `update`. |
+| `add <url> [name]` | Clone `<url>` into `.omp/references/<name>` (name derived from the URL or explicit). Fails if the name is already installed with the same origin (use `update`) or a different origin (pass `<other-name>`). |
 | `update <name>` | `git pull` the installed reference; reports HEAD before → after. |
 | `remove <name>` | Delete `.omp/references/<name>`. Refuses names that are not a plain directory inside the corpus. |
 | `list` | List the corpus — each entry with its remote and HEAD; "corpus is empty" when none. |

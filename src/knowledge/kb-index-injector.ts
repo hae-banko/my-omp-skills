@@ -13,16 +13,15 @@
 // 1. **Zero work when empty** — if the repository has no records or pitfalls,
 //    no section is added.
 //
-// 2. **Dedup-safe** — the same session can fire `before_agent_start`
-//    multiple times (user prompt, compaction, etc.). The section MUST NOT
-//    be appended twice; a substring check on the section marker guards
-//    this. The substring (not equality) is deliberate: prior injections
-//    may have wrapped the section, and the model may have echoed nearby
-//    text back into the prompt.
+// 2. **Append-only block** — the runtime rebuilds the system prompt every
+//    turn and passes it as `string[]` (`before_agent_start`). The section is
+//    appended as one new tail block; earlier blocks are never rewritten
+//    (AGENTS.md §8). A block already carrying the marker (another handler or
+//    a duplicate install in the same chain) suppresses a second copy.
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionApi } from "../core/api.ts";
+import { asBeforeAgentStartEvent, type BeforeAgentStartEventResult, type ExtensionApi } from "../core/api.ts";
 import { findKnowledgeRoot } from "./knowledge.ts";
 import { getPitfallCount, getRecordCount } from "./kb-ingest-status.ts";
 
@@ -88,33 +87,18 @@ export function formatIndexSection(cwd: string): string {
 }
 
 /**
- * Returns true if `systemPrompt` already contains the section header.
- * Substring (not equality) so that wrapped, echoed, or augmented copies of
- * the marker do not slip past the dedup guard.
- */
-export function systemPromptHasSection(systemPrompt: string): boolean {
-  return systemPrompt.includes(SECTION_MARKER);
-}
-
-/**
- * Subscribe to `before_agent_start` and append the compact KB index when
- * (a) records/pitfalls exist in the repository or session, and (b) the
- * system prompt does not already contain the section header.
+ * Subscribe to `before_agent_start` and append the compact KB index as a new
+ * tail block when records/pitfalls exist and no block carries the marker yet.
  */
 export function installKbIndexInjector(pi: ExtensionApi): void {
-  pi.on("before_agent_start", (event: unknown, ctx?: unknown) => {
-    if (!event || typeof event !== "object") return;
-    const evt = event as { systemPrompt?: unknown; cwd?: unknown };
-    if (!("systemPrompt" in evt)) return;
-    if (typeof evt.systemPrompt !== "string") return;
-    if (systemPromptHasSection(evt.systemPrompt)) return;
-    const cwd =
-      readStringField(ctx, "cwd") ?? readStringField(event, "cwd") ?? process.cwd();
+  pi.on("before_agent_start", (event: unknown, ctx?: unknown): BeforeAgentStartEventResult | undefined => {
+    const evt = asBeforeAgentStartEvent(event);
+    if (!evt) return;
+    if (evt.systemPrompt.some((block) => block.includes(SECTION_MARKER))) return;
+    const cwd = readStringField(ctx, "cwd") ?? process.cwd();
     const section = formatIndexSection(cwd);
     if (section === "") return;
-    const updatedPrompt = evt.systemPrompt + "\n\n" + section;
-    evt.systemPrompt = updatedPrompt;
-    return { systemPrompt: updatedPrompt };
+    return { systemPrompt: [...evt.systemPrompt, section] };
   });
 }
 

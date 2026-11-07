@@ -18,7 +18,8 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionApi } from "../core/api.ts";
+import { asEventContext, sessionIdOf, type ExtensionApi } from "../core/api.ts";
+import { findKnowledgeRoot } from "./knowledge.ts";
 
 /** Unique key for `ui.setStatus`. The status bar uses key to de-dup. */
 export const STATUS_KEY = "kb-guardrail";
@@ -41,9 +42,24 @@ export interface KbBlockDetail {
 /** Max retained details. Older entries roll off; count is uncapped. */
 const DETAILS_CAP = 8;
 
-/** Module-scoped counter and detail ring; reset per session. */
-let blockCount = 0;
-let blockDetails: KbBlockDetail[] = [];
+interface SessionGuardState {
+  blockCount: number;
+  blockDetails: KbBlockDetail[];
+  cwd: string | null;
+}
+
+const sessionGuardStates = new Map<string, SessionGuardState>();
+let currentSessionId = "default";
+
+function getOrCreateState(sessionId?: string): SessionGuardState {
+  const id = sessionId ?? currentSessionId;
+  let state = sessionGuardStates.get(id);
+  if (!state) {
+    state = { blockCount: 0, blockDetails: [], cwd: sessionRootCwd };
+    sessionGuardStates.set(id, state);
+  }
+  return state;
+}
 
 /** Closure-captured cwd from the most recent session_start. `null` before then. */
 let sessionRootCwd: string | null = null;
@@ -58,29 +74,36 @@ let setStatusFn: ((key: string, text: string | undefined) => void) | undefined =
  *
  * Intended caller: `installPolicy` (one site per `return { block: true }`).
  */
-export function recordBlock(tool: string, path: string, reason: KbBlockReason): void {
-  blockCount += 1;
-  blockDetails.push({ ts: Date.now(), tool, path, reason });
-  if (blockDetails.length > DETAILS_CAP) {
-    blockDetails = blockDetails.slice(blockDetails.length - DETAILS_CAP);
+export function recordBlock(
+  tool: string,
+  path: string,
+  reason: KbBlockReason,
+  sessionId?: string,
+): void {
+  const state = getOrCreateState(sessionId);
+  state.blockCount += 1;
+  state.blockDetails.push({ ts: Date.now(), tool, path, reason });
+  if (state.blockDetails.length > DETAILS_CAP) {
+    state.blockDetails = state.blockDetails.slice(state.blockDetails.length - DETAILS_CAP);
   }
   refreshStatus();
 }
 
 /** Zero the counter and detail list. Called on each `session_start`. */
-export function resetSession(): void {
-  blockCount = 0;
-  blockDetails = [];
+export function resetSession(sessionId?: string): void {
+  const state = getOrCreateState(sessionId);
+  state.blockCount = 0;
+  state.blockDetails = [];
 }
 
-/** Snapshot accessor for tests; not part of the public runtime surface. */
-export function getBlockCount(): number {
-  return blockCount;
+/** Snapshot accessor; reading never creates session state. */
+export function getBlockCount(sessionId?: string): number {
+  return sessionGuardStates.get(sessionId ?? currentSessionId)?.blockCount ?? 0;
 }
 
-/** Snapshot accessor for tests; returns a defensive copy. */
-export function getBlockDetails(): KbBlockDetail[] {
-  return blockDetails.slice();
+/** Snapshot accessor; returns a defensive copy, never creates session state. */
+export function getBlockDetails(sessionId?: string): KbBlockDetail[] {
+  return sessionGuardStates.get(sessionId ?? currentSessionId)?.blockDetails.slice() ?? [];
 }
 
 /**
@@ -94,11 +117,19 @@ export function getBlockDetails(): KbBlockDetail[] {
  * active on a quiet session, and the counter becomes the loud state once
  * the model starts hitting it.
  */
-export function formatStatusText(rootCwd: string | null): string | undefined {
+export function formatStatusText(
+  rootCwd: string | null,
+  sessionId?: string,
+): string | undefined {
   if (rootCwd === null) return undefined;
-  if (!existsSync(join(rootCwd, ".omp", "knowledge"))) return undefined;
-  const noun = blockCount === 1 ? "block" : "blocks";
-  return `KB append-only · ${blockCount} ${noun}`;
+  const root = findKnowledgeRoot(rootCwd);
+  if (!root) return undefined;
+  const hasKb = existsSync(join(root, ".omp", "knowledge"));
+  const hasAudits = existsSync(join(root, ".omp", "audits"));
+  if (!hasKb && !hasAudits) return undefined;
+  const count = getOrCreateState(sessionId).blockCount;
+  const noun = count === 1 ? "block" : "blocks";
+  return `KB append-only · ${count} ${noun}`;
 }
 
 /** Re-render the status bar entry from the current closure state. */
@@ -114,14 +145,56 @@ export function refreshStatus(): void {
  * `agent_end` (re-render so any late `recordBlock` lands on the bar).
  */
 export function installKbGuardStatus(pi: ExtensionApi): void {
-  pi.on("session_start", (event) => {
-    const cwd = handlerCwdFromEvent(event);
-    sessionRootCwd = cwd;
-    resetSession();
+  const syncUi = (ctx?: unknown) => {
+    const evCtx = asEventContext(ctx);
+    if (evCtx.hasUI !== false && typeof evCtx.ui?.setStatus === "function") {
+      setStatusFn = evCtx.ui.setStatus.bind(evCtx.ui);
+    }
+  };
+
+  pi.on("session_start", (event, ctx) => {
+    const evCtx = asEventContext(ctx);
+    const isSubagent = evCtx.hasUI === false;
+    const sessId = sessionIdOf(ctx) ?? (isSubagent ? "subagent" : "default");
+    if (!isSubagent) {
+      currentSessionId = sessId;
+      sessionRootCwd = handlerCwdFromEvent(event);
+      syncUi(ctx);
+      resetSession(sessId);
+      refreshStatus();
+    } else {
+      resetSession(sessId);
+    }
+  });
+
+  const handleSessionChange = (event: unknown, ctx?: unknown) => {
+    const evCtx = asEventContext(ctx);
+    if (evCtx.hasUI === false) return;
+    const sessId = sessionIdOf(ctx) ?? "default";
+    currentSessionId = sessId;
+    if (evCtx.cwd) sessionRootCwd = evCtx.cwd;
+    syncUi(ctx);
+    if (!sessionGuardStates.has(sessId)) {
+      sessionGuardStates.set(sessId, { blockCount: 0, blockDetails: [], cwd: sessionRootCwd });
+    }
+    refreshStatus();
+  };
+
+  pi.on("session_switch", handleSessionChange);
+  pi.on("session_branch", handleSessionChange);
+  pi.on("session_tree", handleSessionChange);
+
+  pi.on("agent_end", (_event, ctx) => {
+    syncUi(ctx);
     refreshStatus();
   });
-  pi.on("agent_end", () => {
-    refreshStatus();
+
+  // Task subagents are disposed after they finish; their dispose emits
+  // session_shutdown on their own binding. Release that session's entry so
+  // the process-shared map tracks only live sessions.
+  pi.on("session_shutdown", (_event, ctx) => {
+    const sessId = sessionIdOf(ctx);
+    if (sessId) sessionGuardStates.delete(sessId);
   });
 }
 

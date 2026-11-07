@@ -6,9 +6,9 @@
 //
 // Block counter is surfaced via the kb-guard-status widget; do not remove the recordBlock() calls.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
-import type { ExtensionApi, ToolCallEvent, ToolCallEventResult } from "../core/api.ts";
+import { sessionIdOf, type ExtensionApi, type ToolCallEvent, type ToolCallEventResult } from "../core/api.ts";
 import { recordBlock } from "./kb-guard-status.ts";
 
 const KB_REASON =
@@ -28,24 +28,39 @@ const AUDIT_REASON =
 function knowledgeSubpath(cwd: string, raw: unknown): string[] | null {
   if (typeof raw !== "string" || raw.length === 0) return null;
   const abs = isAbsolute(raw) ? normalize(raw) : normalize(resolve(cwd, raw));
-  const parts = abs.split(sep);
-  for (let i = 0; i + 1 < parts.length; i++) {
-    if (parts[i] === ".omp" && parts[i + 1] === "knowledge") {
-      return parts.slice(i + 2);
-    }
-    if (parts[i] === ".omp" && parts[i + 1] === "audits") {
-      return ["audits", ...parts.slice(i + 2)];
+  const parts = abs.split(sep).filter(Boolean);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === ".omp") {
+      if (i === parts.length - 1) {
+        return [".omp"];
+      }
+      if (parts[i + 1] === "knowledge") {
+        if (i + 1 === parts.length - 1) {
+          return ["knowledge"];
+        }
+        return parts.slice(i + 2);
+      }
+      if (parts[i + 1] === "audits") {
+        return ["audits", ...parts.slice(i + 2)];
+      }
     }
   }
   return null;
 }
 
-/** True when the path targets the append-only stores (records/, pitfalls/, INDEX.md). */
+/** True when the path targets the append-only stores (records/, pitfalls/, INDEX.md, audits/, or their root/ancestors). */
 function isProtectedPath(cwd: string, raw: unknown): boolean {
   const sub = knowledgeSubpath(cwd, raw);
   if (!sub || sub.length === 0) return false;
   const first = sub[0];
-  return first === "records" || first === "pitfalls" || first === "INDEX.md" || first === "audits";
+  return (
+    first === ".omp" ||
+    first === "knowledge" ||
+    first === "records" ||
+    first === "pitfalls" ||
+    first === "INDEX.md" ||
+    first === "audits"
+  );
 }
 
 function anyProtectedPath(cwd: string, input: Record<string, unknown>): boolean {
@@ -83,8 +98,8 @@ export function isDestructiveBashAgainstProtected(
   command: string,
   cwd: string,
 ): { blocked: boolean; target?: string; reason?: "knowledge" | "audit" } {
-  // 1. Check stdout overwrite redirection: `> <file>` (excluding `>>`, `>&`, and heredocs `<<`)
-  const redirectMatches = command.matchAll(/(?<![>&0-9])>\s*([^\s;&|]+)/g);
+  // 1. Check stdout/stderr overwrite redirection: `> <file>`, `1> <file>`, `2> <file>` (excluding `>>`, `1>>`, `>&`, and heredocs `<<`)
+  const redirectMatches = command.matchAll(/(?<![>&])(?:[0-9]+)?>(?!>|&)\s*([^\s;&|]+)/g);
   for (const m of redirectMatches) {
     const target = m[1].replace(/^['"]|['"]$/g, "");
     if (isProtectedPath(cwd, target)) {
@@ -93,14 +108,18 @@ export function isDestructiveBashAgainstProtected(
     }
   }
 
-  // 2. Check deletion commands: rm, unlink, git rm, shred
+  const tokenizeArgs = (str: string): string[] => {
+    const matches = str.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g);
+    return matches ? matches.map((s) => s.replace(/^['"]|['"]$/g, "")) : [];
+  };
+
+  // 2. Check deletion commands: rm, unlink, shred, git rm
   const deleteMatches = command.matchAll(
-    /\b(?:rm(?:\s+-[a-zA-Z0-9]+)*|unlink|shred|git\s+rm(?:\s+-[a-zA-Z0-9]+)*)\s+([^;&|]+)/g,
+    /\b(?:rm|unlink|shred|git\s+rm)\b\s+([^;&|]+)/g,
   );
   for (const m of deleteMatches) {
-    const args = m[1].split(/\s+/);
-    for (const rawArg of args) {
-      const arg = rawArg.replace(/^['"]|['"]$/g, "");
+    const args = tokenizeArgs(m[1]);
+    for (const arg of args) {
       if (arg.startsWith("-") || !arg) continue;
       if (isProtectedPath(cwd, arg)) {
         const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
@@ -109,14 +128,40 @@ export function isDestructiveBashAgainstProtected(
     }
   }
 
-  // 3. Check move/rename commands: mv <src> <dest>
-  const mvMatches = command.matchAll(/\bmv(?:\s+-[a-zA-Z0-9]+)*\s+([^;&|]+)/g);
+  // 3. Check move/rename commands: mv <src> <dest> or mv -t <dir> <src>
+  const mvMatches = command.matchAll(/\bmv\b\s+([^;&|]+)/g);
   for (const m of mvMatches) {
-    const args = m[1]
-      .split(/\s+/)
-      .map((a) => a.replace(/^['"]|['"]$/g, ""))
-      .filter((a) => a && !a.startsWith("-"));
-    for (const arg of args) {
+    const tokens = tokenizeArgs(m[1]);
+    for (let i = 0; i < tokens.length; i++) {
+      const arg = tokens[i];
+      if (arg === "-t" || arg === "--target-directory") {
+        if (i + 1 < tokens.length) {
+          const target = tokens[i + 1];
+          if (isProtectedPath(cwd, target)) {
+            const reason = isAuditSubpath(cwd, target) ? "audit" : "knowledge";
+            return { blocked: true, target, reason };
+          }
+          i++;
+        }
+        continue;
+      }
+      if (arg.startsWith("-t")) {
+        const target = arg.slice(2);
+        if (isProtectedPath(cwd, target)) {
+          const reason = isAuditSubpath(cwd, target) ? "audit" : "knowledge";
+          return { blocked: true, target, reason };
+        }
+        continue;
+      }
+      if (arg.startsWith("--target-directory=")) {
+        const target = arg.slice("--target-directory=".length);
+        if (isProtectedPath(cwd, target)) {
+          const reason = isAuditSubpath(cwd, target) ? "audit" : "knowledge";
+          return { blocked: true, target, reason };
+        }
+        continue;
+      }
+      if (arg.startsWith("-")) continue;
       if (isProtectedPath(cwd, arg)) {
         const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
         return { blocked: true, target: arg, reason };
@@ -124,30 +169,45 @@ export function isDestructiveBashAgainstProtected(
     }
   }
 
-  // 4. Check cp overwrite: cp ... <dest>
-  const cpMatches = command.matchAll(/\bcp(?:\s+-[a-zA-Z0-9]+)*\s+([^;&|]+)/g);
+  // 4. Check cp overwrite: cp ... <dest> or cp -t <dir> ...
+  const cpMatches = command.matchAll(/\bcp\b\s+([^;&|]+)/g);
   for (const m of cpMatches) {
-    const args = m[1]
-      .split(/\s+/)
-      .map((a) => a.replace(/^['"]|['"]$/g, ""))
-      .filter((a) => a && !a.startsWith("-"));
-    if (args.length >= 2) {
-      const dest = args[args.length - 1];
-      if (isProtectedPath(cwd, dest)) {
-        const reason = isAuditSubpath(cwd, dest) ? "audit" : "knowledge";
-        return { blocked: true, target: dest, reason };
+    const tokens = tokenizeArgs(m[1]);
+    let targetDir: string | undefined = undefined;
+    const positional: string[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const arg = tokens[i];
+      if (arg === "-t" || arg === "--target-directory") {
+        if (i + 1 < tokens.length) {
+          targetDir = tokens[i + 1];
+          i++;
+        }
+        continue;
       }
+      if (arg.startsWith("-t")) {
+        targetDir = arg.slice(2);
+        continue;
+      }
+      if (arg.startsWith("--target-directory=")) {
+        targetDir = arg.slice("--target-directory=".length);
+        continue;
+      }
+      if (arg.startsWith("-")) continue;
+      positional.push(arg);
+    }
+    const dest = targetDir ?? (positional.length >= 2 ? positional[positional.length - 1] : undefined);
+    if (dest && isProtectedPath(cwd, dest)) {
+      const reason = isAuditSubpath(cwd, dest) ? "audit" : "knowledge";
+      return { blocked: true, target: dest, reason };
     }
   }
 
   // 5. Check in-place edits: sed -i ... <file>
   const sedMatches = command.matchAll(/\bsed\s+-[a-zA-Z0-9]*i[a-zA-Z0-9]*\s+([^;&|]+)/g);
   for (const m of sedMatches) {
-    const args = m[1]
-      .split(/\s+/)
-      .map((a) => a.replace(/^['"]|['"]$/g, ""))
-      .filter((a) => a && !a.startsWith("-"));
+    const args = tokenizeArgs(m[1]);
     for (const arg of args) {
+      if (arg.startsWith("-") || !arg) continue;
       if (isProtectedPath(cwd, arg)) {
         const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
         return { blocked: true, target: arg, reason };
@@ -156,13 +216,11 @@ export function isDestructiveBashAgainstProtected(
   }
 
   // 6. Check truncate: truncate -s ... <file>
-  const truncateMatches = command.matchAll(/\btruncate(?:\s+-[a-zA-Z0-9]+)*\s+([^;&|]+)/g);
+  const truncateMatches = command.matchAll(/\btruncate\b\s+([^;&|]+)/g);
   for (const m of truncateMatches) {
-    const args = m[1]
-      .split(/\s+/)
-      .map((a) => a.replace(/^['"]|['"]$/g, ""))
-      .filter((a) => a && !a.startsWith("-"));
+    const args = tokenizeArgs(m[1]);
     for (const arg of args) {
+      if (arg.startsWith("-") || !arg) continue;
       if (isProtectedPath(cwd, arg)) {
         const reason = isAuditSubpath(cwd, arg) ? "audit" : "knowledge";
         return { blocked: true, target: arg, reason };
@@ -216,6 +274,27 @@ function matchedPath(
 }
 
 
+function parseSemVer(v: string): [number, number, number] | null {
+  const m = v.match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+function compareSemVer(a: string, b: string): number | null {
+  const pa = parseSemVer(a);
+  const pb = parseSemVer(b);
+  if (!pa || !pb) return null;
+  if (pa[0] !== pb[0]) return pa[0] - pb[0];
+  if (pa[1] !== pb[1]) return pa[1] - pb[1];
+  return pa[2] - pb[2];
+}
+
+const VALID_STATUSES: Record<string, true> = {
+  active: true,
+  superseded: true,
+  archived: true,
+};
+
 function isControlledAuditUpdate(
   cwd: string,
   input: Record<string, unknown>,
@@ -241,27 +320,11 @@ function isControlledAuditUpdate(
       return false;
     }
 
-    let oldVersionMatch = oldContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
-    let oldVersion = oldVersionMatch ? oldVersionMatch[1].trim() : "";
-
-    // If target file doesn't have version frontmatter (e.g. subtopic file), look in root report overview.md or report.md
-    if (!oldVersion) {
-      const parts = normalized.split(sep);
-      const auditIdx = parts.lastIndexOf("audits");
-      if (auditIdx !== -1 && auditIdx + 1 < parts.length) {
-        const slugDir = parts.slice(0, auditIdx + 2).join(sep);
-        const overviewP = join(slugDir, "overview.md");
-        const reportP = join(slugDir, "report.md");
-        const rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
-        if (rootP) {
-          try {
-            const rootContent = readFileSync(rootP, "utf8");
-            const rootVM = rootContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
-            if (rootVM) oldVersion = rootVM[1].trim();
-          } catch {}
-        }
-      }
-    }
+    // Frontmatter status, minus the YAML comment the AUDIT-FORMAT template
+    // carries (`status: active # active | superseded | archived`).
+    const readStatus = (text: string): string | undefined =>
+      text.match(/(?:^|\n|\+)\s*status:\s*["']?([^"'#\r\n]+)/m)?.[1].trim().toLowerCase();
+    const oldStatus = readStatus(oldContent) ?? "active";
 
     let newText = "";
     if (toolName === "write") {
@@ -270,30 +333,59 @@ function isControlledAuditUpdate(
       newText = typeof input.input === "string" ? input.input : "";
     }
 
-    let versionMatch = newText.match(/(?:^|\n|\+)\s*version:\s*["']?([^"'\r\n]+)["']?/m);
-    let newVersion = versionMatch ? versionMatch[1].trim() : "";
+    const newStatus = readStatus(newText) ?? oldStatus;
+    if (!VALID_STATUSES[newStatus]) {
+      return false;
+    }
 
-    // If newText doesn't have version frontmatter (e.g. subtopic edit), check root overview.md or report.md
-    if (!newVersion) {
+    const oldVersionMatch = oldContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+    const oldVersion = oldVersionMatch ? oldVersionMatch[1].trim() : "";
+
+    const newVersionMatch = newText.match(/(?:^|\n|\+)\s*version:\s*["']?([^"'\r\n]+)["']?/m);
+    const newVersion = newVersionMatch ? newVersionMatch[1].trim() : "";
+
+    const filename = abs.split(sep).pop() ?? "";
+    const isSubtopic = filename !== "overview.md" && filename !== "report.md";
+
+    if (isSubtopic && !oldVersion && !newVersion) {
       const parts = normalized.split(sep);
       const auditIdx = parts.lastIndexOf("audits");
+      let rootP: string | null = null;
       if (auditIdx !== -1 && auditIdx + 1 < parts.length) {
         const slugDir = parts.slice(0, auditIdx + 2).join(sep);
         const overviewP = join(slugDir, "overview.md");
         const reportP = join(slugDir, "report.md");
-        const rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
-        if (rootP && rootP !== abs) {
-          try {
-            const rootContent = readFileSync(rootP, "utf8");
-            const rootVM = rootContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
-            if (rootVM) newVersion = rootVM[1].trim();
-          } catch {}
-        }
+        rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
       }
+      if (!rootP || rootP === abs) return false;
+
+      let rootContent = "";
+      try {
+        rootContent = readFileSync(rootP, "utf8");
+      } catch {
+        return false;
+      }
+
+      const rootHasRevHistory = /revision\s+history/i.test(rootContent);
+      if (!rootHasRevHistory) return false;
+
+      const rootVM = rootContent.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
+      const rootVersion = rootVM ? rootVM[1].trim() : "";
+      if (!parseSemVer(rootVersion)) return false;
+
+      const rootMtime = statSync(rootP).mtimeMs;
+      const subtopicMtime = statSync(abs).mtimeMs;
+      if (rootMtime < subtopicMtime) {
+        return false;
+      }
+      continue;
     }
 
-    const isSemVer = /^v?\d+\.\d+\.\d+/.test(newVersion);
-    if (!newVersion || !isSemVer || newVersion === oldVersion) {
+    if (!newVersion || !oldVersion) {
+      return false;
+    }
+    const cmp = compareSemVer(newVersion, oldVersion);
+    if (cmp === null || cmp <= 0) {
       return false;
     }
 
@@ -302,25 +394,7 @@ function isControlledAuditUpdate(
         ? /revision\s+history/i.test(newText)
         : /revision\s+history/i.test(newText) || /revision\s+history/i.test(oldContent);
 
-    let rootHasRevHistory = false;
     if (!hasRevHistory) {
-      const parts = normalized.split(sep);
-      const auditIdx = parts.lastIndexOf("audits");
-      if (auditIdx !== -1 && auditIdx + 1 < parts.length) {
-        const slugDir = parts.slice(0, auditIdx + 2).join(sep);
-        const overviewP = join(slugDir, "overview.md");
-        const reportP = join(slugDir, "report.md");
-        const rootP = existsSync(overviewP) ? overviewP : existsSync(reportP) ? reportP : null;
-        if (rootP && rootP !== abs) {
-          try {
-            const rootContent = readFileSync(rootP, "utf8");
-            rootHasRevHistory = /revision\s+history/i.test(rootContent);
-          } catch {}
-        }
-      }
-    }
-
-    if (!hasRevHistory && !rootHasRevHistory) {
       return false;
     }
   }
@@ -331,6 +405,7 @@ function isControlledAuditUpdate(
 export function installPolicy(pi: ExtensionApi): void {
   pi.on("tool_call", (event, ctx) => {
     const cwd = handlerCwd(ctx);
+    const sessId = sessionIdOf(ctx);
     const e = event as ToolCallEvent;
 
     if (e.toolName === "edit") {
@@ -338,11 +413,11 @@ export function installPolicy(pi: ExtensionApi): void {
       if (protectedMatch !== undefined) {
         if (isAuditSubpath(cwd, protectedMatch)) {
           if (!isControlledAuditUpdate(cwd, e.input, "edit")) {
-            recordBlock(e.toolName, protectedMatch, "audit");
+            recordBlock(e.toolName, protectedMatch, "audit", sessId);
             return { block: true, reason: AUDIT_REASON };
           }
         } else {
-          recordBlock(e.toolName, protectedMatch, "knowledge");
+          recordBlock(e.toolName, protectedMatch, "knowledge", sessId);
           return { block: true, reason: KB_REASON };
         }
       }
@@ -357,11 +432,11 @@ export function installPolicy(pi: ExtensionApi): void {
       if (protectedMatch !== undefined) {
         if (isAuditSubpath(cwd, protectedMatch)) {
           if (!isControlledAuditUpdate(cwd, e.input, "write")) {
-            recordBlock(e.toolName, protectedMatch, "audit");
+            recordBlock(e.toolName, protectedMatch, "audit", sessId);
             return { block: true, reason: AUDIT_REASON };
           }
         } else {
-          recordBlock(e.toolName, protectedMatch, "knowledge");
+          recordBlock(e.toolName, protectedMatch, "knowledge", sessId);
           return { block: true, reason: KB_REASON };
         }
       }
@@ -371,7 +446,7 @@ export function installPolicy(pi: ExtensionApi): void {
       const command = typeof e.input.command === "string" ? e.input.command : "";
       const check = isDestructiveBashAgainstProtected(command, cwd);
       if (check.blocked) {
-        recordBlock(e.toolName, check.target ?? "<bash>", check.reason ?? "knowledge");
+        recordBlock(e.toolName, check.target ?? "<bash>", check.reason ?? "knowledge", sessId);
         if (check.reason === "audit") {
           return { block: true, reason: AUDIT_REASON };
         }

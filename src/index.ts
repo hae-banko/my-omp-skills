@@ -119,7 +119,7 @@ const RESEARCH_SUBCOMMANDS: Array<{ value: string; label: string; description: s
 
 // findRepoRoot is imported from ./core/locators.ts
 
-function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
+export function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
   const auditsDir = join(root, ".omp", "audits");
   let auditSlug = slugArg.trim();
 
@@ -159,7 +159,8 @@ function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
           const versionMatch = body.match(/^version:\s*["']?([^"'\r\n]+)["']?/m);
           const version = versionMatch?.[1]?.trim() ?? "v0.1.0";
           const statusMatch = body.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
-          const status = statusMatch?.[1]?.trim() ?? "active";
+          const rawStatus = statusMatch?.[1] ? statusMatch[1].replace(/#.*$/, "").trim() : "active";
+          const status = rawStatus || "active";
 
           let subtopicsCount = 0;
           const subtopicSpecs: AuditSubtopicSpec[] = [];
@@ -208,7 +209,7 @@ function getAuditCardPayload(root: string, slugArg: string): AuditCardPayload {
   } as AuditCardPayload & { not_found?: boolean };
 }
 
-function getTriageStatusPayload(root: string): TriageStatusPayload {
+export function getTriageStatusPayload(root: string): TriageStatusPayload {
   const scratchDirs = [join(root, ".omp", "scratch"), join(root, ".scratch")];
   let unlabeled = 0;
   let needsTriage = 0;
@@ -223,7 +224,11 @@ function getTriageStatusPayload(root: string): TriageStatusPayload {
         if (ent.isDirectory() && !ent.name.startsWith(".")) {
           collect(full);
         } else if (ent.isFile() && ent.name.endsWith(".md")) {
-          mdFiles.push(full);
+          // Only count issue files: must be directly under an "issues" directory
+          const parentDir = basename(dir);
+          if (parentDir === "issues") {
+            mdFiles.push(full);
+          }
         }
       }
     } catch {}
@@ -243,7 +248,12 @@ function getTriageStatusPayload(root: string): TriageStatusPayload {
       const lower = content.toLowerCase();
       if (lower.includes("needs-triage") || lower.includes("needs_triage")) {
         needsTriage++;
-      } else if (lower.includes("agent-ready") || lower.includes("agent_ready")) {
+      } else if (
+        lower.includes("agent-ready") ||
+        lower.includes("agent_ready") ||
+        lower.includes("ready-for-agent") ||
+        lower.includes("ready_for_agent")
+      ) {
         agentReady++;
       } else {
         unlabeled++;
@@ -426,8 +436,8 @@ const COMMANDS: CommandSpec[] = [
         const root = findRepoRoot();
         const cleanRest = rest.replace(/\s+--(bar|card|full|compact)\b/g, "").trim();
         const { slug, notFound, payload } = readProject(root, cleanRest);
-        if (notFound) {
-          ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+        if (notFound || !payload.project_path) {
+          ctx.ui?.notify?.(cleanRest ? `Research project slug not found: ${slug}` : "No active research projects found", "warning");
           return;
         }
 
@@ -488,17 +498,20 @@ const COMMANDS: CommandSpec[] = [
         }
 
         const { slug, notFound, payload } = readProject(root, cleanRest);
-        if (notFound) {
-          ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+        if (notFound || !payload.project_path) {
+          const msg = cleanRest ? `Research project slug not found: ${slug}` : "No active research projects found";
+          ctx.ui?.notify?.(msg, "warning");
           pi.sendMessage({
             customType: "my-omp-research-error",
             display: true,
             attribution: "user",
-            content: `Research error — project "${slug}" not found`,
+            content: `Research error — ${msg}`,
             details: {
-              slug,
+              slug: slug === "unknown" ? "none" : slug,
               code: "PROJECT_NOT_FOUND",
-              message: `Project "${slug}" not found under .omp/knowledge/research/`,
+              message: cleanRest
+                ? `Project "${slug}" not found under .omp/knowledge/research/`
+                : "No active research projects found under .omp/knowledge/research/",
               hint: "Run '/research status' to list projects, or '/research <topic>' to create one.",
             } satisfies ResearchErrorPayload,
           });
@@ -525,17 +538,26 @@ const COMMANDS: CommandSpec[] = [
       }
 
       if (head === "archive") {
+        if (!rest.trim()) {
+          ctx.ui?.notify?.("Must specify a research project slug to archive", "warning");
+          return;
+        }
         const root = findRepoRoot();
         const result = archiveResearchProject(root, rest);
         if (!result.ok) {
           ctx.ui?.notify?.(result.error ?? "Failed to archive project", "warning");
           return;
         }
+        ctx.ui?.setStatus?.("research", undefined);
         ctx.ui?.notify?.(`Archived research project ${result.slug}`, "info");
         return;
       }
 
       if (head === "unarchive") {
+        if (!rest.trim()) {
+          ctx.ui?.notify?.("Must specify a research project slug to unarchive", "warning");
+          return;
+        }
         const root = findRepoRoot();
         const result = unarchiveResearchProject(root, rest);
         if (!result.ok) {
@@ -547,12 +569,17 @@ const COMMANDS: CommandSpec[] = [
       }
 
       if (head === "remove" || head === "delete") {
+        if (!rest.trim()) {
+          ctx.ui?.notify?.("Must specify a research project slug to remove", "warning");
+          return;
+        }
         const root = findRepoRoot();
         const result = removeResearchProject(root, rest);
         if (!result.ok) {
           ctx.ui?.notify?.(result.error ?? "Failed to remove project", "warning");
           return;
         }
+        ctx.ui?.setStatus?.("research", undefined);
         ctx.ui?.notify?.(`Removed research project ${result.slug}`, "info");
         return;
       }
@@ -600,10 +627,11 @@ const COMMANDS: CommandSpec[] = [
           const result = await ctx.ui.custom<ResearchOverlayAction | undefined>(
             (_tui, _theme, _keybindings, done) => {
               return {
-                render: (width = 80, height = 24) => overlay.render(width, height),
+                render: (width = 80, height = 24) => overlay.renderLines(width, height),
                 handleInput: (data: string) => {
                   const act = overlay.handleInput(data);
                   if (act) done(act);
+                  return act;
                 },
               };
             },
@@ -619,17 +647,20 @@ const COMMANDS: CommandSpec[] = [
         }
 
         const { slug, projectDir, notFound } = resolveResearchProjectDir(root, cleanRest);
-        if (notFound) {
-          ctx.ui?.notify?.(`Research project slug not found: ${slug}`, "warning");
+        if (notFound || !projectDir || !existsSync(projectDir)) {
+          const msg = cleanRest ? `Research project slug not found: ${slug}` : "No active research projects found";
+          ctx.ui?.notify?.(msg, "warning");
           pi.sendMessage({
             customType: "my-omp-research-error",
             display: true,
             attribution: "user",
-            content: `Research error — project "${slug}" not found`,
+            content: `Research error — ${msg}`,
             details: {
-              slug,
+              slug: slug === "unknown" ? "none" : slug,
               code: "PROJECT_NOT_FOUND",
-              message: `Project "${slug}" not found under .omp/knowledge/research/`,
+              message: cleanRest
+                ? `Project "${slug}" not found under .omp/knowledge/research/`
+                : "No active research projects found under .omp/knowledge/research/",
               hint: "Run '/research status' to list projects, or '/research <topic>' to create one.",
             } satisfies ResearchErrorPayload,
           });
@@ -867,7 +898,32 @@ const COMMANDS: CommandSpec[] = [
       const tokens = argText ? argText.split(/\s+/) : [];
       const head = tokens[0] ?? "";
 
-      if (head === "status" || head === "list" || head === "view" || head === "--recent" || argText.startsWith("--recent")) {
+      if (head === "list") {
+        // One audit card per report, most recently written first.
+        const root = findRepoRoot();
+        const reportMtime = (rel: string | undefined): number => {
+          try {
+            return rel ? statSync(join(root, rel)).mtimeMs : 0;
+          } catch {
+            return 0;
+          }
+        };
+        const payloads = listAuditSlugs(root)
+          .map((slug) => getAuditCardPayload(root, slug))
+          .map((payload) => ({ payload, mtime: reportMtime(payload.root_report_path) }))
+          .sort((a, b) => b.mtime - a.mtime);
+        if (payloads.length === 0) {
+          ctx.ui?.notify?.("No audit reports in .omp/audits/ — /audit <topic> creates one", "info");
+          return;
+        }
+        for (const { payload } of payloads) {
+          pi.sendMessage({ customType: "audit-card", display: true, attribution: "user", details: payload });
+        }
+        ctx.ui?.notify?.(`Found ${payloads.length} audit report(s)`, "info");
+        return;
+      }
+
+      if (head === "status" || head === "view" || head === "--recent" || argText.startsWith("--recent")) {
         const root = findRepoRoot();
         const rest = tokens.slice(1).join(" ").trim();
         const targetSlug = head === "--recent" ? "" : rest;
@@ -1235,7 +1291,7 @@ const COMMANDS: CommandSpec[] = [
   {
     name: "reference",
     description:
-      "Manage the repo's reference corpus at .omp/references/ — add <url> | update <name> | remove <name> | list. User-invoked: acquisition happens only when you type it.",
+      "Manage the repo's reference corpus at .omp/references/ — add <url> [name] | update <name> | remove <name> | list. User-invoked: acquisition happens only when you type it.",
     bodyPath: "commands/reference.md",
     // /reference is a LOCAL, deterministic command: the handler runs git
     // itself (clone/pull/delete), emits a card + toasts, and never queues a
@@ -1251,7 +1307,7 @@ const COMMANDS: CommandSpec[] = [
     getArgumentCompletions: (argumentPrefix: string) => {
       const lower = argumentPrefix.toLowerCase();
       const options = [
-        { value: "add ", label: "add", description: "Add reference repository from <url>" },
+        { value: "add ", label: "add", description: "Add reference repository from <url> [name]" },
         { value: "update ", label: "update", description: "Update reference repository by <name>" },
         { value: "remove ", label: "remove", description: "Remove reference repository by <name>" },
         { value: "list", label: "list", description: "List installed reference repositories" },
@@ -1690,6 +1746,8 @@ const COMMANDS: CommandSpec[] = [
         { value: "init", label: "init", description: "Scaffold .omp/council.yaml with documentation (--force to overwrite)" },
         { value: "edit", label: "edit", description: "Open .omp/council.yaml in the built-in text editor directly" },
         { value: "config", label: "config", description: "Alias for edit (open .omp/council.yaml in text editor)" },
+        { value: "recent", label: "recent [N]", description: "List recent council debate records from .omp/scratch/debates/" },
+        { value: "history", label: "history [N]", description: "Alias for recent" },
       ];
       if (head === "list") {
         return subcommandOptions.filter((o) => o.value === "list");
@@ -1700,7 +1758,7 @@ const COMMANDS: CommandSpec[] = [
           { value: "force", label: "force", description: "Overwrite existing .omp/council.yaml" },
         ];
       }
-      if (head === "edit" || head === "config") {
+      if (head === "edit" || head === "config" || head === "recent" || head === "history") {
         return subcommandOptions.filter((o) => o.value === head);
       }
       const override = process.env.MY_OMP_SKILLS_TEST_ROOT;

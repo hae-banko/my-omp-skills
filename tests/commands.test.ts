@@ -1,8 +1,7 @@
 // Commands and Session Bootstrap Test Suite
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { __resetBootstrapForTests } from "../src/core/bootstrap.ts";
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import {
   completeStrings,
   createSubcommandCompleter,
@@ -115,7 +114,6 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
   }
 
   // 5. Bootstrap injection lifecycle
-  __resetBootstrapForTests();
   const baseMessages: unknown[] = [
     { role: "compactionSummary", content: [{ type: "text", text: "compacted" }] },
     { role: "user", content: [{ type: "text", text: "hello" }] },
@@ -136,8 +134,8 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     return typeof first.text === "string" ? first.text : "";
   }
 
-  await handlers["session_start"]?.({}, {});
-  const injected = asMessagesResult(await handlers["context"]?.({ messages: baseMessages }));
+  // Main interactive session: injects on context event
+  const injected = asMessagesResult(await handlers["context"]?.({ messages: baseMessages }, { hasUI: true }));
   if (!injected || injected.length !== 3) {
     fail("bootstrap: context handler did not return 3 messages");
   } else {
@@ -154,15 +152,21 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     }
   }
 
-  // Dedup: same messages again -> no second injection
-  const second = await handlers["context"]?.({ messages: injected ?? baseMessages });
-  if (second !== undefined) fail("bootstrap: injected twice in one session");
+  // Dedup: same messages already containing the marker -> idempotent, no second injection
+  const second = await handlers["context"]?.({ messages: injected ?? baseMessages }, { hasUI: true });
+  if (second !== undefined) fail("bootstrap: injected twice when marker present");
 
-  // agent_end clears the flag
-  await handlers["agent_end"]?.({});
-  const afterEnd = await handlers["context"]?.({ messages: baseMessages });
-  if (afterEnd !== undefined) fail("bootstrap: injected after agent_end");
+  // Subagent context (hasUI === false): must NEVER receive bootstrap injection
+  const subagentResult = await handlers["context"]?.({ messages: baseMessages }, { hasUI: false });
+  if (subagentResult !== undefined) {
+    fail("bootstrap: subagent with hasUI: false received bootstrap injection");
+  }
 
+  // Subsequent turn after prior turn completes: still injected for interactive session
+  const turn2Injected = asMessagesResult(await handlers["context"]?.({ messages: baseMessages }, { hasUI: true }));
+  if (!turn2Injected || turn2Injected.length !== 3) {
+    fail("bootstrap: subsequent turn did not receive ephemeral context injection");
+  }
   // 6. Declarative Completions
   const testOpts = [
     { value: "run", label: "run", description: "Run routine" },
@@ -372,6 +376,56 @@ export async function runCommandsSuite(ctx: TestContext): Promise<void> {
     const timelineOpts = timelineCompleter("") ?? [];
     if (!timelineOpts.some((o) => o.value === "5") || !timelineOpts.some((o) => o.value === "15")) {
       fail("/timeline: missing expected numeric completions");
+    }
+  }
+
+  // D55: `/audit list` shows every audit report (not just the newest), zero-turn.
+  const auditCmd = registered["audit"];
+  if (!auditCmd) {
+    fail("/audit: command not registered");
+  } else {
+    const fixture = createTempFixture("audit-list-");
+    const prevCwd = process.cwd();
+    try {
+      mkdirSync(join(fixture.dir, ".git"));
+      // `/audit` resolves the repo from process.cwd(), and the selftest bundle
+      // loads command bodies relative to cwd, so the fixture borrows `commands/`.
+      symlinkSync(resolve("commands"), join(fixture.dir, "commands"));
+      const auditsDir = join(fixture.dir, ".omp", "audits");
+      for (const slug of ["alpha", "beta"]) {
+        mkdirSync(join(auditsDir, slug), { recursive: true });
+        writeFileSync(
+          join(auditsDir, slug, "overview.md"),
+          `---\ntitle: "${slug} audit"\nversion: "v0.1.0"\nstatus: active\n---\n`,
+        );
+      }
+      mkdirSync(join(auditsDir, "legacy"), { recursive: true });
+      writeFileSync(
+        join(auditsDir, "legacy", "report.md"),
+        `---\ntitle: "legacy audit"\nversion: "v1.0.0"\nstatus: superseded\n---\n`,
+      );
+      process.chdir(fixture.dir);
+      const messagesBefore = ctx.customMessages.length;
+      const sentBefore = sent.length;
+      await auditCmd.handler("list", createInteractiveCommandContext());
+      const shown = ctx.customMessages
+        .slice(messagesBefore)
+        .filter((m) => m.customType === "audit-card")
+        .map((m) => {
+          const details = m.details;
+          return details && typeof details === "object" && "slug" in details ? String(details.slug) : "";
+        });
+      for (const slug of ["alpha", "beta", "legacy"]) {
+        if (!shown.includes(slug)) {
+          fail(`D55: /audit list did not show audit "${slug}" (shown: ${shown.join(", ") || "none"})`);
+        }
+      }
+      if (sent.length !== sentBefore) {
+        fail("D55: /audit list queued an agent turn");
+      }
+    } finally {
+      process.chdir(prevCwd);
+      fixture.cleanup();
     }
   }
 

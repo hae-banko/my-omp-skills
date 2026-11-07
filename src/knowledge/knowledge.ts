@@ -5,7 +5,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { ensureKnowledgeDirs, findRepoRoot, listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
+import { findRepoRoot, listResearchProjects, resolveResearchProjectDir } from "../core/locators.ts";
 import { readOutlineItems, readProject } from "../research/research-store.ts";
 
 export type KnowledgeType = "index" | "records" | "pitfalls" | "research" | "audits";
@@ -22,7 +22,7 @@ export interface RelevantKnowledgeItem {
   title: string;
   path: string;
   snippet: string;
-  kind: "pitfall" | "record" | "index";
+  kind: "pitfall" | "record" | "index" | "research";
 }
 
 const STOP_WORDS = new Set([
@@ -71,7 +71,7 @@ export function findRelevantKnowledge(
       const matchesIndex = terms.some((term) => lineLower.includes(term));
       if (!matchesIndex) continue;
 
-      const pathMatch = line.match(/\.omp\/knowledge\/(pitfalls|records)\/[^\s)]+/);
+      const pathMatch = line.match(/\.omp\/knowledge\/(pitfalls|records|research)\/[^\s)]+/);
       const refPath = pathMatch ? pathMatch[0] : ".omp/knowledge/INDEX.md";
       if (seenPaths.has(refPath)) continue;
 
@@ -83,6 +83,8 @@ export function findRelevantKnowledge(
         ? "pitfall"
         : refPath.includes("/records/")
         ? "record"
+        : refPath.includes("/research/")
+        ? "research"
         : "index";
 
       if (pathMatch && existsSync(targetFilePath) && statSync(targetFilePath).isFile()) {
@@ -270,7 +272,7 @@ function firstLine(body: string): string {
 }
 
 export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeReadResult {
-  const { rootDir: base } = ensureKnowledgeDirs(root);
+  const base = join(root, ".omp", "knowledge");
   const type = query.type;
   const limit = query.limit ?? 10;
 
@@ -410,10 +412,13 @@ export function readKnowledge(root: string, query: KnowledgeQuery): KnowledgeRea
         details: { found: true, type, count: 0, paths: [] },
       };
     }
-    const lines = readFileSync(indexPath, "utf8").split("\n").filter((l) => l.trim().length > 0);
+    const lines = readFileSync(indexPath, "utf8")
+      .split("\n")
+      .filter((l) => l.trim().length > 0 && !l.trim().startsWith("#"));
+    const picked = lines.slice(-limit);
     return {
       found: true,
-      text: lines.slice(0, limit).join("\n"),
+      text: picked.join("\n"),
       details: { found: true, type, count: lines.length, paths: [] },
     };
   }

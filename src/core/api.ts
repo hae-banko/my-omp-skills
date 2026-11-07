@@ -102,6 +102,57 @@ export interface ContextEventResult {
   messages?: unknown[];
 }
 
+/**
+ * Minimal view of the `before_agent_start` event. The runtime builds the
+ * system prompt fresh every turn and passes it as an array of blocks; each
+ * handler sees the array chained from the previous handler's result
+ * (`extensions/runner.ts` `emitBeforeAgentStart`). Extensions append blocks
+ * to the tail and never rewrite earlier ones (AGENTS.md §8 prefix stability).
+ */
+export interface BeforeAgentStartEvent {
+  prompt: string;
+  systemPrompt: string[];
+}
+
+export interface BeforeAgentStartEventResult {
+  systemPrompt?: string[];
+  message?: CustomMessagePayload;
+}
+
+/** Narrow an `unknown` before_agent_start payload; `undefined` if malformed. */
+export function asBeforeAgentStartEvent(event: unknown): BeforeAgentStartEvent | undefined {
+  if (!event || typeof event !== "object" || !("systemPrompt" in event)) return undefined;
+  const blocks = event.systemPrompt;
+  if (!Array.isArray(blocks) || !blocks.every((b): b is string => typeof b === "string")) return undefined;
+  const prompt = "prompt" in event && typeof event.prompt === "string" ? event.prompt : "";
+  return { prompt, systemPrompt: blocks };
+}
+
+/**
+ * Minimal view of the `ExtensionContext` the runtime passes as the second
+ * argument to every `pi.on(...)` handler. Task subagents get their own
+ * context with `hasUI: false`; `sessionManager.getSessionId()` changes on
+ * `/new`, resume, and fork (none of which re-run the extension factory or
+ * emit `session_start`). See docs/state-machines.md §0.
+ */
+export interface EventContext {
+  cwd?: string;
+  hasUI?: boolean;
+  ui?: CommandContext["ui"];
+  sessionManager?: { getSessionId?(): string };
+}
+
+/** Narrow an `unknown` handler context to the fields this package reads. */
+export function asEventContext(ctx: unknown): EventContext {
+  return ctx && typeof ctx === "object" ? (ctx as EventContext) : {};
+}
+
+/** Session id of the session that emitted the event, when the runtime exposes it. */
+export function sessionIdOf(ctx: unknown): string | undefined {
+  const id = asEventContext(ctx).sessionManager?.getSessionId?.();
+  return typeof id === "string" && id.length > 0 ? id : undefined;
+}
+
 export interface ContentBlock {
   type: string;
   text: string;

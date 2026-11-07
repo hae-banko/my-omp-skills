@@ -209,7 +209,8 @@ export interface ResearchProjectRead {
 /** Resolve the project dir (via the locator) and read its dashboard payload. */
 export function readProject(root: string, slugArg: string): ResearchProjectRead {
   const { slug, projectDir, notFound } = resolveResearchProjectDir(root, slugArg);
-  return { slug, projectDir, notFound, payload: getResearchDashboardMetrics(projectDir, slug) };
+  const isNotFound = notFound || !projectDir || !existsSync(projectDir);
+  return { slug, projectDir, notFound: isNotFound, payload: getResearchDashboardMetrics(projectDir, slug) };
 }
 
 // ---------------------------------------------------------------------------
@@ -304,6 +305,10 @@ export function readOutlineItems(projectDir: string): string[] | undefined {
   const outlinePath = pickOutlinePath(projectDir);
   if (!outlinePath) return undefined;
   try {
+    const specs = readOutlineItemSpecs(projectDir);
+    if (specs && specs.length > 0) {
+      return specs.map((s) => s.name);
+    }
     const content = readFileSync(outlinePath, "utf8");
     const matches = content.match(/^(?!\s*#)\s*-\s*name:\s*(.+)$/gm);
     if (matches) {
@@ -314,16 +319,19 @@ export function readOutlineItems(projectDir: string): string[] | undefined {
     const lines = content.split("\n");
     let inItems = false;
     for (const l of lines) {
-      if (/^items:/i.test(l.trim())) {
+      const trimmed = l.trim();
+      if (/^items:/i.test(trimmed)) {
         inItems = true;
         continue;
       }
-      if (inItems && /^[a-z0-9_]+:/i.test(l.trim())) inItems = false;
+      if (inItems && /^[a-z0-9_]+:/i.test(trimmed) && !trimmed.startsWith("-") && !l.startsWith(" ") && !l.startsWith("\t")) {
+        inItems = false;
+      }
       if (inItems && /^\s*-\s*/.test(l)) {
         names.push(l.trim().replace(/^-\s*/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, ""));
       }
     }
-    return names;
+    return names.length > 0 ? names : undefined;
   } catch {
     return undefined;
   }
@@ -341,6 +349,7 @@ export function readOutlineItemSpecs(projectDir: string): ResearchItemSpec[] | u
     const items: ResearchItemSpec[] = [];
     let inItems = false;
     let currentItem: ResearchItemSpec | null = null;
+    let currentItemIndent = 0;
 
     const finalizeItem = (): void => {
       if (currentItem && (currentItem.name || currentItem.id)) {
@@ -372,6 +381,7 @@ export function readOutlineItemSpecs(projectDir: string): ResearchItemSpec[] | u
       // New item block starts with "- "
       if (/^\s*-\s*/.test(rawLine)) {
         finalizeItem();
+        currentItemIndent = rawLine.search(/\S/);
 
         // Check if it's "- name: ..." or "- id: ..." or just "- item_name"
         const afterDash = rawLine.replace(/^\s*-\s*/, "").replace(/#.*$/, "").trim();
@@ -408,9 +418,14 @@ export function readOutlineItemSpecs(projectDir: string): ResearchItemSpec[] | u
         } else if (/^depends_on:\s*$/i.test(cleanLine)) {
           // Multi-line list under depends_on:
           const deps: string[] = [];
-          while (i + 1 < lines.length && /^\s*-\s+/.test(lines[i + 1])) {
+          while (i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            if (!/^\s*-\s+/.test(nextLine)) break;
+            const nextIndent = nextLine.search(/\S/);
+            if (nextIndent <= currentItemIndent) break;
+            if (/^\s*-\s*(id|name|category|depends_on):\s*/i.test(nextLine)) break;
             i++;
-            const depVal = lines[i].replace(/^\s*-\s+/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, "");
+            const depVal = nextLine.replace(/^\s*-\s+/, "").replace(/#.*$/, "").trim().replace(/^['"]|['"]$/g, "");
             if (depVal) deps.push(depVal);
           }
           currentItem.depends_on = deps;
@@ -789,6 +804,9 @@ export function getResearchReviewPayload(projectDir: string, slug: string): Rese
  * to `.omp/knowledge/research/.archive/<slug>/`.
  */
 export function archiveResearchProject(root: string, slugArg: string): { ok: boolean; slug?: string; error?: string } {
+  if (!slugArg || !slugArg.trim()) {
+    return { ok: false, error: "Must specify a research project slug to archive" };
+  }
   const { slug, projectDir, notFound } = resolveResearchProjectDir(root, slugArg);
   if (notFound || !projectDir || !existsSync(projectDir)) {
     return { ok: false, error: `Research project "${slugArg}" not found under .omp/knowledge/research/` };
@@ -808,6 +826,15 @@ export function archiveResearchProject(root: string, slugArg: string): { ok: boo
     try {
       let content = readFileSync(researchMdPath, "utf8");
       if (/^status:\s*.+$/m.test(content)) {
+        const currentMatch = content.match(/^status:\s*(.+)$/m);
+        const prev = currentMatch ? currentMatch[1].trim() : "";
+        if (prev && prev !== "ARCHIVED") {
+          if (/^prior_status:\s*.+$/m.test(content)) {
+            content = content.replace(/^prior_status:\s*.+$/m, `prior_status: ${prev}`);
+          } else {
+            content = content.replace(/^status:\s*.+$/m, `status: ARCHIVED\nprior_status: ${prev}`);
+          }
+        }
         content = content.replace(/^status:\s*.+$/m, "status: ARCHIVED");
       }
       if (/^updated:\s*.+$/m.test(content)) {
@@ -831,6 +858,9 @@ export function archiveResearchProject(root: string, slugArg: string): { ok: boo
  * Restore an archived research project: moves it from `.archive/<slug>/` back to active research.
  */
 export function unarchiveResearchProject(root: string, slugArg: string): { ok: boolean; slug?: string; error?: string } {
+  if (!slugArg || !slugArg.trim()) {
+    return { ok: false, error: "Must specify a research project slug to unarchive" };
+  }
   const { slug, projectDir, notFound } = resolveArchivedResearchProjectDir(root, slugArg);
   if (notFound || !projectDir || !existsSync(projectDir)) {
     return { ok: false, error: `Archived research project "${slugArg}" not found under .omp/knowledge/research/.archive/` };
@@ -847,9 +877,58 @@ export function unarchiveResearchProject(root: string, slugArg: string): { ok: b
     try {
       let content = readFileSync(researchMdPath, "utf8");
       const hasReport = existsSync(join(projectDir, "report.md"));
-      const targetStatus = hasReport ? "REPORT_READY" : "CONVERGED";
+
+      const outlineItems = readOutlineItems(projectDir);
+      const totalItems = outlineItems ? outlineItems.length : 0;
+
+      let completedItems = 0;
+      const resultsDir = join(projectDir, "results");
+      if (existsSync(resultsDir)) {
+        try {
+          const files = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
+          for (const f of files) {
+            const p = join(resultsDir, f);
+            try {
+              const stat = statSync(p);
+              if (stat.isFile() && stat.size > 0) {
+                const raw = readFileSync(p, "utf8");
+                if (raw.trim()) {
+                  JSON.parse(raw);
+                  completedItems++;
+                }
+              }
+            } catch {
+              // ignore invalid JSON
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const priorStatusMatch = content.match(/^prior_status:\s*(.+)$/m) ?? content.match(/^status:\s*(.+)$/m);
+      const priorStatus = priorStatusMatch ? priorStatusMatch[1].trim().toUpperCase() : undefined;
+
+      let targetStatus: PipelineStatus;
+      if (hasReport) {
+        targetStatus = "REPORT_READY";
+      } else if (totalItems > 0 && completedItems >= totalItems) {
+        targetStatus = "CONVERGED";
+      } else if (completedItems > 0) {
+        targetStatus = priorStatus === "PAUSED" ? "PAUSED" : "RUNNING";
+      } else {
+        targetStatus = "OUTLINE";
+      }
+
+      const targetPhase = phaseOf(targetStatus);
       if (/^status:\s*.+$/m.test(content)) {
         content = content.replace(/^status:\s*.+$/m, `status: ${targetStatus}`);
+      }
+      if (/^prior_status:\s*.+\r?\n?/m.test(content)) {
+        content = content.replace(/^prior_status:\s*.+\r?\n?/m, "");
+      }
+      if (/^phase:\s*.+$/m.test(content)) {
+        content = content.replace(/^phase:\s*.+$/m, `phase: ${targetPhase}`);
       }
       if (/^updated:\s*.+$/m.test(content)) {
         content = content.replace(/^updated:\s*.+$/m, `updated: ${new Date().toISOString()}`);
@@ -872,6 +951,9 @@ export function unarchiveResearchProject(root: string, slugArg: string): { ok: b
  * Permanently delete a research project directory (from active or archived store).
  */
 export function removeResearchProject(root: string, slugArg: string): { ok: boolean; slug?: string; error?: string } {
+  if (!slugArg || !slugArg.trim()) {
+    return { ok: false, error: "Must specify a research project slug to remove" };
+  }
   // First check active projects
   const activeTarget = safeResearchTarget(root, slugArg);
   let targetDir = activeTarget;

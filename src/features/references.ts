@@ -7,7 +7,7 @@
 // agent activity.
 //
 // The corpus `.omp/references/` is gitignored raw, mutable material:
-//   add <url>    clone into .omp/references/<name> (name derived from URL)
+//   add <url> [name] clone into .omp/references/<name> (name derived from URL or explicit)
 //   update <name> git pull; reports HEAD before → after
 //   remove <name> delete the directory (name must be a plain basename)
 //   list         corpus of name: remote · HEAD
@@ -17,7 +17,7 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CommandContext, ExtensionApi } from "../core/api.ts";
-import { listReferences } from "../core/locators.ts";
+import { listReferences, listUnmanagedReferences } from "../core/locators.ts";
 import { BORDER_COLORS, toolResultCard } from "../research/research-format.ts";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { createTuiCard, type CardSpec } from "../core/card.ts";
@@ -82,6 +82,18 @@ export function safeReferenceTarget(root: string, name: string): string | null {
   const target = join(refsDir, trimmed);
   if (dirname(target) !== refsDir) return null;
   return target;
+}
+
+/**
+ * Normalize a repository URL for collision checks: trim whitespace, trailing
+ * slashes, and a trailing `.git`.
+ */
+export function normalizeRepoUrl(url: string): string {
+  let u = url.trim().replace(/\/+$/, "");
+  if (u.endsWith(".git")) {
+    u = u.slice(0, -4).replace(/\/+$/, "");
+  }
+  return u;
 }
 
 /**
@@ -160,32 +172,60 @@ function emitError(pi: ExtensionApi, ctx: CommandContext, message: string): void
   emitCard(pi, ctx, `Reference — ${message}`, message, "error");
 }
 
-async function addReference(pi: ExtensionApi, root: string, urlArg: string, ctx: CommandContext): Promise<void> {
-  const url = urlArg.trim();
+async function addReference(pi: ExtensionApi, root: string, rawArgs: string, ctx: CommandContext): Promise<void> {
+  const tokens = rawArgs.trim().split(/\s+/).filter(Boolean);
+  const url = tokens[0] ?? "";
+  const customName = tokens[1];
   if (!url) {
-    emitError(pi, ctx, "Missing URL — /reference add <url>");
+    emitError(pi, ctx, "Missing URL — /reference add <url> [name]");
     return;
   }
-  const name = deriveReferenceName(url);
+  if (tokens.length > 2) {
+    emitError(pi, ctx, "Too many arguments — /reference add <url> [name]");
+    return;
+  }
+  const name = customName ?? deriveReferenceName(url);
   if (!name) {
     emitError(pi, ctx, `Could not derive a reference name from "${url}"`);
     return;
   }
   const target = safeReferenceTarget(root, name);
   if (!target) {
-    emitError(pi, ctx, `Refusing to add "${url}": derived name "${name}" is not a safe directory name`);
+    const label = customName ? `custom name "${name}"` : `derived name "${name}"`;
+    emitError(pi, ctx, `Refusing to add "${url}": ${label} is not a safe directory name`);
     return;
   }
   if (existsSync(target)) {
+    if (!existsSync(join(target, ".git"))) {
+      emitError(
+        pi,
+        ctx,
+        `.omp/references/${name} exists as an unmanaged leftover directory — remove it with /reference remove ${name} before adding`,
+      );
+      return;
+    }
+    const existingOrigin = await runGit(["remote", "get-url", "origin"], target)
+      .then((r) => r.stdout.trim())
+      .catch(() => "");
+    if (existingOrigin && normalizeRepoUrl(existingOrigin) !== normalizeRepoUrl(url)) {
+      emitError(
+        pi,
+        ctx,
+        `.omp/references/${name} already exists (origin: ${existingOrigin}) — use /reference add ${url} <other-name> to add under a distinct directory`,
+      );
+      return;
+    }
     emitError(pi, ctx, `.omp/references/${name} already exists — use /reference update ${name}`);
     return;
   }
-
   ctx.ui?.notify?.(`Cloning ${name} from ${url}…`, "info");
   try {
     mkdirSync(join(root, ".omp", "references"), { recursive: true });
     await runGit(["clone", url, target]);
   } catch (err) {
+    try {
+      rmSync(target, { recursive: true, force: true });
+    } catch {}
     emitError(pi, ctx, `Clone failed for ${name}: ${errMessage(err)}`);
     return;
   }
@@ -265,7 +305,8 @@ async function removeReference(
 
 async function listCorpus(pi: ExtensionApi, root: string, ctx: CommandContext): Promise<void> {
   const names = listReferences(root);
-  if (names.length === 0) {
+  const unmanaged = listUnmanagedReferences(root);
+  if (names.length === 0 && unmanaged.length === 0) {
     emitCard(pi, ctx, "Reference corpus is empty — /reference add <url> starts it", "Reference corpus is empty");
     return;
   }
@@ -283,12 +324,18 @@ async function listCorpus(pi: ExtensionApi, root: string, ctx: CommandContext): 
       return `${name}: remote ${remote} · HEAD ${head}`;
     }),
   );
-  const plural = names.length === 1 ? "entry" : "entries";
+  const unmanagedRows = unmanaged.map(
+    (u) => `${u}: [unmanaged leftover directory — clean with /reference remove ${u}]`,
+  );
+  const allRows = [...rows, ...unmanagedRows];
+  const totalCount = names.length + unmanaged.length;
+  const plural = totalCount === 1 ? "entry" : "entries";
+  const unmanagedNote = unmanaged.length > 0 ? ` (${unmanaged.length} unmanaged leftover)` : "";
   emitCard(
     pi,
     ctx,
-    `Reference corpus (${names.length} ${plural}):\n${rows.join("\n")}`,
-    `Reference corpus: ${names.length} ${plural}`,
+    `Reference corpus (${totalCount} ${plural}${unmanagedNote}):\n${allRows.join("\n")}`,
+    `Reference corpus: ${totalCount} ${plural}`,
   );
 }
 
@@ -325,7 +372,7 @@ export async function runReferenceCommand(
       await removeReference(pi, root, rest, ctx);
       return;
     }
-    emitError(pi, ctx, `Unknown subcommand "${head}" — /reference add <url> | update <name> | remove <name> | list`);
+    emitError(pi, ctx, `Unknown subcommand "${head}" — /reference add <url> [name] | update <name> | remove <name> | list`);
   } catch (err) {
     emitError(pi, ctx, `Reference command failed: ${errMessage(err)}`);
   }
@@ -348,7 +395,7 @@ export function createReferenceCard(content: string, theme?: unknown): Component
         content: body.length > 0 ? body : ["○ No reference repositories cloned yet — use /reference add <url> to add."],
       },
     ],
-    footerActions: ["/reference add <url> | update <name> | remove <name> | list", "Esc: Dismiss"],
+    footerActions: ["/reference add <url> [name] | update <name> | remove <name> | list", "Esc: Dismiss"],
   };
 
   return createTuiCard(spec, theme);

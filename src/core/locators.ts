@@ -245,6 +245,22 @@ export function listReferences(root?: string | null): string[] {
 }
 
 /**
+ * Non-git leftover directories under `<root>/.omp/references/`.
+ */
+export function listUnmanagedReferences(root?: string | null): string[] {
+  const ws = getWorkspaceContext(root ?? process.cwd());
+  const dir = ws.references;
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((ent) => ent.isDirectory() && !ent.name.startsWith(".") && !existsSync(join(dir, ent.name, ".git")))
+      .map((ent) => ent.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Routine ids from `scripts/routines/manifest.json` plus `*.sh` files.
  */
 export function listRoutines(root?: string | null): string[] {
@@ -454,11 +470,23 @@ export function findFrontierTicket(root?: string | null): FrontierTicket | null 
   }
 
   if (allTickets.length === 0) return null;
-  const resolvedSlugs = new Set(allTickets.filter((t) => t.isResolved).map((t) => t.slug));
+  // Group tickets by feature: blockers must resolve within the same feature
+  const resolvedSlugsByFeature = new Map<string, Set<string>>();
+  for (const t of allTickets) {
+    if (t.isResolved) {
+      let set = resolvedSlugsByFeature.get(t.feature);
+      if (!set) {
+        set = new Set<string>();
+        resolvedSlugsByFeature.set(t.feature, set);
+      }
+      set.add(t.slug);
+    }
+  }
 
   for (const t of allTickets) {
     if (t.isResolved) continue;
-    const isUnblocked = t.blockedBy.every((dep) => resolvedSlugs.has(dep));
+    const resolvedForFeature = resolvedSlugsByFeature.get(t.feature);
+    const isUnblocked = t.blockedBy.every((dep) => resolvedForFeature ? resolvedForFeature.has(dep) : false);
     if (isUnblocked) {
       return {
         feature: t.feature,

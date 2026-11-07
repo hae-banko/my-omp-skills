@@ -41,6 +41,7 @@ export function parseRecentCount(args: string): number {
   const match = args.trim().match(/^--recent\s+(\d+)$/);
   if (!match) return DEFAULT_LIMIT;
   const n = parseInt(match[1], 10);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_LIMIT;
   return Math.min(n, MAX_LIMIT);
 }
 
